@@ -23,7 +23,7 @@ android {
         buildConfigField(
             "String",
             "SADEEQI_API_BASE_URL",
-            "\"${providers.gradleProperty("sadeeqiApiBaseUrl").orElse("https://YOUR-SADEEQI-SERVER.example").get()}\""
+            "\"${providers.gradleProperty("sadeeqiApiBaseUrl").orElse("https://sadeeqi-ai.azamfai155.workers.dev").get()}\""
         )
 
         buildConfigField(
