@@ -26,8 +26,8 @@ import androidx.core.content.ContextCompat
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.voice.VoiceController
 import com.azzam.sadeeqi.memory.EncryptedMemory
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -38,7 +38,9 @@ class MainActivity : ComponentActivity() {
     private var onVoiceError: ((String) -> Unit)? = null
 
     private val requestMic =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { granted ->
             if (granted) voice.listen()
         }
 
@@ -47,8 +49,16 @@ class MainActivity : ComponentActivity() {
 
         voice = VoiceController(
             this,
-            { text -> runOnUiThread { onVoiceText?.invoke(text) } },
-            { err -> runOnUiThread { onVoiceError?.invoke(err) } }
+            { text ->
+                runOnUiThread {
+                    onVoiceText?.invoke(text)
+                }
+            },
+            { error ->
+                runOnUiThread {
+                    onVoiceError?.invoke(error)
+                }
+            }
         )
 
         setContent {
@@ -62,7 +72,9 @@ class MainActivity : ComponentActivity() {
                     ) {
                         voice.listen()
                     } else {
-                        requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                        requestMic.launch(
+                            Manifest.permission.RECORD_AUDIO
+                        )
                     }
                 },
                 onReply = { voice.speak(it) }
@@ -81,29 +93,41 @@ class MainActivity : ComponentActivity() {
         onReply: (String) -> Unit
     ) {
         val gateway = remember { OpenAiGateway() }
-        val memory = remember { EncryptedMemory(this@MainActivity) }
+        val memory = remember {
+            EncryptedMemory(this@MainActivity)
+        }
         val scope = rememberCoroutineScope()
 
         val messages = remember {
             mutableStateListOf(
-                "صديقي" to "أهلاً عزام! أنا صديقي. اكتب رسالتك أو اضغط الميكروفون."
+                "صديقي" to
+                    "أهلاً عزام! أنا صديقي. اكتب رسالتك أو اضغط الميكروفون."
             )
         }
 
-        var input by remember { mutableStateOf("") }
-        var status by remember {
-            mutableStateOf("الإصدار 1.2.0 — يحتاج إعداد خادم API")
+        var input by remember {
+            mutableStateOf("")
         }
+
+        var status by remember {
+            mutableStateOf(
+                "الإصدار 1.2.0 — جاري تجهيز الاتصال"
+            )
+        }
+
         var selectedImageDataUrl by remember {
             mutableStateOf<String?>(null)
         }
 
         val imagePicker = rememberLauncherForActivityResult(
-            PickVisualMedia()
+            contract = PickVisualMedia()
         ) { uri ->
+
             selectedImageDataUrl = uri?.let { picked ->
+
                 runCatching {
-                    val bytes = contentResolver.openInputStream(picked)
+                    val bytes = contentResolver
+                        .openInputStream(picked)
                         ?.use { it.readBytes() }
                         ?: error("تعذر قراءة الصورة")
 
@@ -111,20 +135,28 @@ class MainActivity : ComponentActivity() {
                         "حجم الصورة أكبر من 8 ميغابايت"
                     }
 
-                    val mime = contentResolver.getType(picked) ?: "image/jpeg"
+                    val mime = contentResolver
+                        .getType(picked) ?: "image/jpeg"
 
                     "data:$mime;base64," +
-                        Base64.encodeToString(bytes, Base64.NO_WRAP)
+                        Base64.encodeToString(
+                            bytes,
+                            Base64.NO_WRAP
+                        )
 
-                }.getOrElse {
-                    status = it.message ?: "تعذر تحميل الصورة"
+                }.getOrElse { error ->
+                    status = error.message ?: "تعذر تحميل الصورة"
                     null
                 }
             }
         }
 
         fun sendQuestion(question: String) {
-            if (question.isBlank() && selectedImageDataUrl == null) return
+
+            if (
+                question.isBlank() &&
+                selectedImageDataUrl == null
+            ) return
 
             val imageForRequest = selectedImageDataUrl
             selectedImageDataUrl = null
@@ -134,19 +166,30 @@ class MainActivity : ComponentActivity() {
             }
 
             messages.add("أنت" to effectiveQuestion)
+
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             scope.launch {
                 try {
-                    val turns = messages.takeLast(24).map { (who, body) ->
-                        OpenAiGateway.Turn(
-                            if (who == "صديقي") "assistant" else "user",
-                            body
-                        )
-                    }
+                    val turns = messages
+                        .takeLast(24)
+                        .map { (who, body) ->
+
+                            OpenAiGateway.Turn(
+                                if (who == "صديقي") {
+                                    "assistant"
+                                } else {
+                                    "user"
+                                },
+                                body
+                            )
+                        }
 
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(
+                            turns,
+                            imageForRequest
+                        )
                     }
 
                     messages.add("صديقي" to answer)
@@ -166,40 +209,60 @@ class MainActivity : ComponentActivity() {
                     )
 
                     onReply(answer)
-                    status = "متصل — ${BuildConfig.VERSION_NAME}"
 
-                } catch (e: Exception) {
+                    status =
+                        "متصل — ${BuildConfig.VERSION_NAME}"
+
+                } catch (error: Exception) {
+
+                    val errorMessage =
+                        error.message ?: "خطأ غير معروف"
+
                     messages.add(
                         "صديقي" to
-                            "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}"
+                            "تعذر الاتصال: $errorMessage"
                     )
+
                     status = "تعذر الاتصال بالخادم"
                 }
             }
         }
 
         LaunchedEffect(Unit) {
-            val saved = memory.search("chat:")
+            try {
+                val saved = memory.search("chat:")
 
-            if (saved.isNotEmpty()) {
-                messages.clear()
+                if (saved.isNotEmpty()) {
+                    messages.clear()
 
-                saved.sortedBy { it.first }.forEach { entry ->
-                    val parts = entry.second.split("\n", limit = 2)
+                    saved.sortedBy { it.first }
+                        .forEach { entry ->
 
-                    if (parts.size == 2) {
-                        messages.add(parts[0] to parts[1])
-                    }
+                            val parts = entry.second.split(
+                                "\n",
+                                limit = 2
+                            )
+
+                            if (parts.size == 2) {
+                                messages.add(
+                                    parts[0] to parts[1]
+                                )
+                            }
+                        }
                 }
+            } catch (error: Exception) {
+                status = "تعذر استعادة المحادثات السابقة"
             }
         }
 
         onVoiceText = { spoken ->
-            if (spoken.isNotBlank()) sendQuestion(spoken)
+            if (spoken.isNotBlank()) {
+                sendQuestion(spoken)
+            }
         }
 
-        onVoiceError = {
-            status = it
+        onVoiceError = { error ->
+            status = error
         }
 
         MaterialTheme(
@@ -209,56 +272,70 @@ class MainActivity : ComponentActivity() {
                 surface = Color(0xFF1B1D2A)
             )
         ) {
+
             Column(
-                Modifier
+                modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0xFF10111A))
                     .padding(16.dp)
             ) {
 
                 Text(
-                    "صديقي | SADEEQI AI",
+                    text = "صديقي | SADEEQI AI",
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White
                 )
 
                 Text(
-                    "مرحباً عزام",
+                    text = "مرحباً عزام",
                     color = Color(0xFFB9A5FF)
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
 
                 Text(
-                    status,
+                    text = status,
                     color = Color.LightGray,
                     style = MaterialTheme.typography.bodySmall
                 )
 
                 LazyColumn(
-                    Modifier
+                    modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(vertical = 16.dp)
+                    verticalArrangement =
+                        Arrangement.spacedBy(10.dp),
+                    contentPadding =
+                        PaddingValues(vertical = 16.dp)
                 ) {
+
                     items(messages) { (who, body) ->
+
                         Card(
                             shape = RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (who == "صديقي")
-                                    Color(0xFF25283A)
-                                else
-                                    Color(0xFF34304A)
+                                containerColor =
+                                    if (who == "صديقي") {
+                                        Color(0xFF25283A)
+                                    } else {
+                                        Color(0xFF34304A)
+                                    }
                             )
                         ) {
-                            Column(Modifier.padding(12.dp)) {
+
+                            Column(
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+
                                 Text(
-                                    who,
+                                    text = who,
                                     color = Color(0xFFB9A5FF)
                                 )
+
                                 Text(
-                                    body,
+                                    text = body,
                                     color = Color.White
                                 )
                             }
@@ -270,20 +347,25 @@ class MainActivity : ComponentActivity() {
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("اكتب أمرك بالعربية") }
+                    label = {
+                        Text("اكتب أمرك بالعربية")
+                    }
                 )
 
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp),
+                    verticalAlignment =
+                        Alignment.CenterVertically
                 ) {
 
                     Button(
                         onClick = {
                             imagePicker.launch(
                                 PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly
+                                    ActivityResultContracts
+                                        .PickVisualMedia.ImageOnly
                                 )
                             )
                         },
@@ -294,8 +376,9 @@ class MainActivity : ComponentActivity() {
 
                     Button(
                         onClick = {
+                            status =
+                                "استمع الآن عبر خدمة التعرف على الكلام"
                             onListen()
-                            status = "استمع الآن عبر خدمة التعرف على الكلام"
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -316,7 +399,8 @@ class MainActivity : ComponentActivity() {
 
                 if (selectedImageDataUrl != null) {
                     Text(
-                        "تم اختيار صورة — أرسل سؤالك لتحليلها",
+                        text =
+                            "تم اختيار صورة — أرسل سؤالك لتحليلها",
                         color = Color(0xFFB9A5FF)
                     )
                 }
