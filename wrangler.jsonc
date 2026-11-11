@@ -1,8 +1,1 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-"name": "sadeeeqii-ai",
-  "main": "backend/src/worker.js",
-  "compatibility_date": "2026-11-11",
-  "workers_dev": true,
-  "observability": { "enabled": true }
-}
+{ "$schema": "node_modules/wrangler/config-schema.json", "name": "sadeeqi-ai", "main": "backend/src/worker.js", "compatibility_date": "2026-11-11", "workers_dev": true, "observability": { "enabled": true }
