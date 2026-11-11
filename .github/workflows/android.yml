@@ -47,9 +47,16 @@ jobs:
           PY
 
       - name: Build APK
-        run: gradle :app:assembleDebug
+        env:
+          SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
+          SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
+        run: |
+          test -n "$SADEEQI_API_BASE_URL"
+          test -n "$SADEEQI_APP_TOKEN"
 
-
+          gradle :app:assembleDebug \
+            -PsadeeqiApiBaseUrl="$SADEEQI_API_BASE_URL" \
+            -PsadeeqiAppToken="$SADEEQI_APP_TOKEN"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
