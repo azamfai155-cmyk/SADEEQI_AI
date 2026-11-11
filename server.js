@@ -7,7 +7,7 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GROQ_API_KEY = process.env.OPENAI_API_KEY;
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 const MODEL = process.env.OPENAI_MODEL;
 const ALLOW_WEB_SEARCH = process.env.ALLOW_WEB_SEARCH !== 'false';
@@ -22,62 +22,46 @@ const SYSTEM_PROMPT =
 وضّح عدم اليقين واستشهد بالمصادر عند استخدام البحث.`;
 
 function constantTimeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') {
-    return false;
-  }
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
 
   const aa = Buffer.from(a);
   const bb = Buffer.from(b);
 
-  return aa.length === bb.length &&
-    crypto.timingSafeEqual(aa, bb);
+  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
 }
 
 function auth(req, res, next) {
   if (!APP_TOKEN) {
-    return res.status(503).json({
-      error: 'Backend auth is not configured.'
-    });
+    return res.status(503).json({ error: 'Backend auth is not configured.' });
   }
 
-  const token = (req.headers.authorization || '')
-    .replace(/^Bearer\s+/i, '');
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
 
   if (!constantTimeEqual(token, APP_TOKEN)) {
-    return res.status(401).json({
-      error: 'Unauthorized.'
-    });
+    return res.status(401).json({ error: 'Unauthorized.' });
   }
 
   next();
 }
 
-// Health check
 app.get('/health', (_req, res) => {
   res.json({
     service: 'sadeeqi-ai',
     version: '1.2.0',
-    configured: Boolean(
-      OPENAI_API_KEY && APP_TOKEN && MODEL
-    )
+    configured: Boolean(GROQ_API_KEY && APP_TOKEN && MODEL)
   });
 });
 
-// Chat endpoint
 app.post('/v1/chat', auth, async (req, res) => {
-  if (!OPENAI_API_KEY || !MODEL) {
+  if (!GROQ_API_KEY || !MODEL) {
     return res.status(503).json({
-      error: 'OPENAI_API_KEY and OPENAI_MODEL must be configured on the server.'
+      error: 'API key and model must be configured on the server.'
     });
   }
 
   const input = req.body?.input;
 
-  if (
-    !Array.isArray(input) ||
-    input.length < 1 ||
-    input.length > 24
-  ) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > 24) {
     return res.status(400).json({
       error: 'input must contain 1 to 24 turns.'
     });
@@ -85,60 +69,42 @@ app.post('/v1/chat', auth, async (req, res) => {
 
   for (const turn of input) {
     if (!['user', 'assistant'].includes(turn?.role)) {
-      return res.status(400).json({
-        error: 'Invalid role.'
-      });
+      return res.status(400).json({ error: 'Invalid role.' });
     }
 
-    if (
-      typeof turn.content !== 'string' &&
-      !Array.isArray(turn.content)
-    ) {
-      return res.status(400).json({
-        error: 'Invalid content.'
-      });
+    if (typeof turn.content !== 'string' && !Array.isArray(turn.content)) {
+      return res.status(400).json({ error: 'Invalid content.' });
     }
 
-    if (
-      typeof turn.content === 'string' &&
-      turn.content.length > 16000
-    ) {
-      return res.status(413).json({
-        error: 'Message too large.'
-      });
+    if (typeof turn.content === 'string' && turn.content.length > 16000) {
+      return res.status(413).json({ error: 'Message too large.' });
     }
   }
 
   const hasImage = input.some(turn =>
-  Array.isArray(turn.content) &&
-  turn.content.some(part => part?.type === 'input_image')
-);
+    Array.isArray(turn.content) &&
+    turn.content.some(part => part?.type === 'input_image')
+  );
 
-const selectedModel = hasImage
-  ? 'qwen/qwen3.8-27b'
-  : MODEL;
+  const selectedModel = hasImage ? 'qwen/qwen3.8-27b' : MODEL;
 
-const payload = {
-  model: selectedModel,
-  instructions: SYSTEM_PROMPT,
-  input
-};
+  const payload = {
+    model: selectedModel,
+    instructions: SYSTEM_PROMPT,
+    input
+  };
 
-  if (
-    ALLOW_WEB_SEARCH &&
-    req.body?.enable_web_search === true
-  ) {
-    if (!hasImage) {
-  payload.tools = [{ type: 'browser_search' }];
-    }
+  if (ALLOW_WEB_SEARCH && req.body?.enable_web_search === true && !hasImage) {
+    payload.tools = [{ type: 'browser_search' }];
+  }
 
   try {
     const upstream = await fetch(
-      ''https://api.groq.com/openai/v1/responses',
+      'https://api.groq.com/openai/v1/responses',
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload),
@@ -150,7 +116,7 @@ const payload = {
 
     if (!upstream.ok) {
       return res.status(upstream.status).json({
-        error: raw?.error?.message || 'OpenAI request failed.'
+        error: raw?.error?.message || 'Groq request failed.'
       });
     }
 
@@ -163,19 +129,18 @@ const payload = {
 
     return res.json({
       id: raw.id,
-      model: raw.model || MODEL,
+      model: raw.model || selectedModel,
       output_text: output,
       usage: raw.usage || null
     });
 
-  } catch (error) {
+  } catch {
     return res.status(502).json({
-      error: `AI provider unavailable: ${error.message}`
+      error: 'AI provider unavailable. Check provider status and server logs.'
     });
   }
 });
 
-// Vercel serverless handler
 export default function handler(req, res) {
   return app(req, res);
 }
