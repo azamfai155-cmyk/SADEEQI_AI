@@ -13,3 +13,9 @@
 - Voice uses Android SpeechRecognizer/TTS; this is not OpenAI Realtime voice and is not wake-word listening.
 - App bearer token embedded at build time is only a bootstrap gate, not robust user authentication; production should issue short-lived per-user tokens.
 - No server deployment, API key provisioning, GitHub remote creation, APK build, or device test has been performed.
+
+## 1.2.0 – Cloudflare Workers deployment adapter
+- Added `wrangler.jsonc` at repository root so Cloudflare deploys a Worker entrypoint rather than looking for static assets.
+- Added a native Fetch API Worker endpoint for `/health` and `/v1/chat`.
+- Kept the original Express backend intact for Node.js hosting.
+- Added Worker request-validation tests and Arabic deployment instructions.
