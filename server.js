@@ -1,4 +1,4 @@
-import express from 'express';
+
 import crypto from 'node:crypto';
 
 const app = express();
@@ -49,5 +49,5 @@ app.post('/v1/chat', auth, async (req, res) => {
     return res.status(502).json({ error: `AI provider unavailable: ${error.message}` });
   }
 });
-app.listen(PORT, '0.0.0.0', () => console.log(`SADEEQI backend 1.2.0 listening on ${PORT}`));
+export default app;
 export { app };
