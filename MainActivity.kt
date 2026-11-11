@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.azzam.sadeeqi.core.OpenAiGateway
@@ -93,9 +96,11 @@ class MainActivity : ComponentActivity() {
         onReply: (String) -> Unit
     ) {
         val gateway = remember { OpenAiGateway() }
+
         val memory = remember {
             EncryptedMemory(this@MainActivity)
         }
+
         val scope = rememberCoroutineScope()
 
         val messages = remember {
@@ -273,136 +278,152 @@ class MainActivity : ComponentActivity() {
             )
         ) {
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF10111A))
-                    .padding(16.dp)
+            Box(
+                modifier = Modifier.fillMaxSize()
             ) {
 
-                Text(
-                    text = "صديقي | SADEEQI AI",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White
+                // خلفية تطبيق صديقي
+                Image(
+                    painter = painterResource(
+                        id = R.drawable.sadeeqi_background
+                    ),
+                    contentDescription = "خلفية صديقي",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
 
-                Text(
-                    text = "مرحباً عزام",
-                    color = Color(0xFFB9A5FF)
-                )
-
-                Spacer(
-                    modifier = Modifier.height(8.dp)
-                )
-
-                Text(
-                    text = status,
-                    color = Color.LightGray,
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                LazyColumn(
+                // طبقة شفافة لتحسين وضوح المحتوى
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement =
-                        Arrangement.spacedBy(10.dp),
-                    contentPadding =
-                        PaddingValues(vertical = 16.dp)
+                        .fillMaxSize()
+                        .background(Color(0x66000000))
+                        .padding(16.dp)
                 ) {
 
-                    items(messages) { (who, body) ->
+                    Text(
+                        text = "صديقي | SADEEQI AI",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = Color.White
+                    )
 
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor =
-                                    if (who == "صديقي") {
-                                        Color(0xFF25283A)
-                                    } else {
-                                        Color(0xFF34304A)
-                                    }
-                            )
-                        ) {
+                    Text(
+                        text = "مرحباً عزام",
+                        color = Color(0xFFB9A5FF)
+                    )
 
-                            Column(
-                                modifier = Modifier.padding(12.dp)
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        text = status,
+                        color = Color.LightGray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement =
+                            Arrangement.spacedBy(10.dp),
+                        contentPadding =
+                            PaddingValues(vertical = 16.dp)
+                    ) {
+
+                        items(messages) { (who, body) ->
+
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor =
+                                        if (who == "صديقي") {
+                                            Color(0xCC25283A)
+                                        } else {
+                                            Color(0xCC34304A)
+                                        }
+                                )
                             ) {
 
-                                Text(
-                                    text = who,
-                                    color = Color(0xFFB9A5FF)
-                                )
+                                Column(
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
 
-                                Text(
-                                    text = body,
-                                    color = Color.White
-                                )
+                                    Text(
+                                        text = who,
+                                        color = Color(0xFFB9A5FF)
+                                    )
+
+                                    Text(
+                                        text = body,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }
-                }
 
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = {
-                        Text("اكتب أمرك بالعربية")
-                    }
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(8.dp),
-                    verticalAlignment =
-                        Alignment.CenterVertically
-                ) {
-
-                    Button(
-                        onClick = {
-                            imagePicker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts
-                                        .PickVisualMedia.ImageOnly
-                                )
-                            )
-                        },
-                        modifier = Modifier.weight(0.8f)
-                    ) {
-                        Text("📷 صورة")
-                    }
-
-                    Button(
-                        onClick = {
-                            status =
-                                "استمع الآن عبر خدمة التعرف على الكلام"
-                            onListen()
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("🎙 استمع")
-                    }
-
-                    Button(
-                        onClick = {
-                            val question = input
-                            input = ""
-                            sendQuestion(question)
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("إرسال")
-                    }
-                }
-
-                if (selectedImageDataUrl != null) {
-                    Text(
-                        text =
-                            "تم اختيار صورة — أرسل سؤالك لتحليلها",
-                        color = Color(0xFFB9A5FF)
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = {
+                            Text("اكتب أمرك بالعربية")
+                        }
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement =
+                            Arrangement.spacedBy(8.dp),
+                        verticalAlignment =
+                            Alignment.CenterVertically
+                    ) {
+
+                        Button(
+                            onClick = {
+                                imagePicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts
+                                            .PickVisualMedia.ImageOnly
+                                    )
+                                )
+                            },
+                            modifier = Modifier.weight(0.8f)
+                        ) {
+                            Text("📷 صورة")
+                        }
+
+                        Button(
+                            onClick = {
+                                status =
+                                    "استمع الآن عبر خدمة التعرف على الكلام"
+                                onListen()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("🎙 استمع")
+                        }
+
+                        Button(
+                            onClick = {
+                                val question = input
+                                input = ""
+                                sendQuestion(question)
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("إرسال")
+                        }
+                    }
+
+                    if (selectedImageDataUrl != null) {
+                        Text(
+                            text =
+                                "تم اختيار صورة — أرسل سؤالك لتحليلها",
+                            color = Color(0xFFB9A5FF)
+                        )
+                    }
                 }
             }
         }
