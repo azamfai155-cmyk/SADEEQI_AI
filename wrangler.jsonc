@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ssadeeqii-ai",
+  "name": "// wrangler.jsonc
+"name": "sadeeeqii-ai",",
   "main": "backend/src/worker.js",
   "compatibility_date": "2026-11-11",
   "workers_dev": true,
