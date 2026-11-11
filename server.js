@@ -109,23 +109,32 @@ app.post('/v1/chat', auth, async (req, res) => {
     }
   }
 
-  const payload = {
-    model: MODEL,
-    instructions: SYSTEM_PROMPT,
-    input,
-    store: false
-  };
+  const hasImage = input.some(turn =>
+  Array.isArray(turn.content) &&
+  turn.content.some(part => part?.type === 'input_image')
+);
+
+const selectedModel = hasImage
+  ? 'qwen/qwen3.8-27b'
+  : MODEL;
+
+const payload = {
+  model: selectedModel,
+  instructions: SYSTEM_PROMPT,
+  input
+};
 
   if (
     ALLOW_WEB_SEARCH &&
     req.body?.enable_web_search === true
   ) {
-    payload.tools = [{ type: 'web_search' }];
-  }
+    if (!hasImage) {
+  payload.tools = [{ type: 'browser_search' }];
+    }
 
   try {
     const upstream = await fetch(
-      'https://api.openai.com/v1/responses',
+      ''https://api.groq.com/openai/v1/responses',
       {
         method: 'POST',
         headers: {
