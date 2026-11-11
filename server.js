@@ -4,7 +4,6 @@ import crypto from 'node:crypto';
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
-const PORT = Number(process.env.PORT || 8080);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 const MODEL = process.env.OPENAI_MODEL;
@@ -49,5 +48,6 @@ app.post('/v1/chat', auth, async (req, res) => {
     return res.status(502).json({ error: `AI provider unavailable: ${error.message}` });
   }
 });
-export default app;
-export { app };
+export default function handler(req, res) {
+  return app(req, res);
+}
