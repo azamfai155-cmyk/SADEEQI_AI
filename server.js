@@ -1,9 +1,5 @@
 import express from 'express';
 import crypto from 'node:crypto';
-
-const app = express();
-import crypto from 'node:crypto';
-
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
