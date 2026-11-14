@@ -65,5 +65,6 @@ test('social provider readiness lists platforms without claiming fake connection
   assert.equal(response.status, 200);
   assert.equal(data.providers.length, 15);
   assert.equal(data.connectedCount, 0);
+  assert.equal(data.configuredCount, 0);
   assert.ok(data.providers.every(provider => provider.connected === false));
 });
