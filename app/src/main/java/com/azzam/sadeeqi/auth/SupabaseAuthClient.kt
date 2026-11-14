@@ -27,12 +27,14 @@ class SupabaseAuthClient(private val context: Context) {
         "/auth/v1/signup", email, password
     )
 
-    fun accessToken(): String {
+    fun accessToken(): String = synchronized(REFRESH_LOCK) {
+        // Re-read only after acquiring the process-wide lock: another request may
+        // already have rotated the refresh token and saved a newer session.
         val session = EncryptedSessionStore.read(context)
             ?: error("سجّل الدخول إلى حسابك أولاً.")
         val now = System.currentTimeMillis() / 1000L
         if (session.optLong("expires_at", 0L) > now + 60L) {
-            return session.optString("access_token").takeIf { it.isNotBlank() }
+            return@synchronized session.optString("access_token").takeIf { it.isNotBlank() }
                 ?: error("جلسة الدخول غير صالحة.")
         }
         val refreshToken = session.optString("refresh_token")
@@ -51,9 +53,10 @@ class SupabaseAuthClient(private val context: Context) {
                 EncryptedSessionStore.clear(context)
                 error("انتهت الجلسة. سجّل الدخول مجدداً.")
             }
-            result.put("expires_at", now + result.optLong("expires_in", 3600L))
+            val refreshedAt = System.currentTimeMillis() / 1000L
+            result.put("expires_at", refreshedAt + result.optLong("expires_in", 3600L))
             EncryptedSessionStore.save(context, result)
-            return result.getString("access_token")
+            result.getString("access_token")
         }
     }
 
