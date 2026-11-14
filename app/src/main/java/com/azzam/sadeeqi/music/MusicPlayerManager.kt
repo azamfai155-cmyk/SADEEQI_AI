@@ -28,6 +28,7 @@ class MusicPlayerManager(
     private val appContext = context.applicationContext
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
+    private var pendingRemoteQueue: Pair<List<RemoteMusicTrack>, Int>? = null
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = publish()
@@ -47,6 +48,10 @@ class MusicPlayerManager(
             runCatching {
                 controller = future.get().also { it.addListener(listener) }
                 publish()
+                pendingRemoteQueue?.let { (tracks, index) ->
+                    pendingRemoteQueue = null
+                    playRemoteQueue(tracks, index)
+                }
             }
         }, MoreExecutors.directExecutor())
     }
@@ -66,8 +71,12 @@ class MusicPlayerManager(
     }
 
     fun playRemoteQueue(tracks: List<RemoteMusicTrack>, startIndex: Int = 0) {
-        val player = controller ?: return
         if (tracks.isEmpty()) return
+        val player = controller
+        if (player == null) {
+            pendingRemoteQueue = tracks to startIndex
+            return
+        }
         val items = tracks.map { track ->
             MediaItem.Builder()
                 .setUri(track.streamUrl)
@@ -134,5 +143,6 @@ class MusicPlayerManager(
         controller = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
+        pendingRemoteQueue = null
     }
 }
