@@ -50,6 +50,8 @@ class SocialHubRepository(private val accessTokenProvider: () -> String) {
             }
             return SocialProviderResponse(
                 providers = providers,
+                connectedCount = root.optInt("connectedCount", 0),
+                configuredCount = root.optInt("configuredCount", providers.count { it.configured }),
                 notice = root.optString("notice", "حالة الربط محدثة من الخادم.")
             )
         }
