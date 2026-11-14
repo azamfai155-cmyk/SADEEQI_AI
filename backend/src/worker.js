@@ -3,7 +3,7 @@ const DEFAULT_SYSTEM_PROMPT = 'أنت صديقي، مساعد عزام الرق�
 const MAX_BODY_BYTES = 6 * 1024 * 1024;
 const MAX_INPUT_TURNS = 24;
 const MAX_TEXT_CHARS = 20000;
-const MAX_IMAGE_DATA_CHARS = 5 * 1024 * 1024;
+const MAX_IMAGE_DATA_CHARS = 4 * 1024 * 1024;
 const MAX_OUTPUT_TOKENS = 1200;
 
 function json(data, status = 200, headers = {}) {
@@ -127,7 +127,7 @@ export default {
         env.SESSION_RATE_LIMITER && typeof env.SESSION_RATE_LIMITER.limit === 'function' &&
         env.CHAT_RATE_LIMITER && typeof env.CHAT_RATE_LIMITER.limit === 'function'
       );
-      return json({service:'sadeeqi-ai',version:'1.4.0',runtime:'cloudflare-workers',configured},200,cors);
+      return json({service:'sadeeqi-ai',version:'1.4.1',runtime:'cloudflare-workers',configured},200,cors);
     }
 
     if (url.pathname === '/v1/session' && request.method === 'POST') {
@@ -197,6 +197,7 @@ export default {
       }
       const output = (raw?.output || []).flatMap(item=>item.content || [])
         .filter(part=>part.type==='output_text').map(part=>part.text).join('\\n').trim();
+      if (!output) return json({error:'وصل رد فارغ من محرك الذكاء الاصطناعي.'},502,cors);
       return json({id:raw?.id || null,model:raw?.model || env.OPENAI_MODEL,output_text:output,usage:raw?.usage || null},200,cors);
     } catch {
       return json({error:'تعذر الاتصال بمحرك الذكاء الاصطناعي. حاول لاحقاً.'},502,cors);
