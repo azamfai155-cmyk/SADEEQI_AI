@@ -392,7 +392,13 @@ class MainActivity : ComponentActivity() {
 
         onVoiceText = { spoken ->
             if (spoken.isNotBlank()) {
-                when (val command = MusicCommandParser.parse(spoken)) {
+                val phoneCommand = DeviceCommandParser.parse(spoken)
+                if (phoneCommand != null) {
+                    messages.add("أنت" to spoken)
+                    pendingDeviceCommand = phoneCommand
+                    status = "بانتظار موافقتك لتنفيذ أمر على الهاتف."
+                } else {
+                    when (val command = MusicCommandParser.parse(spoken)) {
                     MusicCommand.Pause -> {
                         musicManager.pause()
                         musicNotice = "تم إيقاف الموسيقى مؤقتاً."
@@ -434,6 +440,7 @@ class MainActivity : ComponentActivity() {
                             onReply(greeting)
                         } else sendQuestion(spoken)
                     }
+                }
                 }
             }
         }
