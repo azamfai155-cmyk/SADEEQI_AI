@@ -1,21 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from './backend/src/worker.js';
-const env = { OPENAI_API_KEY: 'test-key', SADEEQI_APP_TOKEN: 'test-token', OPENAI_MODEL: 'test-model' };
+const secret = 'test-session-signing-secret-at-least-32-characters';
+const env = {OPENAI_API_KEY:'test-key',SADEEQI_SESSION_SECRET:secret,OPENAI_MODEL:'test-model'};
+
 test('health reports missing config without exposing secrets', async () => {
   const response = await worker.fetch(new Request('https://example.workers.dev/health'), {});
   const data = await response.json();
-  assert.equal(response.status, 200);
-  assert.equal(data.configured, false);
-  assert.equal(JSON.stringify(data).includes('test-key'), false);
+  assert.equal(response.status,200); assert.equal(data.configured,false);
+  assert.equal(JSON.stringify(data).includes('test-key'),false);
+});
+test('session endpoint issues a signed ten-minute token', async () => {
+  const response = await worker.fetch(new Request('https://example.workers.dev/v1/session',{method:'POST'}),env);
+  const data = await response.json();
+  assert.equal(response.status,200); assert.equal(data.token_type,'Bearer');
+  assert.equal(data.expires_in,600); assert.equal(data.token.split('.').length,3);
 });
 test('chat rejects missing bearer token', async () => {
-  const request = new Request('https://example.workers.dev/v1/chat', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({input:[{role:'user',content:'مرحبا'}]}) });
-  const response = await worker.fetch(request, env);
-  assert.equal(response.status, 401);
+  const response = await worker.fetch(new Request('https://example.workers.dev/v1/chat',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({input:[{role:'user',content:'مرحبا'}]})}),env);
+  assert.equal(response.status,401);
 });
-test('chat validates request payload before provider call', async () => {
-  const request = new Request('https://example.workers.dev/v1/chat', { method: 'POST', headers: {'content-type':'application/json', authorization:'Bearer test-token'}, body: JSON.stringify({input:[]}) });
-  const response = await worker.fetch(request, env);
-  assert.equal(response.status, 400);
+test('chat validates payload after session authentication', async () => {
+  const issued = await worker.fetch(new Request('https://example.workers.dev/v1/session',{method:'POST'}),env);
+  const {token} = await issued.json();
+  const response = await worker.fetch(new Request('https://example.workers.dev/v1/chat',{
+    method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},
+    body:JSON.stringify({input:[]})}),env);
+  assert.equal(response.status,400);
+});
+test('chat rejects a session signed with a different secret', async () => {
+  const issued = await worker.fetch(new Request('https://example.workers.dev/v1/session',{method:'POST'}),env);
+  const {token} = await issued.json();
+  const response = await worker.fetch(new Request('https://example.workers.dev/v1/chat',{
+    method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({input:[{role:'user',content:'test'}]})}),
+    {...env,SADEEQI_SESSION_SECRET:'different-secret-that-is-also-long-enough'});
+  assert.equal(response.status,401);
 });
