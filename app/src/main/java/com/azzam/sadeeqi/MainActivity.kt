@@ -525,29 +525,45 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        OutlinedTextField(
-                            value = input,
-                            onValueChange = { input = it },
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(28.dp),
-                            placeholder = { Text("اكتب لصديقك…", color = Color(0xFFB9B4C7)) },
-                            leadingIcon = {
+                            color = Color(0xF01B1D2A),
+                            shape = RoundedCornerShape(30.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x553C3B4C)),
+                            shadowElevation = 5.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 IconButton(
                                     onClick = {
-                                        imagePicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                        )
-                                    }
+                                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                    },
+                                    modifier = Modifier.size(42.dp)
                                 ) {
-                                    Text("▧", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
+                                    Text("+", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineMedium)
                                 }
-                            },
-                            trailingIcon = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
+                                OutlinedTextField(
+                                    value = input,
+                                    onValueChange = { input = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("راسل صديقي", color = Color(0xFF9C9AAA)) },
+                                    singleLine = false,
+                                    maxLines = 4,
+                                    shape = RoundedCornerShape(22.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        cursorColor = Color(0xFFE6C77A),
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    )
+                                )
+                                if (input.isBlank()) {
                                     IconButton(
                                         onClick = {
                                             if (voiceSessionActive) {
@@ -558,29 +574,27 @@ class MainActivity : ComponentActivity() {
                                                 onStartVoice()
                                                 status = "الميكروفون جاهز — تحدث الآن"
                                             }
-                                        }
+                                        },
+                                        modifier = Modifier.size(42.dp)
                                     ) {
-                                        Text(
-                                            if (voiceSessionActive) "◉" else "🎙",
+                                        Text(if (voiceSessionActive) "◉" else "🎙",
                                             color = if (voiceSessionActive) Color(0xFF9DE0B3) else Color(0xFFE6C77A),
-                                            style = MaterialTheme.typography.titleLarge
-                                        )
+                                            style = MaterialTheme.typography.titleLarge)
                                     }
+                                } else {
                                     IconButton(
                                         onClick = {
                                             val question = input
                                             input = ""
                                             sendQuestion(question)
                                         },
-                                        enabled = input.isNotBlank() || selectedImageDataUrl != null
+                                        modifier = Modifier.size(42.dp).background(Color(0xFFE6C77A), RoundedCornerShape(50))
                                     ) {
-                                        Text("➤", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
+                                        Text("↑", color = Color(0xFF211A2D), style = MaterialTheme.typography.headlineSmall)
                                     }
                                 }
-                            },
-                            singleLine = false,
-                            maxLines = 4
-                        )
+                            }
+                        }
                         if (selectedImageDataUrl != null) Text("تم اختيار صورة — أرسل سؤالك لتحليلها", color = Color(0xFFE6C77A))
                     }
                     "البحث" -> {
