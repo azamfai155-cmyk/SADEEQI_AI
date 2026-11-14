@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
             saveDataMode = musicLibrary.isDataSaverEnabled()
         }
         var status by remember {
-            mutableStateOf("الإصدار 1.2.0 — يحتاج إعداد خادم API")
+            mutableStateOf("الإصدار 1.3.0 — المحادثة الصوتية العربية")
         }
 
         var selectedImageDataUrl by remember {
