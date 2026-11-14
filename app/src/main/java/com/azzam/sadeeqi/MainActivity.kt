@@ -789,7 +789,10 @@ class MainActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    "التداول" -> {\n                        TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))\n                    }\n                    "SOCIAL HUB" -> {
+                    "التداول" -> {
+                        TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
+                    }
+                    "SOCIAL HUB" -> {
                         SocialHubScreen(modifier = Modifier.weight(1f))
                     }
                     "الأدوات" -> {
