@@ -1,4 +1,4 @@
-name: SADEEQI AI - tests and Android build
+name: SADEEQI AI - unified Android build and tests
 
 # Keep only the newest run for a branch.
 concurrency:
@@ -30,25 +30,31 @@ jobs:
       - name: Run backend tests
         run: npm test
 
-  android-build:
+  android:
+    name: Android - unit tests, APK and emulator tests
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          packages: "platform-tools platforms;android-34 platforms;android-35 build-tools;34.0.0 build-tools;35.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - name: Run Android unit tests and build debug APK
+
+      - name: Run unit tests and build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
@@ -63,32 +69,8 @@ jobs:
             -PsadeeqiApiBaseUrl="$API_URL" \
             -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
             -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SADEEQI-AI-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
 
-  android-instrumentation-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.11.1"
-      - name: Run Android instrumentation tests on API 34 emulator
+      - name: Run instrumentation tests on API 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
@@ -102,7 +84,29 @@ jobs:
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            set -u; if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then echo "::error::Missing required Supabase build secrets."; exit 1; fi; set +e; gradle :app:connectedDebugAndroidTest --stacktrace -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"; test_status=$?; adb logcat -d -v threadtime > android-instrumentation-logcat.txt; adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1; exit "$test_status"
+            set -u
+            if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+              echo "::error::Missing required Supabase build secrets."
+              exit 1
+            fi
+            set +e
+            gradle :app:connectedDebugAndroidTest --stacktrace \
+              -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" \
+              -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
+              -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
+            test_status=$?
+            adb logcat -d -v threadtime > android-instrumentation-logcat.txt
+            adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1
+            exit "$test_status"
+
+      - name: Upload APK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SADEEQI-AI-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: ignore
+
       - name: Upload Android instrumentation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
