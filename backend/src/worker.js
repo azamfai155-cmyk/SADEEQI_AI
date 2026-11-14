@@ -66,19 +66,19 @@ async function authenticate(request, env) {
     }
 
     if (mode === 'supabase') {
-      if (!supabaseUrl) return { ok: false, response: json({ error: 'Supabase authentication is not configured.' }, 503) };
-      return { ok: false, response: json({ error: token ? 'Invalid or expired session. Please sign in again.' : 'Authentication required.' }, 401) };
+      if (!supabaseUrl) return { ok: false, status: 503, body: { error: 'Supabase authentication is not configured.' } };
+      return { ok: false, status: 401, body: { error: token ? 'Invalid or expired session. Please sign in again.' : 'Authentication required.' } };
     }
   }
 
   if (!legacyToken) {
     return {
       ok: false,
-      response: json({ error: mode === 'dual' ? 'Neither Supabase nor legacy authentication is configured.' : 'Backend auth is not configured.' }, 503)
+      status: 503, body: { error: mode === 'dual' ? 'Neither Supabase nor legacy authentication is configured.' : 'Backend auth is not configured.' }
     };
   }
   if (!safeEqual(token, legacyToken)) {
-    return { ok: false, response: json({ error: 'Unauthorized.' }, 401) };
+    return { ok: false, status: 401, body: { error: 'Unauthorized.' } };
   }
   return { ok: true, userId: null, email: null };
 }
@@ -237,7 +237,7 @@ export async function handleRequest(request, env) {
   }
 
   const auth = await authenticate(request, env);
-  if (!auth.ok) return json(auth.response.body, auth.response.status, { ...cors, ...Object.fromEntries(auth.response.headers) });
+  if (!auth.ok) return json(auth.body, auth.status, cors);
 
   if (isSocial) {
     return json({
