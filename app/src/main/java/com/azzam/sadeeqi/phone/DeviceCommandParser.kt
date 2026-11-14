@@ -24,8 +24,9 @@ object DeviceCommandParser {
         when (text) {
             "افتح الكاميرا", "شغل الكاميرا", "فتح الكاميرا" -> return DeviceCommand.OpenCamera
             "افتح الاعدادات", "افتح الضبط", "اذهب للاعدادات" -> return DeviceCommand.OpenSettings
-            "ارفع مستوى الصوت", "ارفع الصوت", "علي الصوت" -> return DeviceCommand.VolumeUp
-            "اخفض مستوى الصوت", "اخفض الصوت", "وطي الصوت" -> return DeviceCommand.VolumeDown
+            // normalize() converts Arabic alef maqsura (ى) to ya (ي).
+            "ارفع مستوي الصوت", "ارفع الصوت", "علي الصوت" -> return DeviceCommand.VolumeUp
+            "اخفض مستوي الصوت", "اخفض الصوت", "وطي الصوت" -> return DeviceCommand.VolumeDown
         }
 
         val launch = Regex("^(?:افتح|شغل|قم بفتح)\\s+(.+)$").matchEntire(text)
