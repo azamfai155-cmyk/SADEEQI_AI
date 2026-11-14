@@ -41,7 +41,7 @@ object PhoneCommandParser {
     )
 
     fun parse(raw: String): PhoneCommand? {
-        val text = normalize(raw)
+        val text = normalize(raw).removePrefix("يا صديقي ").removePrefix("صديقي ").trim()
         if (text.isBlank()) return null
 
         if (listOf("ارفع الصوت", "علي الصوت", "زود الصوت", "ارفع صوت الهاتف", "ارفع صوت الجوال").any(text::contains)) {
@@ -82,7 +82,7 @@ object PhoneCommandParser {
         }
 
         if (text.startsWith("افتح ") || text.startsWith("شغل ")) {
-            appAliases.firstOrNull { (aliases, _) -> aliases.any { alias -> text.removePrefix("افتح ").removePrefix("شغل ").trim() == alias } }
+            appAliases.firstOrNull { (aliases, _) -> aliases.any { alias -> text.removePrefix("افتح ").removePrefix("شغل ").removePrefix("تطبيق ").trim() == alias } }
                 ?.let { (_, app) -> return PhoneCommand.OpenApp(app.first, app.second) }
         }
         return null
