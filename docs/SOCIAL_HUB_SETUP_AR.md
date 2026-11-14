@@ -63,7 +63,7 @@ npx wrangler secret put SOCIAL_TOKEN_ENCRYPTION_KEY
 
 تُقرأ المفاتيح من Cloudflare Worker Secrets/Vars فقط، لا من تطبيق Android:
 
-- Meta: `META_CLIENT_ID`, `META_CLIENT_SECRET` (تطبيق Meta واحد قد يخدم Facebook وInstagram وMessenger وThreads وبعض WhatsApp flows بعد تهيئة المنتجات والصلاحيات).
+- Meta: `META_CLIENT_ID`, `META_CLIENT_SECRET` (تطبيق Meta واحد يخدم Facebook وInstagram وMessenger وThreads بعد تهيئة المنتجات والصلاحيات).
 - Facebook عند فصل التطبيق: `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`.
 - Instagram عند فصل التطبيق: `INSTAGRAM_CLIENT_ID`, `INSTAGRAM_CLIENT_SECRET`.
 - TikTok: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`.
@@ -75,6 +75,7 @@ npx wrangler secret put SOCIAL_TOKEN_ENCRYPTION_KEY
 - Reddit: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`.
 - Pinterest: `PINTEREST_CLIENT_ID`, `PINTEREST_CLIENT_SECRET`.
 - Twitch: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`.
+- WhatsApp Business Cloud API: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
 - Telegram Bot API: `TELEGRAM_BOT_TOKEN` (ليس OAuth ولا كلمة مرور حسابك).
 
 حتى بعد إضافة المفاتيح، لا تعتبر المنصة جاهزة للإنتاج قبل ضبط redirect URIs، scopes، webhook URLs، مراجعة التطبيق، واختبار كل API.
