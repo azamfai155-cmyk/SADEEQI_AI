@@ -43,14 +43,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Ink = Color(0xFF0B0B13)
-private val Panel = Color(0xFF171725)
-private val PanelRaised = Color(0xFF202034)
-private val Violet = Color(0xFF9B7BFF)
-private val VioletLight = Color(0xFFC8B8FF)
-private val Muted = Color(0xFF9B9AAF)
-private val TextMain = Color(0xFFF7F5FF)
-private val Teal = Color(0xFF67DCC7)
+private val Ink = Color(0xFF07090D)
+private val Panel = Color(0xFF11151B)
+private val PanelRaised = Color(0xFF1A2028)
+private val Violet = Color(0xFFC49A52)
+private val VioletLight = Color(0xFFE8C98A)
+private val Muted = Color(0xFF9A9DA5)
+private val TextMain = Color(0xFFF5F1E8)
+private val Teal = Color(0xFF8BC8B5)
+private val Silver = Color(0xFFC5CDD5)
 
 class MainActivity : ComponentActivity() {
 
@@ -226,7 +227,7 @@ class MainActivity : ComponentActivity() {
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color(0xFF171326), Ink, Ink)
+                                listOf(Color(0xFF17130D), Color(0xFF0B0D11), Ink)
                             )
                         )
                         .padding(horizontal = 18.dp)
@@ -310,17 +311,17 @@ private fun Header(status: String) {
                     .clip(RoundedCornerShape(15.dp))
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xFFB9A4FF), Color(0xFF6747C7))
+                            listOf(Color(0xFFF0D49A), Color(0xFF8E642D), Color(0xFF3A3022))
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text("✦", color = Color.White, fontSize = 26.sp)
+                Text("S", color = Color(0xFFFFE6B3), fontSize = 25.sp, fontWeight = FontWeight.Black)
             }
             Spacer(Modifier.width(11.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("صديقي", color = TextMain, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Text("SADEEQI AI  •  مساعدك الشخصي", color = Muted, fontSize = 10.sp)
+                Text("SADEEQI AI", color = VioletLight, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                Text("صَديقك الذكي • إصدار شخصي", color = Muted, fontSize = 10.sp)
             }
             Surface(
                 color = Color(0xFF17352F),
@@ -387,15 +388,15 @@ private fun ColumnScope.HomeScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xFF49347E), Color(0xFF25213D), Color(0xFF1B1A2B))
+                            listOf(Color(0xFF3A2B17), Color(0xFF191A1D), Color(0xFF101319))
                         )
                     )
                     .padding(20.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("✦  مساحة صديقي الذكية", color = VioletLight, fontSize = 12.sp)
+                    Text("SADEEQI AI  /  CORE ONLINE", color = VioletLight, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
                     Text(
-                        "فكّر، اسأل، خطّط…\nأنا معك خطوة بخطوة.",
+                        "ذكاء يفهمك.\nومساعد يرافقك.",
                         color = Color.White,
                         fontSize = 21.sp,
                         lineHeight = 29.sp,
