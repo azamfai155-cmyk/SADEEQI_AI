@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const expectedToken = process.env.SADEEQI_APP_TOKEN;
   if (!expectedToken) return json(res, 503, { error: "Backend auth is not configured." });
   const authorization = req.headers.authorization || "";
-  const token = authorization.replace(/^Bearer\\s+/i, "");
+  const token = authorization.replace(/^Bearer\s+/i, "");
   if (!safeEqual(token, expectedToken)) return json(res, 401, { error: "Unauthorized." });
 
   if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL) {
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     const upstream = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: \`Bearer \${process.env.OPENAI_API_KEY}\`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload),
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       .flatMap(item => item.content || [])
       .filter(part => part.type === "output_text")
       .map(part => part.text)
-      .join("\\n")
+      .join("\n")
       .trim();
 
     if (!output) return json(res, 502, { error: "AI provider returned an empty response." });
