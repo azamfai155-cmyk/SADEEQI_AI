@@ -110,7 +110,7 @@ export function validateInput(input) {
 app.get('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
     service: 'sadeeqi-ai',
-    version: '1.4.0',
+    version: process.env.SADEEQI_VERSION || '1.5.1',
     provider: PROVIDER,
     model: MODEL,
     auth_mode: AUTH_MODE,
