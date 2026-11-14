@@ -8,7 +8,7 @@ app.use(express.json({ limit: '12mb' }));
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 const AUTH_MODE = (process.env.AUTH_MODE || 'legacy').toLowerCase();
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\\/$/, '');
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
 const PROVIDER = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -24,7 +24,7 @@ const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
 export function extractBearerToken(value) {
-  return typeof value === 'string' ? value.replace(/^Bearer\\s+/i, '').trim() : '';
+  return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
 }
 
 function safeEqual(a, b) {
@@ -181,7 +181,7 @@ app.post('/v1/chat', requireAuth, async (req, res) => {
       });
     }
     const output = (result.output || []).flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text').map(part => part.text).join('\\n').trim();
+      .filter(part => part.type === 'output_text').map(part => part.text).join('\n').trim();
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
     return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
   } catch {
