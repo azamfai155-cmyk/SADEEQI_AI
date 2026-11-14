@@ -35,6 +35,8 @@ import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.music.MusicLibraryStore
+import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.RemoteMusicTrack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -127,8 +129,12 @@ class MainActivity : ComponentActivity() {
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicFavorites by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         val musicLibrary = remember { MusicLibraryStore(this@MainActivity) }
+        val audiusRepository = remember { AudiusMusicRepository() }
+        var remoteSearchQuery by remember { mutableStateOf("") }
+        var remoteMusicResults by remember { mutableStateOf(emptyList<RemoteMusicTrack>()) }
+        var isSearchingMusic by remember { mutableStateOf(false) }
         var saveDataMode by remember { mutableStateOf(true) }
-        var musicNotice by remember { mutableStateOf("اختر ملفات صوتية من جهازك لبدء التشغيل.") }
+        var musicNotice by remember { mutableStateOf("ابحث عن موسيقى عالمية أو اختر ملفات من هاتفك.") }
         val musicManager = remember {
             MusicPlayerManager(this@MainActivity) { state -> musicState = state }
         }
@@ -312,6 +318,36 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        fun searchOnlineMusic(query: String) {
+            val cleanQuery = query.trim()
+            if (cleanQuery.isBlank()) {
+                musicNotice = "اكتب اسم الأغنية أو الفنان أولاً."
+                return
+            }
+            remoteSearchQuery = cleanQuery
+            selectedTab = "موسيقى"
+            isSearchingMusic = true
+            musicNotice = "جاري البحث في مكتبة Audius العالمية…"
+            scope.launch {
+                try {
+                    val results = withContext(Dispatchers.IO) {
+                        audiusRepository.search(cleanQuery)
+                    }
+                    remoteMusicResults = results
+                    musicNotice = if (results.isEmpty()) {
+                        "لم نعثر على نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى."
+                    } else {
+                        "تم العثور على ${results.size} نتيجة. اختر مقطعاً للتشغيل."
+                    }
+                } catch (error: Exception) {
+                    remoteMusicResults = emptyList()
+                    musicNotice = "تعذر البحث: ${error.message ?: "تحقق من اتصال الإنترنت."}"
+                } finally {
+                    isSearchingMusic = false
+                }
+            }
+        }
+
         onVoiceText = { spoken ->
             if (spoken.isNotBlank()) {
                 when (val command = MusicCommandParser.parse(spoken)) {
@@ -346,8 +382,7 @@ class MainActivity : ComponentActivity() {
                         selectedTab = "موسيقى"
                     }
                     is MusicCommand.Search -> {
-                        musicNotice = "طلب البحث: ${command.query}. البحث عبر الإنترنت ينتظر ربط مزود موسيقى مرخّص."
-                        selectedTab = "موسيقى"
+                        searchOnlineMusic(command.query)
                     }
                     null -> {
                         if (spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "") in setOf("ياصديقي", "صديقي")) {
@@ -519,8 +554,44 @@ class MainActivity : ComponentActivity() {
                     }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
-                        Text("مشغّل ملفاتك الصوتية • يعمل دون اتصال", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Text("بث موسيقى عالمي عبر Audius + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         Text(musicNotice, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = remoteSearchQuery,
+                            onValueChange = { remoteSearchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("ابحث عن أغنية أو فنان عالمياً") }
+                        )
+                        Button(
+                            onClick = { searchOnlineMusic(remoteSearchQuery) },
+                            enabled = !isSearchingMusic && remoteSearchQuery.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E6B35))
+                        ) {
+                            Text(if (isSearchingMusic) "جاري البحث…" else "⌕ ابحث وشغّل")
+                        }
+                        if (remoteMusicResults.isNotEmpty()) {
+                            Text("نتائج الموسيقى العالمية", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            remoteMusicResults.take(12).forEachIndexed { index, track ->
+                                TextButton(
+                                    onClick = {
+                                        ContextCompat.startForegroundService(
+                                            this@MainActivity,
+                                            Intent(this@MainActivity, MusicPlaybackService::class.java)
+                                        )
+                                        musicManager.playRemoteQueue(remoteMusicResults, index)
+                                        musicNotice = "يتم تشغيل ${track.title} — ${track.artist}"
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text("♫  ${track.title}", color = Color.White, maxLines = 1)
+                                        Text(track.artist, color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(12.dp))
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -602,7 +673,7 @@ class MainActivity : ComponentActivity() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("وضع توفير الإنترنت", color = Color.White)
-                                Text("مفعّل افتراضياً؛ لا يوجد بث شبكي حالياً", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
+                                Text("يقلل استهلاك البيانات عند استخدام المصادر المتوافقة", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
                             }
                             Switch(checked = saveDataMode, onCheckedChange = { enabled ->
                                 saveDataMode = enabled
@@ -650,8 +721,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         Text(
-                            "المكتبة العالمية وخدمات البث لم تُربط بعد. لن تظهر نتائج أو موسيقى عبر الإنترنت قبل إضافة مزود مرخّص ومفاتيح API الخاصة به.",
-                            color = Color(0xFFE6C77A),
+                            "المصدر: Audius — كتالوج مفتوح يضم موسيقى لفنانين مستقلين. توفر كل مقطع وحقوقه وشروط استخدامه تخضع لبيانات الفنان والمنصة؛ لا يعني ذلك توفر كل الإصدارات التجارية.",
+                            color = Color(0xFFB9B4C7),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
