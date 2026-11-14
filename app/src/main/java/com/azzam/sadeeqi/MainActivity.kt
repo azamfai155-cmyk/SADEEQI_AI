@@ -38,6 +38,9 @@ import com.azzam.sadeeqi.music.MusicLibraryStore
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
+import com.azzam.sadeeqi.phone.DeviceCommand
+import com.azzam.sadeeqi.phone.DeviceCommandParser
+import com.azzam.sadeeqi.phone.PhoneControl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
     ) {
 
         val gateway = remember { OpenAiGateway() }
+        val phoneControl = remember { PhoneControl(this@MainActivity) }
         val memory = remember { EncryptedMemory(this@MainActivity) }
         val scope = rememberCoroutineScope()
 
@@ -160,6 +164,7 @@ class MainActivity : ComponentActivity() {
         var selectedImageDataUrl by remember {
             mutableStateOf<String?>(null)
         }
+        var pendingDeviceCommand by remember { mutableStateOf<DeviceCommand?>(null) }
 
         val audioPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenMultipleDocuments()
@@ -238,6 +243,14 @@ class MainActivity : ComponentActivity() {
         fun sendQuestion(question: String) {
 
             if (question.isBlank() && selectedImageDataUrl == null) return
+
+            val localCommand = DeviceCommandParser.parse(question)
+            if (localCommand != null && selectedImageDataUrl == null) {
+                messages.add("أنت" to question)
+                pendingDeviceCommand = localCommand
+                status = "بانتظار موافقتك لتنفيذ أمر على الهاتف."
+                return
+            }
 
             val imageForRequest = selectedImageDataUrl
             selectedImageDataUrl = null
@@ -425,6 +438,54 @@ class MainActivity : ComponentActivity() {
                 surface = Color(0xFF1B1D2A)
             )
         ) {
+            pendingDeviceCommand?.let { command ->
+                AlertDialog(
+                    onDismissRequest = { pendingDeviceCommand = null },
+                    title = { Text("تأكيد أمر الهاتف", color = Color.White) },
+                    text = { Text(DeviceCommandParser.confirmationText(command), color = Color(0xFFD2D0DC)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val result = runCatching {
+                                when (command) {
+                                    is DeviceCommand.LaunchApp -> check(phoneControl.launchApp(command.packageName)) {
+                                        "تطبيق ${command.appName} غير مثبت أو لا يمكن فتحه."
+                                    }
+                                    DeviceCommand.OpenCamera -> phoneControl.openCamera()
+                                    DeviceCommand.OpenSettings -> phoneControl.openSettings()
+                                    DeviceCommand.VolumeUp -> phoneControl.adjustMusicVolume(true)
+                                    DeviceCommand.VolumeDown -> phoneControl.adjustMusicVolume(false)
+                                    is DeviceCommand.SetAlarm -> phoneControl.createAlarm(command.hour, command.minute, "منبه صديقي")
+                                }
+                            }
+                            result.onSuccess {
+                                val confirmation = when (command) {
+                                    is DeviceCommand.LaunchApp -> "تم فتح تطبيق ${command.appName}."
+                                    DeviceCommand.OpenCamera -> "تم فتح الكاميرا."
+                                    DeviceCommand.OpenSettings -> "تم فتح إعدادات الهاتف."
+                                    DeviceCommand.VolumeUp -> "تم طلب رفع مستوى صوت الوسائط."
+                                    DeviceCommand.VolumeDown -> "تم طلب خفض مستوى صوت الوسائط."
+                                    is DeviceCommand.SetAlarm -> "فُتح تطبيق الساعة. أكمل حفظ المنبه هناك."
+                                }
+                                messages.add("صديقي" to confirmation)
+                                status = confirmation
+                            }.onFailure { error ->
+                                val message = error.message ?: "تعذر تنفيذ الأمر."
+                                messages.add("صديقي" to message)
+                                status = message
+                            }
+                            pendingDeviceCommand = null
+                        }) { Text("تأكيد", color = Color(0xFF62A9FF)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            messages.add("صديقي" to "تم إلغاء أمر الهاتف بناءً على طلبك.")
+                            pendingDeviceCommand = null
+                            status = "تم إلغاء الأمر."
+                        }) { Text("إلغاء", color = Color(0xFFB9B4C7)) }
+                    },
+                    containerColor = Color(0xFF242333)
+                )
+            }
 
             ModalNavigationDrawer(
                 drawerState = drawerState,
