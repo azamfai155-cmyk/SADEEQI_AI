@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -844,16 +844,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    "المهام" -> {
-                        Text("المهام والأتمتة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
-                        Card(modifier = Modifier.padding(top = 12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
-                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("✦ مساحة تنظيم المهام", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                Text("ستظهر هنا مهامك ومتابعة تنفيذها. لا توجد مهام مجدولة حالياً.", color = Color(0xFFD2D0DC))
-                                Text("هذه واجهة أولية؛ الجدولة التلقائية غير مربوطة بعد.", color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
                         Text("بث موسيقى عالمي عبر Audius + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
@@ -1068,7 +1058,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (selectedTab == "المهام" || selectedTab == "الأدوات" || selectedTab == "الإعدادات" || selectedTab == "SOCIAL HUB") {
+                if (selectedTab == "الأدوات" || selectedTab == "الإعدادات" || selectedTab == "SOCIAL HUB") {
                     Spacer(Modifier.weight(1f))
                 } else {
                     Spacer(Modifier.height(8.dp))
