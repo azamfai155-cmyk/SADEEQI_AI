@@ -51,6 +51,7 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
+    private var requestedVoiceAction: String = VoiceForegroundService.ACTION_START
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
@@ -58,7 +59,7 @@ class MainActivity : ComponentActivity() {
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
+                ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(requestedVoiceAction))
                 onVoiceSession?.invoke(true)
             } else {
                 onVoiceSession?.invoke(false)
@@ -74,7 +75,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SadeeqiApp(
+                onStartDictation = {
+                    requestedVoiceAction = VoiceForegroundService.ACTION_DICTATE
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_DICTATE))
+                        onVoiceSession?.invoke(true)
+                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                },
                 onStartVoice = {
+                    requestedVoiceAction = VoiceForegroundService.ACTION_START
                     if (
                         ContextCompat.checkSelfPermission(
                             this,
@@ -106,6 +115,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SadeeqiApp(
+        onStartDictation: () -> Unit,
         onStartVoice: () -> Unit,
         onStopVoice: () -> Unit,
         onInterruptVoice: () -> Unit,
@@ -686,13 +696,28 @@ class MainActivity : ComponentActivity() {
                                             voiceSessionActive = false
                                             status = "تم إيقاف الاستماع"
                                         } else {
-                                            onStartVoice()
-                                            status = "الميكروفون جاهز — تحدث الآن"
+                                            onStartDictation()
+                                            status = "استمع صديقي إلى رسالتك الصوتية"
                                         }
                                     },
                                     modifier = Modifier.size(40.dp)
                                 ) {
                                     Text("🎙", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (voiceSessionActive) {
+                                            onStopVoice()
+                                            voiceSessionActive = false
+                                            status = "تم إيقاف المحادثة الصوتية"
+                                        } else {
+                                            onStartVoice()
+                                            status = "المحادثة الصوتية المباشرة نشطة"
+                                        }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Text("〰", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
                                 }
                                 if (isGenerating) {
                                     IconButton(
