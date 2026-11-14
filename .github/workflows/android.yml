@@ -55,6 +55,7 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Run unit tests and build debug APK
+        timeout-minutes: 35
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
@@ -65,7 +66,7 @@ jobs:
             echo "::error::Missing required GitHub Actions secrets: SADEEQI_SUPABASE_URL and/or SADEEQI_SUPABASE_ANON_KEY. Refusing to build a broken APK."
             exit 1
           fi
-          gradle :app:testDebugUnitTest :app:assembleDebug \
+          gradle --no-daemon --stacktrace --console=plain --warning-mode all --max-workers=2 :app:testDebugUnitTest :app:assembleDebug \
             -PsadeeqiApiBaseUrl="$API_URL" \
             -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
             -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
