@@ -29,6 +29,7 @@ class MusicPlayerManager(
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var pendingRemoteQueue: Pair<List<RemoteMusicTrack>, Int>? = null
+    private var dataSaverEnabled: Boolean = true
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = publish()
@@ -47,6 +48,7 @@ class MusicPlayerManager(
         future.addListener({
             runCatching {
                 controller = future.get().also { it.addListener(listener) }
+                applyDataSaver()
                 publish()
                 pendingRemoteQueue?.let { (tracks, index) ->
                     pendingRemoteQueue = null
@@ -107,8 +109,13 @@ class MusicPlayerManager(
     fun previous() { controller?.seekToPreviousMediaItem(); publish() }
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs); publish() }
     fun setDataSaver(enabled: Boolean) {
+        dataSaverEnabled = enabled
+        applyDataSaver()
+    }
+
+    private fun applyDataSaver() {
         val player = controller ?: return
-        val maxBitrate = if (enabled) MusicPlaybackService.DATA_SAVER_MAX_AUDIO_BITRATE else Int.MAX_VALUE
+        val maxBitrate = if (dataSaverEnabled) MusicPlaybackService.DATA_SAVER_MAX_AUDIO_BITRATE else Int.MAX_VALUE
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()
             .setMaxAudioBitrate(maxBitrate)
