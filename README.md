@@ -56,3 +56,11 @@ This is source code only, not a built APK. Backend deployment and API credential
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
 **Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+
+
+## Android voice phone controls
+- The foreground voice session and chat input recognize a limited allow-list of Arabic phone commands (launch supported apps, open system settings, camera/files, media volume, prepare alarms, open dialer/SMS composer).
+- Calls and messages are never placed/sent silently; Android's own UI opens for the user to review and confirm.
+- No always-on microphone, unrestricted app tapping, lock-screen bypass, or hidden accessibility control is implemented.
+- See [Arabic voice phone controls guide](docs/PHONE_VOICE_CONTROLS_AR.md).
+- The Tasks navigation item and its placeholder screen were removed.
