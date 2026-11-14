@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
             musicManager.setDataSaver(saveDataMode)
         }
         var status by remember {
-            mutableStateOf("الإصدار 1.3.0 — المحادثة الصوتية العربية")
+            mutableStateOf("الإصدار 1.4.0 — المحادثة والصوت والموسيقى")
         }
 
         var selectedImageDataUrl by remember {
