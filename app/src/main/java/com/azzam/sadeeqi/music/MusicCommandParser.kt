@@ -21,7 +21,7 @@ object MusicCommandParser {
         if (text.contains("الاغنيه السابقه") || text.contains("الاغنية السابقة") || text == "السابق" || text == "اللي قبلها") return MusicCommand.Previous
         if (text.contains("ارفع الصوت") || text.contains("علي الصوت") || text.contains("زود الصوت")) return MusicCommand.VolumeUp
         if (text.contains("خفض الصوت") || text.contains("وطي الصوت") || text.contains("قلل الصوت")) return MusicCommand.VolumeDown
-        val searchPhrases = listOf("ابحث عن موسيقى", "ابحث عن اغنيه", "ابحث عن أغنية", "شغل موسيقى", "شغل اغنيه", "شغل أغنية", "ابحث عن")
+        val searchPhrases = listOf("ابحث عن", "شغل")
         val phrase = searchPhrases.firstOrNull { text.startsWith(it) }
         if (phrase != null) {
             val query = raw.trim().drop(phrase.length).trim().trimStart(':', '،', ' ')
