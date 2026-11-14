@@ -41,7 +41,7 @@ app.get('/health', (_req, res) => {
 
 app.post('/v1/chat', async (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
   if (!API_KEY || !MODEL) return res.status(503).json({ error: 'OpenAI server secrets are not configured.' });
 
