@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
         window.setBackgroundDrawableResource(R.drawable.sadeeqi_background)
 
+        voice = VoiceController(
             this,
             { text ->
                 runOnUiThread {
