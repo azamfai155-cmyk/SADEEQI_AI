@@ -179,18 +179,30 @@ export function buildSocialProviders(env = process.env) {
     { id: 'twitch', name: 'Twitch', family: 'Twitch', auth: 'Twitch OAuth 2.0', env: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'], note: 'الوظائف تعتمد على نطاقات OAuth وتسجيل تطبيق Twitch.' }
   ];
 
-  return definitions.map(({ env: required, ...provider }) => ({
-    ...provider,
-    configured: required.every((name) => Boolean(env[name])),
-    connected: false
-  }));
+  return definitions.map(({ env: required, ...provider }) => {
+    const credentialsPresent = required.every((name) => Boolean(env[name]));
+    const encryptionReady = Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY);
+    const configured = provider.id === 'telegram'
+      ? credentialsPresent
+      : credentialsPresent && encryptionReady;
+    return {
+      ...provider,
+      configured,
+      status: configured ? 'credentials_and_encryption_ready' : 'setup_required',
+      connected: false
+    };
+  });
 }
 
 app.get('/v1/social/providers', requireAuth, (_req, res) => {
   // Readiness only: OAuth, account linking and social actions are not implemented.
+  const providers = buildSocialProviders();
   res.set('Cache-Control', 'no-store').json({
-    providers: buildSocialProviders(),
-    notice: 'هذه حالة إعداد واجهات المطور فقط. لا توجد حسابات اجتماعية متصلة حالياً، ولا يمكن الربط أو النشر قبل تنفيذ OAuth وموافقة المستخدم.'
+    phase: 'provider_readiness',
+    connectedCount: providers.filter(provider => provider.connected).length,
+    configuredCount: providers.filter(provider => provider.configured).length,
+    providers,
+    notice: 'هذه حالة إعداد واجهات المطور والتشفير فقط. لا توجد حسابات اجتماعية متصلة حالياً، ولا يمكن الربط أو النشر قبل تنفيذ OAuth وموافقة المستخدم.'
   });
 });
 
