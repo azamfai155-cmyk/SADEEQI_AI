@@ -1,29 +1,69 @@
 # نشر خادم صديقي على Cloudflare Workers
 
-تمت إضافة نقطة تشغيل متوافقة مع Cloudflare Workers في `backend/src/worker.js` مع إبقاء خادم Express الأصلي دون حذف.
+ملف Worker الفعلي هو `backend/src/worker.js`، وإعداد Wrangler في جذر المستودع هو `wrangler.jsonc`. اسم Worker المعتمد في المشروع هو `sadeeqi-ai`، لذلك يكون العنوان المتوقع:
+`https://sadeeqi-ai.<workers-dev-subdomain>.workers.dev`
 
-## إعدادات Cloudflare الحالية
+## إعداد Cloudflare
+
+من لوحة Cloudflare افتح Workers & Pages ثم Worker باسم `sadeeqi-ai`:
 - Root directory: `/`
 - Build command: اتركه فارغاً
 - Deploy command: `npx wrangler deploy`
-- يجب أن يكتشف Wrangler ملف `wrangler.jsonc` في جذر المستودع.
+- ملف الإعداد: `wrangler.jsonc`
+- Entry point: `backend/src/worker.js`
 
-## أسرار يجب إضافتها قبل/بعد النشر
-من لوحة Cloudflare: Workers & Pages → ssadeeqii-ai → Settings → Variables and Secrets، أضف كـ **Secrets**:
-- `OPENAI_API_KEY`: مفتاح OpenAI API
-- `SADEEQI_APP_TOKEN`: رمز عشوائي طويل (32 بايت عشوائية على الأقل)
+لا تنشئ Worker جديداً باسم مختلف ولا تحذف أي Worker أو نشر قائم. راجع الاسم والنطاق الحاليين قبل أي تعديل في لوحة Cloudflare.
 
-وأضف كمتغيرات عادية:
-- `OPENAI_MODEL`: اسم نموذج متاح في مشروع API الخاص بك
-- `ALLOW_WEB_SEARCH`: `true` أو `false`
-- `SADEEQI_SYSTEM_PROMPT`: اختياري؛ يمكن تركه لاستخدام تعليمات صديقي الافتراضية.
+## إعداد المصادقة ومزود الذكاء الاصطناعي
 
-لا ترفع أي مفاتيح أو رموز إلى GitHub ولا ترسلها في المحادثة.
+الإصدار الحالي من التطبيق يستخدم Supabase Auth؛ لذلك يجب أن يتحقق Worker من JWT الصادر عن مشروع Supabase نفسه.
 
-## اختبار بعد النشر
-افتح `https://<worker-subdomain>.workers.dev/health` ويجب أن ترى JSON فيه `service: sadeeqi-ai` و `runtime: cloudflare-workers`. تكون `configured: true` فقط بعد ضبط الأسرار والمتغيرات.
+أضف في Worker → Settings → Variables and Secrets:
 
-اختبار `/v1/chat` يحتاج POST مع `Authorization: Bearer <SADEEQI_APP_TOKEN>` وجسم JSON يحوي `input`.
+### Variables (قيم عادية)
+- `AUTH_MODE`: `supabase`
+- `SUPABASE_URL`: عنوان مشروع Supabase مثل `https://<project-ref>.supabase.co`
+- `AI_PROVIDER`: `groq`
+- `GROQ_MODEL`: `openai/gpt-oss-20b`
+- `ALLOW_WEB_SEARCH`: `false` للاختبار الأول، ثم غيّره فقط إذا أردت تفعيل البحث وكان المزود يدعمه.
 
-## تنبيه أمني مهم
-تطبيق Android الحالي يضم رمز التطبيق في إعدادات البناء. أي رمز ثابت داخل APK يمكن استخراجه؛ لذلك هذا حاجز تجريبي وليس مصادقة قوية لتطبيق منشور للعامة. قبل الإطلاق العام يجب استبداله بتسجيل مستخدم/رموز قصيرة العمر أو بوابة مصادقة مناسبة، مع حدود استخدام ومكافحة إساءة الاستخدام.
+### Secrets (قيم سرية)
+- `GROQ_API_KEY`: مفتاح Groq من لوحة المطور الرسمية.
+
+بديل Groq: إذا كان حساب المشروع يستخدم OpenAI بدلاً منه، اضبط `AI_PROVIDER=openai` وأضف `OPENAI_API_KEY` كـ Secret و`OPENAI_MODEL` كـ Variable. لا تضبط مفاتيح المزود في أكثر من مكان دون حاجة.
+
+### انتقال مؤقت فقط
+إذا كان لا يزال لديك إصدار Android قديم يعتمد الرمز المشترك، يمكن استخدام `AUTH_MODE=dual` مؤقتاً مع `SADEEQI_APP_TOKEN` كـ Secret. لا تستخدم هذا الوضع للإصدار الجديد بعد التأكد من تسجيل الدخول بـ Supabase. وضع `supabase` يرفض الرمز المشترك.
+
+لا تضع أي مفتاح أو رمز سري في GitHub أو ملف Wrangler أو Android APK أو المحادثة. مفتاح Supabase anon/public ليس مفتاح service-role، ولا يغني عن التحقق من JWT على الخادم.
+
+## فحص الصحة بعد النشر
+
+افتح:
+`https://sadeeqi-ai.<workers-dev-subdomain>.workers.dev/health`
+
+يجب أن يعرض JSON:
+- `runtime: cloudflare-workers`
+- `auth_mode: supabase`
+- `provider: groq` (أو المزود الذي اخترته)
+- `configured: true`
+
+لا تكشف استجابة الصحة أي مفاتيح سرية. إذا كانت `configured: false` فتحقق من أسماء المتغيرات والأسرار في Worker، لا تنشر أي قيمة سرية في سجل أو رسالة.
+
+بعدها اختبر طلب دردشة حقيقياً من APK تجريبي مسجل الدخول، ثم اختبر Social Hub. نجاح `/health` وحده لا يثبت نجاح تسجيل الدخول أو محادثة AI.
+
+## ترتيب النقل الآمن
+
+1. جهّز إعدادات Worker والأسرار وتحقق من `/health`.
+2. اختبر مصادقة Supabase وطلب الدردشة مباشرة على Worker.
+3. بعد نجاح الاختبار فقط، حدّث عنوان API في إعداد Android وGitHub Actions إلى عنوان Worker الصحيح.
+4. ابنِ APK جديداً واختبر تسجيل الحساب والدخول وتجديد الجلسة والدردشة وSocial Hub.
+5. لا تغيّر إعدادات Vercel ولا تحذف أي مشروع أو نشر قائم أثناء اختبار Cloudflare. أبقِ النسخة الحالية كما هي حتى ينجح اختبار Worker والتطبيق.
+
+## ما هو مدعوم وما ليس مدعوماً
+
+- يدعم Worker مسارات `/health` و`/v1/chat` و`/v1/social/providers`.
+- يدعم التحقق من Supabase JWT وفق issuer وaudience وJWKS، مع وضع انتقال مزدوج اختياري.
+- يدعم Groq Responses API أو OpenAI Responses API وفق متغيرات البيئة.
+- قائمة Social Hub تعرض جاهزية إعداد المطور فقط؛ OAuth وربط الحسابات والرسائل والنشر غير منفذة حتى الآن.
+- لا يدّعي اختبار الصحة نجاح الدردشة؛ يجب اختبارها بمستخدم مسجل الدخول.
