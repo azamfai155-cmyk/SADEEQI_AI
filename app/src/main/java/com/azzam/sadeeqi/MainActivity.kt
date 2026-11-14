@@ -271,7 +271,7 @@ class MainActivity : ComponentActivity() {
                     .fillMaxSize()
                     .background(Color.Transparent)
                     .padding(16.dp)
-            ) 
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color(0xE51A1B2A),
