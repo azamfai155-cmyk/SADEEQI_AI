@@ -31,7 +31,7 @@ function safeEqual(a, b) {
 }
 
 function extractBearerToken(value) {
-  return typeof value === 'string' ? value.replace(/^Bearer\\s+/i, '').trim() : '';
+  return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
 }
 
 function getJwks(supabaseUrl) {
@@ -46,7 +46,7 @@ function getJwks(supabaseUrl) {
 async function authenticate(request, env) {
   const mode = (env.AUTH_MODE || 'legacy').toLowerCase();
   const token = extractBearerToken(request.headers.get('Authorization'));
-  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
   const legacyToken = env.SADEEQI_APP_TOKEN;
 
   if (mode === 'supabase' || mode === 'dual') {
