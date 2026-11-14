@@ -473,7 +473,7 @@ class MainActivity : ComponentActivity() {
                                 messages.add("صديقي" to "أهلاً! أنا صديقي. كيف أستطيع مساعدتك؟")
                                 input = ""
                                 scope.launch {
-                                    memory.clear()
+                                    memory.search("chat:").forEach { (recordId, _) -> memory.delete(recordId) }
                                     status = "تم حذف سجل المحادثة من ذاكرة هذا الجهاز."
                                 }
                                 selectedTab = "الرئيسية"
@@ -600,6 +600,9 @@ class MainActivity : ComponentActivity() {
                                                             openMessageMenuIndex = null
                                                             input = body
                                                             messages.removeAt(index)
+                                                            scope.launch {
+                                                                memory.search("chat:").filter { it.second.endsWith(body) }.forEach { memory.delete(it.first) }
+                                                            }
                                                         })
                                                         DropdownMenuItem(text = { Text("نسخ الرسالة") }, onClick = {
                                                             openMessageMenuIndex = null
