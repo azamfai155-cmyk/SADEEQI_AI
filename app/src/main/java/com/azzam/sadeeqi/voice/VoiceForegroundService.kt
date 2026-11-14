@@ -17,6 +17,9 @@ import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
+import com.azzam.sadeeqi.phone.DeviceCommand
+import com.azzam.sadeeqi.phone.DeviceCommandParser
+import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import java.util.concurrent.Executors
@@ -33,6 +36,8 @@ class VoiceForegroundService : Service() {
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
     private var started = false
+    private var pendingPhoneCommand: DeviceCommand? = null
+    private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -110,8 +115,66 @@ class VoiceForegroundService : Service() {
         voice?.startConversation()
     }
 
+    private fun normalizeVoiceConfirmation(value: String): String = value.trim().lowercase()
+        .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ى', 'ي')
+        .replace(Regex("[!！؟?،,.]+"), " ")
+        .replace(Regex("\\s+"), " ")
+
+    private fun executeVoicePhoneCommand(command: DeviceCommand): String {
+        when (command) {
+            is DeviceCommand.LaunchApp -> check(phoneControl.launchApp(command.packageName)) {
+                "تطبيق ${command.appName} غير مثبت أو لا يمكن فتحه."
+            }
+            DeviceCommand.OpenCamera -> phoneControl.openCamera()
+            DeviceCommand.OpenSettings -> phoneControl.openSettings()
+            DeviceCommand.VolumeUp -> phoneControl.adjustMusicVolume(true)
+            DeviceCommand.VolumeDown -> phoneControl.adjustMusicVolume(false)
+            is DeviceCommand.SetAlarm -> phoneControl.createAlarm(command.hour, command.minute, "منبه صديقي")
+        }
+        return when (command) {
+            is DeviceCommand.LaunchApp -> "تم فتح تطبيق ${command.appName}."
+            DeviceCommand.OpenCamera -> "تم فتح الكاميرا."
+            DeviceCommand.OpenSettings -> "تم فتح إعدادات الهاتف."
+            DeviceCommand.VolumeUp -> "تم رفع مستوى صوت الوسائط."
+            DeviceCommand.VolumeDown -> "تم خفض مستوى صوت الوسائط."
+            is DeviceCommand.SetAlarm -> "فُتح تطبيق الساعة. أكمل حفظ المنبه هناك."
+        }
+    }
+
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+
+        // Voice phone actions require a separate spoken confirmation before execution.
+        val pending = pendingPhoneCommand
+        if (pending != null) {
+            val confirmation = normalizeVoiceConfirmation(spoken)
+            if (confirmation in setOf("نعم", "ايوه", "موافق", "اكد", "نفذ", "نفذ الامر", "تمام")) {
+                pendingPhoneCommand = null
+                val result = runCatching { executeVoicePhoneCommand(pending) }
+                val reply = result.getOrElse { error ->
+                    "تعذر تنفيذ الأمر: ${error.message ?: "تحقق من إعدادات الهاتف."}"
+                }
+                updateNotification(reply)
+                voice?.speak(reply)
+            } else if (confirmation in setOf("لا", "الغاء", "الغاء الامر", "تراجع", "مش موافق")) {
+                pendingPhoneCommand = null
+                updateNotification("تم إلغاء أمر الهاتف.")
+                voice?.speak("تم إلغاء أمر الهاتف.")
+            } else {
+                voice?.speak("لم أفهم التأكيد. قل نعم للتنفيذ أو لا للإلغاء.")
+            }
+            return
+        }
+
+        val phoneCommand = DeviceCommandParser.parse(spoken)
+        if (phoneCommand != null) {
+            pendingPhoneCommand = phoneCommand
+            val prompt = DeviceCommandParser.confirmationText(phoneCommand) + " قل نعم للتأكيد أو لا للإلغاء."
+            updateNotification(prompt)
+            voice?.speak(prompt)
+            return
+        }
+
         when (val command = MusicCommandParser.parse(spoken)) {
             MusicCommand.Pause -> { musicManager?.pause(); voice?.speak("تم إيقاف الموسيقى مؤقتاً"); return }
             MusicCommand.Resume -> { musicManager?.resume(); voice?.speak("تم استئناف الموسيقى"); return }
