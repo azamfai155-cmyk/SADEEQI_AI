@@ -12,202 +12,140 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
-/**
- * Hands-free, turn-based Arabic voice conversation.
- * Android SpeechRecognizer performs STT and Android TTS speaks the AI response.
- * The microphone is never kept open while Sadeeqi is speaking.
- */
+/** Arabic speech input and TTS, alternating listen -> AI reply -> speak -> listen. */
 class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
     private val onError: (String) -> Unit
 ) : RecognitionListener, TextToSpeech.OnInitListener {
-
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
-    private var continuous = false
-    private var microphoneMuted = false
-    private var listening = false
-    private var speaking = false
+    @Volatile private var conversationActive = false
+    @Volatile private var listening = false
+    private var lastUtteranceId: String? = null
 
-    init {
-        tts = TextToSpeech(appContext, this)
-    }
+    init { tts = TextToSpeech(appContext, this) }
 
-    /** Start a voice session that automatically listens again after each spoken answer. */
+    fun isConversationActive(): Boolean = conversationActive
+
     fun startConversation() {
-        continuous = true
-        microphoneMuted = false
-        stopSpeech()
-        listen()
+        conversationActive = true
+        startListeningInternal()
     }
 
-    /** One-shot listening remains available for callers that do not want a session. */
+    fun stopConversation() {
+        conversationActive = false
+        mainHandler.removeCallbacksAndMessages(null)
+        runCatching { recognizer?.cancel() }
+        listening = false
+        runCatching { tts?.stop() }
+    }
+
+    fun interruptAndListen() {
+        conversationActive = true
+        runCatching { tts?.stop() }
+        runCatching { recognizer?.cancel() }
+        listening = false
+        startListeningInternal()
+    }
+
     fun listen() {
-        if (microphoneMuted) return
-        stopSpeech()
+        conversationActive = false
+        startListeningInternal()
+    }
+
+    private fun startListeningInternal() {
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             onError("خدمة التعرف على الكلام غير متاحة على هذا الجهاز.")
             return
         }
-
+        if (listening) return
         try {
             if (recognizer == null) {
-                recognizer = SpeechRecognizer.createSpeechRecognizer(appContext).also {
-                    it.setRecognitionListener(this)
-                }
-            } else {
-                recognizer?.cancel()
+                recognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
+                recognizer?.setRecognitionListener(this)
             }
-
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar")
-                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             }
             listening = true
             recognizer?.startListening(intent)
         } catch (e: SecurityException) {
             listening = false
-            onError("إذن الميكروفون مرفوض. اسمح لصديقي باستخدام الميكروفون من إعدادات الهاتف.")
+            onError("إذن الميكروفون مرفوض. اسمح لصديقي باستخدام الميكروفون من إعدادات التطبيق.")
         } catch (e: Exception) {
             listening = false
-            onError("تعذر تشغيل الميكروفون: ${e.message ?: "خطأ غير معروف"}")
-            retryListeningIfActive(1200)
+            onError("تعذر تشغيل الميكروفون: " + (e.message ?: "خطأ غير معروف"))
         }
-    }
-
-    fun setMicrophoneMuted(muted: Boolean) {
-        microphoneMuted = muted
-        if (muted) {
-            listening = false
-            runCatching { recognizer?.cancel() }
-        } else if (continuous && !speaking) {
-            listen()
-        }
-    }
-
-    /** Interrupt the current TTS output and immediately return to microphone capture. */
-    fun interruptAndListen() {
-        continuous = true
-        microphoneMuted = false
-        stopSpeech()
-        listen()
-    }
-
-    fun stopConversation() {
-        continuous = false
-        microphoneMuted = false
-        listening = false
-        speaking = false
-        runCatching { recognizer?.cancel() }
-        stopSpeech()
-    }
-
-    /** Called if the network/AI request fails; keep an active voice session usable. */
-    fun resumeAfterTurnFailure() {
-        if (continuous && !microphoneMuted) retryListeningIfActive(700)
     }
 
     fun speak(text: String) {
         if (!ttsReady) {
-            onError("خدمة النطق لم تجهز بعد. انتظر لحظة ثم حاول مجدداً.")
-            resumeAfterTurnFailure()
+            onError("محرك النطق لم يجهز بعد. تحقق من تثبيت صوت عربي في إعدادات الهاتف.")
+            if (conversationActive) scheduleListening(900)
             return
         }
-        val spokenText = cleanForSpeech(text)
-        if (spokenText.isBlank()) {
-            resumeAfterTurnFailure()
+        val cleanText = text
+            .replace(Regex("https?://\\S+"), "رابط")
+            .replace(Regex("[*_#>\\[\\]{}]"), " ")
+            .replace(Regex("[\\t\\r\\n]+"), " ")
+            .replace(Regex("\\s{2,}"), " ")
+            .trim()
+        if (cleanText.isBlank()) {
+            if (conversationActive) scheduleListening(250)
             return
         }
-        speaking = true
-        listening = false
-        runCatching { recognizer?.cancel() }
-        val result = tts?.speak(
-            spokenText,
-            TextToSpeech.QUEUE_FLUSH,
-            Bundle(),
-            "sadeeqi-${System.currentTimeMillis()}"
-        )
-        if (result == TextToSpeech.ERROR) {
-            speaking = false
-            onError("تعذر تشغيل الرد الصوتي على هذا الجهاز.")
-            resumeAfterTurnFailure()
-        }
-    }
-
-    private fun cleanForSpeech(value: String): String = value
-        .replace(Regex("```[\\s\\S]*?```"), " ")
-        .replace(Regex("`([^`]+)`"), "$1")
-        .replace(Regex("https?://\\S+"), "رابط")
-        .replace(Regex("[*_#>]"), " ")
-        .replace(Regex("\\s+"), " ")
-        .trim()
-
-    private fun stopSpeech() {
-        runCatching { tts?.stop() }
-        speaking = false
-    }
-
-    private fun retryListeningIfActive(delayMs: Long) {
-        if (!continuous || microphoneMuted) return
-        mainHandler.postDelayed({
-            if (continuous && !microphoneMuted && !speaking && !listening) listen()
-        }, delayMs)
+        val utteranceId = "sadeeqi-" + System.currentTimeMillis()
+        lastUtteranceId = utteranceId
+        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val engine = tts
-            val preferred = engine?.setLanguage(Locale("ar"))
-            ttsReady = preferred != TextToSpeech.LANG_MISSING_DATA &&
-                preferred != TextToSpeech.LANG_NOT_SUPPORTED
-            if (!ttsReady) {
-                val fallback = engine?.setLanguage(Locale("ar", "SA"))
-                ttsReady = fallback != TextToSpeech.LANG_MISSING_DATA &&
-                    fallback != TextToSpeech.LANG_NOT_SUPPORTED
-            }
-            if (!ttsReady) onError("لا توجد حزمة صوت عربي مثبتة. ثبّت صوتاً عربياً من إعدادات تحويل النص إلى كلام.")
-            engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {
-                    speaking = true
-                }
+            val result = tts?.setLanguage(Locale("ar"))
+            ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
+                result != TextToSpeech.LANG_NOT_SUPPORTED
+            tts?.setSpeechRate(0.96f)
+            tts?.setPitch(0.98f)
+            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(utteranceId: String?) {}
                 override fun onDone(utteranceId: String?) {
-                    mainHandler.post {
-                        speaking = false
-                        if (continuous && !microphoneMuted) listen()
-                    }
+                    if (utteranceId == lastUtteranceId && conversationActive) scheduleListening(250)
                 }
-                @Deprecated("Deprecated in Android")
+                @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    mainHandler.post {
-                        speaking = false
-                        onError("حدث خطأ أثناء تشغيل الصوت.")
-                        resumeAfterTurnFailure()
-                    }
+                    if (conversationActive) scheduleListening(700)
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    mainHandler.post {
-                        speaking = false
-                        onError("تعذر إكمال تشغيل الرد الصوتي.")
-                        resumeAfterTurnFailure()
-                    }
+                    if (conversationActive) scheduleListening(700)
                 }
             })
+            if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
         } else {
-            ttsReady = false
-            onError("تعذر تشغيل خدمة النطق.")
+            onError("تعذر تشغيل خدمة النطق في الهاتف.")
         }
     }
 
-    override fun onReadyForSpeech(params: Bundle?) {}
+    private fun scheduleListening(delayMs: Long) {
+        if (!conversationActive) return
+        mainHandler.removeCallbacksAndMessages(null)
+        mainHandler.postDelayed({
+            if (conversationActive) {
+                listening = false
+                startListeningInternal()
+            }
+        }, delayMs)
+    }
+
+    override fun onReadyForSpeech(params: Bundle?) { listening = true }
     override fun onBeginningOfSpeech() {}
     override fun onRmsChanged(rmsdB: Float) {}
     override fun onBufferReceived(buffer: ByteArray?) {}
@@ -220,39 +158,44 @@ class VoiceController(
             SpeechRecognizer.ERROR_AUDIO -> "حدث خطأ في تسجيل الصوت."
             SpeechRecognizer.ERROR_CLIENT -> "تعذر تشغيل خدمة التعرف على الكلام."
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "إذن الميكروفون غير متاح."
-            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "انقطع اتصال التعرف على الكلام. تحقق من الإنترنت."
+            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                "انقطع اتصال خدمة التعرف على الكلام. تحقق من الإنترنت."
             SpeechRecognizer.ERROR_NO_MATCH -> "لم أتمكن من فهم الكلام، حاول مرة أخرى."
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "خدمة الصوت مشغولة، سأحاول مجدداً."
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "لم أسمع كلاماً."
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "لم أسمع كلاماً، سأستمع مجدداً."
             else -> "حدث خطأ أثناء الاستماع."
         }
         onError(message)
-        if (continuous && !microphoneMuted) {
-            retryListeningIfActive(if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
+        if (conversationActive && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+            scheduleListening(if (error == SpeechRecognizer.ERROR_NETWORK ||
+                error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) 1400 else 500)
         }
     }
 
     override fun onResults(results: Bundle?) {
         listening = false
-        val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-        if (text.isNotBlank()) onText(text) else {
+        val recognized = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+        if (recognized.isNotBlank()) {
+            onText(recognized)
+        } else if (conversationActive) {
+            scheduleListening(400)
+        } else {
             onError("لم أتمكن من التعرف على الكلام.")
-            retryListeningIfActive(500)
         }
     }
 
     override fun onPartialResults(partialResults: Bundle?) {}
 
     fun close() {
-        continuous = false
-        microphoneMuted = true
+        conversationActive = false
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { recognizer?.cancel() }
         recognizer?.destroy()
         recognizer = null
-        tts?.stop()
+        runCatching { tts?.stop() }
         tts?.shutdown()
         tts = null
         ttsReady = false
+        listening = false
     }
 }
