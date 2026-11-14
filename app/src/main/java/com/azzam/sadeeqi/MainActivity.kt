@@ -733,7 +733,7 @@ class MainActivity : ComponentActivity() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("وضع توفير الإنترنت", color = Color.White)
-                                Text("يختصر نتائج البحث ويخزن أجزاء الصوت مؤقتاً؛ خفض الجودة يعمل فقط إذا أتاحه مصدر البث", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
+                                Text("يقلل نتائج البحث إلى 8 ويحذف صور الأغاني ويخزن الصوت مؤقتاً؛ بث Audius نفسه يبقى بجودته الأصلية", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
                             }
                             Switch(checked = saveDataMode, onCheckedChange = { enabled ->
                                 saveDataMode = enabled
