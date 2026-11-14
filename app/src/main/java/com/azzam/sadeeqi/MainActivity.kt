@@ -46,10 +46,17 @@ class MainActivity : ComponentActivity() {
 
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
+    private var onVoiceSession: ((Boolean) -> Unit)? = null
 
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) voice.listen()
+            if (granted) {
+                voice.startConversation()
+                onVoiceSession?.invoke(true)
+            } else {
+                onVoiceSession?.invoke(false)
+                onVoiceError?.invoke("تم رفض إذن الميكروفون. اسمح به من إعدادات التطبيق.")
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,17 +81,28 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SadeeqiApp(
-                onListen = {
+                onStartVoice = {
                     if (
                         ContextCompat.checkSelfPermission(
                             this,
                             Manifest.permission.RECORD_AUDIO
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        voice.listen()
+                        voice.startConversation()
+                        onVoiceSession?.invoke(true)
                     } else {
                         requestMic.launch(Manifest.permission.RECORD_AUDIO)
                     }
+                },
+                onStopVoice = {
+                    voice.stopConversation()
+                    onVoiceSession?.invoke(false)
+                },
+                onInterruptVoice = {
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        voice.interruptAndListen()
+                        onVoiceSession?.invoke(true)
+                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 onReply = {
                     voice.speak(it)
@@ -100,7 +118,9 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SadeeqiApp(
-        onListen: () -> Unit,
+        onStartVoice: () -> Unit,
+        onStopVoice: () -> Unit,
+        onInterruptVoice: () -> Unit,
         onReply: (String) -> Unit
     ) {
 
@@ -117,6 +137,8 @@ class MainActivity : ComponentActivity() {
         var input by remember {
             mutableStateOf("")
         }
+        var voiceSessionActive by remember { mutableStateOf(false) }
+        var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
@@ -285,6 +307,7 @@ class MainActivity : ComponentActivity() {
                     )
 
                     status = "تعذر الاتصال بالخادم"
+                    voice.resumeAfterTurnFailure()
                 }
             }
         }
@@ -345,7 +368,14 @@ class MainActivity : ComponentActivity() {
                         musicNotice = "طلب البحث: ${command.query}. البحث عبر الإنترنت ينتظر ربط مزود موسيقى مرخّص."
                         selectedTab = "موسيقى"
                     }
-                    null -> sendQuestion(spoken)
+                    null -> {
+                        if (spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "") in setOf("ياصديقي", "صديقي")) {
+                            val greeting = "نعم يا عزام، أنا معك"
+                            messages.add("أنت" to spoken)
+                            messages.add("صديقي" to greeting)
+                            onReply(greeting)
+                        } else sendQuestion(spoken)
+                    }
                 }
             }
         }
@@ -359,6 +389,11 @@ class MainActivity : ComponentActivity() {
 
         onVoiceError = {
             status = it
+            if (it.contains("إذن الميكروفون") || it.contains("رفض")) voiceSessionActive = false
+        }
+        onVoiceSession = { active ->
+            voiceSessionActive = active
+            if (active) microphoneMuted = false
         }
 
         MaterialTheme(
@@ -413,11 +448,57 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(22.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xE51A1B2A))
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(13.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(76.dp).background(Color(0xFF30243B), RoundedCornerShape(38.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(if (voiceSessionActive) "◉" else "✦", color = Color(0xFFE6C77A), style = MaterialTheme.typography.displaySmall)
+                                }
+                                Text(
+                                    when { !voiceSessionActive -> "صديقي الصوتي"; microphoneMuted -> "الميكروفون مكتوم"; else -> "المحادثة الصوتية نشطة" },
+                                    color = Color(0xFFE6C77A),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    if (voiceSessionActive) "تحدث بالعربية؛ سأجيبك ثم أستمع من جديد. اضغط مقاطعة للتحدث أثناء ردي." else "ابدأ محادثة صوتية متواصلة مع صديقي.",
+                                    color = Color(0xFFD2D0DC),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                    Button(
+                                        onClick = { if (voiceSessionActive) { onStopVoice(); voiceSessionActive = false } else onStartVoice() },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = if (voiceSessionActive) Color(0xFF7A3434) else Color(0xFF8E6B35))
+                                    ) { Text(if (voiceSessionActive) "إنهاء" else "ابدأ التحدث") }
+                                    OutlinedButton(
+                                        onClick = { microphoneMuted = !microphoneMuted; voice.setMicrophoneMuted(microphoneMuted) },
+                                        enabled = voiceSessionActive,
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text(if (microphoneMuted) "تشغيل الميكروفون" else "كتم الميكروفون") }
+                                    OutlinedButton(
+                                        onClick = { onInterruptVoice(); microphoneMuted = false },
+                                        enabled = voiceSessionActive,
+                                        modifier = Modifier.weight(1f)
+                                    ) { Text("مقاطعة") }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
                         OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp), label = { Text("اكتب أمرك لصديقي") })
                         Spacer(Modifier.height(7.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             OutlinedButton(onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("📷 صورة") }
-                            OutlinedButton(onClick = { onListen(); status = "استمع الآن" }, modifier = Modifier.weight(1f)) { Text("🎙 صوت") }
+                            OutlinedButton(onClick = { onStartVoice(); status = "بدأت المحادثة الصوتية" }, modifier = Modifier.weight(1f)) { Text("🎙 محادثة صوتية") }
                             Button(onClick = { val q = input; input = ""; sendQuestion(q) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E6B35))) { Text("إرسال") }
                         }
                         if (selectedImageDataUrl != null) Text("تم اختيار صورة — أرسل سؤالك لتحليلها", color = Color(0xFFE6C77A))
@@ -599,7 +680,7 @@ class MainActivity : ComponentActivity() {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("🎙 المساعد الصوتي", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("تحدث إلى صديقي باستخدام الميكروفون.", color = Color(0xFFD2D0DC))
-                                Button(onClick = onListen) { Text("ابدأ الاستماع") }
+                                Button(onClick = onStartVoice) { Text("ابدأ المحادثة الصوتية") }
                             }
                         }
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
