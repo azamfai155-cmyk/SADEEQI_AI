@@ -107,7 +107,7 @@ app.post('/v1/chat', async (req, res) => {
       return res.status(status).json({ error: result?.error?.message || 'OpenAI request failed.' });
     }
     const output = (result.output || []).flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text').map(part => part.text).join('\\n').trim();
+      .filter(part => part.type === 'output_text').map(part => part.text).join('\n').trim();
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
     return res.json({ id: result.id, model: result.model || MODEL, output_text: output, usage: result.usage || null });
   } catch {
