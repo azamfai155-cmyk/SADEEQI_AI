@@ -45,7 +45,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Use the bundled premium Sadeeqi background drawable behind the Compose UI.\n        window.setBackgroundDrawableResource(R.drawable.sadeeqi_background)\n\n        voice = VoiceController(
+        // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
+        window.setBackgroundDrawableResource(R.drawable.sadeeqi_background)
+
             this,
             { text ->
                 runOnUiThread {
