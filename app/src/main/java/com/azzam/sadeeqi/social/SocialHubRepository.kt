@@ -6,7 +6,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class SocialHubRepository(private val accessToken: String) {
+class SocialHubRepository(private val accessTokenProvider: () -> String) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -16,6 +16,7 @@ class SocialHubRepository(private val accessToken: String) {
         require(BuildConfig.SADEEQI_API_BASE_URL.startsWith("https://")) {
             "عنوان الخادم غير آمن أو غير مضبوط."
         }
+        val accessToken = accessTokenProvider()
         require(accessToken.isNotBlank()) {
             "انتهت جلسة تسجيل الدخول. سجّل الدخول مجدداً."
         }
