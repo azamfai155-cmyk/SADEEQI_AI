@@ -5,9 +5,17 @@ export const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
 
-const API_KEY = process.env.OPENAI_API_KEY;
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
-const MODEL = process.env.OPENAI_MODEL;
+const PROVIDER = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const MODEL = PROVIDER === 'groq'
+  ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b')
+  : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+const API_KEY = PROVIDER === 'groq' ? GROQ_API_KEY : OPENAI_API_KEY;
+const API_URL = PROVIDER === 'groq'
+  ? 'https://api.groq.com/openai/v1/responses'
+  : 'https://api.openai.com/v1/responses';
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
@@ -34,15 +42,16 @@ function validateInput(input) {
 app.get('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
     service: 'sadeeqi-ai',
-    version: '1.2.1',
+    version: '1.3.0',
+    provider: PROVIDER,
+    model: MODEL,
     configured: Boolean(API_KEY && APP_TOKEN && MODEL)
   });
 });
 
-
 app.get('/v1/social/providers', (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
 
   // This endpoint reports developer-side API readiness only. It never claims
@@ -77,9 +86,9 @@ app.get('/v1/social/providers', (req, res) => {
 
 app.post('/v1/chat', async (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
-  if (!API_KEY || !MODEL) return res.status(503).json({ error: 'OpenAI server secrets are not configured.' });
+  if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
   const validationError = validateInput(req.body?.input);
   if (validationError) return res.status(400).json({ error: validationError });
@@ -87,15 +96,14 @@ app.post('/v1/chat', async (req, res) => {
   const payload = {
     model: MODEL,
     instructions: SYSTEM_PROMPT,
-    input: req.body.input,
-    store: false
+    input: req.body.input
   };
   if (process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true) {
-    payload.tools = [{ type: 'web_search' }];
+    payload.tools = [{ type: PROVIDER === 'groq' ? 'browser_search' : 'web_search' }];
   }
 
   try {
-    const upstream = await fetch('https://api.openai.com/v1/responses', {
+    const upstream = await fetch(API_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -104,14 +112,18 @@ app.post('/v1/chat', async (req, res) => {
     const result = await upstream.json();
     if (!upstream.ok) {
       const status = upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
-      return res.status(status).json({ error: result?.error?.message || 'OpenAI request failed.' });
+      return res.status(status).json({
+        error: result?.error?.message || `${PROVIDER} request failed.`,
+        code: result?.error?.code || null,
+        provider: PROVIDER
+      });
     }
     const output = (result.output || []).flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text').map(part => part.text).join('\n').trim();
+      .filter(part => part.type === 'output_text').map(part => part.text).join('\\n').trim();
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
-    return res.json({ id: result.id, model: result.model || MODEL, output_text: output, usage: result.usage || null });
+    return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
   } catch {
-    return res.status(502).json({ error: 'AI provider unavailable. Check provider status and server logs.' });
+    return res.status(502).json({ error: `${PROVIDER} unavailable. Check provider status and server logs.`, provider: PROVIDER });
   }
 });
 
