@@ -22,6 +22,7 @@ import com.azzam.sadeeqi.music.AudiusMusicRepository
 import com.azzam.sadeeqi.phone.PhoneCommandParser
 import com.azzam.sadeeqi.phone.PhoneCommandExecutor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * User-started, visible microphone session. The persistent notification provides
@@ -32,9 +33,11 @@ class VoiceForegroundService : Service() {
     private val executor = Executors.newSingleThreadExecutor()
     private val gateway by lazy { OpenAiGateway() }
     private val history = mutableListOf<OpenAiGateway.Turn>()
+    private val historyLock = Any()
+    private val turnGeneration = AtomicLong(0)
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
-    private var started = false
+    @Volatile private var started = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,7 +49,13 @@ class VoiceForegroundService : Service() {
             }
             ACTION_INTERRUPT -> {
                 if (!started) startSession()
+                turnGeneration.incrementAndGet()
                 voice?.interruptAndListen()
+            }
+            ACTION_MUTE -> {
+                val muted = intent.getBooleanExtra(EXTRA_MUTED, false)
+                voice?.setMicrophoneMuted(muted)
+                updateNotification(if (muted) "الميكروفون مكتوم — اضغط تشغيل الميكروفون للمتابعة" else "الميكروفون نشط — يمكنك التحدث")
             }
             ACTION_START, null -> startSession()
         }
@@ -55,6 +64,7 @@ class VoiceForegroundService : Service() {
 
     private fun startSession() {
         if (started) {
+            turnGeneration.incrementAndGet()
             voice?.interruptAndListen()
             return
         }
@@ -76,7 +86,8 @@ class VoiceForegroundService : Service() {
         }
 
         started = true
-        history.clear()
+        turnGeneration.incrementAndGet()
+        synchronized(historyLock) { history.clear() }
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
@@ -88,6 +99,8 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        // A new utterance supersedes any response still being generated for an older turn.
+        val requestId = turnGeneration.incrementAndGet()
 
         // Run explicit allow-listed Android controls locally; never ask the AI to guess or simulate OS actions.
         val phoneCommand = PhoneCommandParser.parse(spoken)
@@ -144,22 +157,29 @@ class VoiceForegroundService : Service() {
             return
         }
 
-        history.add(OpenAiGateway.Turn("user", spoken))
+        val snapshot = synchronized(historyLock) {
+            history.add(OpenAiGateway.Turn("user", spoken))
+            history.takeLast(24).toList()
+        }
         updateNotification("صديقي يعالج كلامك…")
-        val snapshot = history.takeLast(24).toList()
         executor.execute {
             try {
                 val answer = gateway.reply(snapshot)
-                history.add(OpenAiGateway.Turn("assistant", answer))
-                mainHandler.post {
-                    if (started) {
+                val accepted = synchronized(historyLock) {
+                    if (started && turnGeneration.get() == requestId) {
+                        history.add(OpenAiGateway.Turn("assistant", answer))
+                        true
+                    } else false
+                }
+                if (accepted) mainHandler.post {
+                    if (started && turnGeneration.get() == requestId) {
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
                         voice?.speak(answer)
                     }
                 }
             } catch (error: Exception) {
                 mainHandler.post {
-                    if (started) {
+                    if (started && turnGeneration.get() == requestId) {
                         updateNotification("تعذر الرد: ${error.message ?: "خطأ اتصال"}")
                         voice?.resumeAfterTurnFailure()
                     }
@@ -212,6 +232,7 @@ class VoiceForegroundService : Service() {
     }
 
     private fun stopSession() {
+        turnGeneration.incrementAndGet()
         started = false
         voice?.stopConversation()
         voice?.close()
@@ -225,6 +246,7 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        turnGeneration.incrementAndGet()
         started = false
         voice?.close()
         voice = null
