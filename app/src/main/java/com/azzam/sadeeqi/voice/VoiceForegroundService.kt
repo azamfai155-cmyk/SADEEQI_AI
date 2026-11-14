@@ -18,6 +18,7 @@ import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.music.MusicPlayerManager
+import com.azzam.sadeeqi.music.AudiusMusicRepository
 import java.util.concurrent.Executors
 
 /**
@@ -92,7 +93,32 @@ class VoiceForegroundService : Service() {
             MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
             MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
             MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
-            is MusicCommand.Search -> { voice?.speak("طلب البحث عن ${command.query}. البحث الموسيقي عبر الإنترنت يحتاج إلى ربط مزود بث مرخص"); return }
+            is MusicCommand.Search -> {
+                updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
+                executor.execute {
+                    try {
+                        val tracks = AudiusMusicRepository().search(command.query)
+                        mainHandler.post {
+                            if (!started) return@post
+                            if (tracks.isEmpty()) {
+                                voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
+                            } else {
+                                musicManager?.playRemoteQueue(tracks, 0)
+                                updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
+                                voice?.speak("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        mainHandler.post {
+                            if (started) {
+                                updateNotification("تعذر البحث عن الموسيقى")
+                                voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
+                            }
+                        }
+                    }
+                }
+                return
+            }
             null -> Unit
         }
         val normalized = spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "")
