@@ -525,59 +525,62 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        Card(
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { input = it },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xE51A1B2A))
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(13.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(76.dp).background(Color(0xFF30243B), RoundedCornerShape(38.dp)),
-                                    contentAlignment = Alignment.Center
+                            shape = RoundedCornerShape(28.dp),
+                            placeholder = { Text("اكتب لصديقك…", color = Color(0xFFB9B4C7)) },
+                            leadingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        imagePicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
                                 ) {
-                                    Text(if (voiceSessionActive) "◉" else "✦", color = Color(0xFFE6C77A), style = MaterialTheme.typography.displaySmall)
+                                    Text("▧", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
                                 }
-                                Text(
-                                    when { !voiceSessionActive -> "صديقي الصوتي"; microphoneMuted -> "الميكروفون مكتوم"; else -> "المحادثة الصوتية نشطة" },
-                                    color = Color(0xFFE6C77A),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    if (voiceSessionActive) "تحدث بالعربية؛ سأجيبك ثم أستمع من جديد. اضغط مقاطعة للتحدث أثناء ردي." else "ابدأ محادثة صوتية متواصلة مع صديقي.",
-                                    color = Color(0xFFD2D0DC),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    Button(
-                                        onClick = { if (voiceSessionActive) { onStopVoice(); voiceSessionActive = false } else onStartVoice() },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (voiceSessionActive) Color(0xFF7A3434) else Color(0xFF8E6B35))
-                                    ) { Text(if (voiceSessionActive) "إنهاء" else "ابدأ التحدث") }
-                                    OutlinedButton(
-                                        onClick = { microphoneMuted = !microphoneMuted; startService(Intent(this@MainActivity, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_MUTE).putExtra(VoiceForegroundService.EXTRA_MUTED, microphoneMuted)) },
-                                        enabled = voiceSessionActive,
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text(if (microphoneMuted) "تشغيل الميكروفون" else "كتم الميكروفون") }
-                                    OutlinedButton(
-                                        onClick = { onInterruptVoice(); microphoneMuted = false },
-                                        enabled = voiceSessionActive,
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("مقاطعة") }
+                            },
+                            trailingIcon = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            if (voiceSessionActive) {
+                                                onStopVoice()
+                                                voiceSessionActive = false
+                                                status = "تم إيقاف الاستماع"
+                                            } else {
+                                                onStartVoice()
+                                                status = "الميكروفون جاهز — تحدث الآن"
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            if (voiceSessionActive) "◉" else "🎙",
+                                            color = if (voiceSessionActive) Color(0xFF9DE0B3) else Color(0xFFE6C77A),
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            val question = input
+                                            input = ""
+                                            sendQuestion(question)
+                                        },
+                                        enabled = input.isNotBlank() || selectedImageDataUrl != null
+                                    ) {
+                                        Text("➤", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
+                                    }
                                 }
-                            }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp), label = { Text("اكتب أمرك لصديقي") })
-                        Spacer(Modifier.height(7.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            OutlinedButton(onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("📷 صورة") }
-                            OutlinedButton(onClick = { onStartVoice(); status = "بدأت المحادثة الصوتية" }, modifier = Modifier.weight(1f)) { Text("🎙 محادثة صوتية") }
-                            Button(onClick = { val q = input; input = ""; sendQuestion(q) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E6B35))) { Text("إرسال") }
-                        }
+                            },
+                            singleLine = false,
+                            maxLines = 4
+                        )
                         if (selectedImageDataUrl != null) Text("تم اختيار صورة — أرسل سؤالك لتحليلها", color = Color(0xFFE6C77A))
                     }
                     "البحث" -> {
