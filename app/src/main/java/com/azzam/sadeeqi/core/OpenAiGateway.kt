@@ -22,6 +22,36 @@ class OpenAiGateway(
 
     data class Turn(val role: String, val content: String)
 
+    data class Health(
+        val configured: Boolean,
+        val version: String,
+        val runtime: String
+    )
+
+    fun health(): Health {
+        require(baseUrl.startsWith("https://")) {
+            "اضبط عنوان HTTPS لخادم صديقي أولاً."
+        }
+
+        val request = Request.Builder()
+            .url(baseUrl.trimEnd('/') + "/health")
+            .get()
+            .build()
+
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw IllegalStateException("فشل فحص الخادم (" + response.code + ").")
+            }
+            val data = JSONObject(body)
+            return Health(
+                configured = data.optBoolean("configured", false),
+                version = data.optString("version", "غير معروف"),
+                runtime = data.optString("runtime", "غير معروف")
+            )
+        }
+    }
+
     fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
