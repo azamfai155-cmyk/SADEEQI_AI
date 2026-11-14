@@ -30,14 +30,28 @@ function safeEqual(a, b) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function validateInput(input) {
+export function validateInput(input) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
   for (const turn of input) {
     if (!turn || !['user', 'assistant'].includes(turn.role)) return 'Invalid role.';
     if (typeof turn.content === 'string') {
       if (turn.content.length > 16000) return 'Message too large.';
-    } else if (!Array.isArray(turn.content) || turn.content.length < 1 || turn.content.length > 4) {
+      continue;
+    }
+    if (!Array.isArray(turn.content) || turn.content.length < 1 || turn.content.length > 4) {
       return 'Invalid content.';
+    }
+    for (const part of turn.content) {
+      if (!part || !['input_text', 'input_image'].includes(part.type)) return 'Invalid content part.';
+      if (part.type === 'input_text' &&
+          (typeof part.text !== 'string' || part.text.length > 16000)) {
+        return 'Invalid input text.';
+      }
+      if (part.type === 'input_image' &&
+          (typeof part.image_url !== 'string' ||
+           !(part.image_url.startsWith('https://') || part.image_url.startsWith('data:image/')))) {
+        return 'Invalid image input.';
+      }
     }
   }
   return null;
