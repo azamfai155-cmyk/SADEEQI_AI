@@ -34,7 +34,7 @@ function corsHeaders(request, env) {
 function b64url(bytes) {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/=/g, '').replace(/\\+/g, '-').replace(/\\//g, '_');
+  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 function unb64url(value) {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error('Invalid base64url');
@@ -102,7 +102,7 @@ function validateInput(input) {
         textChars += part.text.length;
       } else if (part?.type === 'input_image' && typeof part.image_url === 'string') {
         if (part.image_url.length > MAX_IMAGE_DATA_CHARS ||
-            !/^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(part.image_url)) {
+            !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(part.image_url)) {
           return 'صيغة الصورة غير مدعومة أو حجمها كبير.';
         }
       } else {
