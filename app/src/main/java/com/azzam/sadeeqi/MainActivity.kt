@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
         var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
         val messageReader = remember { TextToSpeech(this@MainActivity, null) }
         DisposableEffect(messageReader) {
-            messageReader.language = Locale("ar")
+            messageReader.setLanguage(Locale("ar"))
             onDispose { messageReader.stop(); messageReader.shutdown() }
         }
         var microphoneMuted by remember { mutableStateOf(false) }
