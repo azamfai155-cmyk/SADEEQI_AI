@@ -1,10 +1,10 @@
 package com.azzam.sadeeqi.phone
 
-import android.app.AlarmClock
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
+import android.provider.AlarmClock
 import android.provider.MediaStore
 import android.provider.Settings
 
