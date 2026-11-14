@@ -13,15 +13,18 @@ Updated: 2026-11-14
 - Arabic voice-command parsing for pause/resume, next/previous, volume up/down and music-search requests. Search phrases are detected but are not falsely reported as successful catalogue searches.
 - Unit tests for the Arabic command parser, included in the Android CI test task.
 
-## Not implemented / requires provider integration
+## Global music streaming — Audius integration added
 
-- No global catalogue or remote music search is connected yet.
-- No licensed streaming provider, provider credentials, OAuth flow, playback authorization or country-availability checks are configured.
-- No online playlists or mood-based recommendation engine is connected.
-- Data-saver quality selection, adaptive streaming, cover-art caching and remote catalogue pagination are not active because there is no streaming source yet.
-- The current voice recognizer is Android's existing speech service; offline recognition depends on the device's installed language pack and provider.
+- Added an Audius read-only catalogue adapter using the documented REST API.
+- Added remote track search, artist/title metadata, artwork metadata and stream URL resolution.
+- Added remote Media3 queue playback alongside local file playback.
+- Added Arabic text search in the SADEEQI MUSIC screen.
+- Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; the first available streamable result is queued.
+- Read-only search uses the public API mode and an app_name identifier; an Audius API key can be added later if higher rate limits are needed.
+- The catalogue is an open, creator-uploaded catalogue, not a complete catalogue of mainstream commercial releases. Each track's availability and rights are governed by its creator/platform terms. Do not describe it as every song in the world.
+- Network playback requires internet access. Data-saver mode is currently a preference only; adaptive bitrate selection is not implemented.
 
-Do not scrape music sites, bypass DRM, download protected streams or bundle commercial music. Before adding a provider, review its current API terms, playback rules, regional availability, attribution requirements, and whether background playback is allowed. Implement one provider adapter at a time and test it against the provider's sandbox/test catalogue.
+The integration uses Audius documented track search and stream endpoints. Before public release, review Audius API terms, track-level rights/availability, attribution requirements, rate limits, regional availability and background playback conditions. Do not scrape music sites, bypass DRM or bundle commercial music.
 
 ## Data and storage estimates
 
