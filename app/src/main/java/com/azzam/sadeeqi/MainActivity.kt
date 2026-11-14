@@ -137,6 +137,14 @@ class MainActivity : ComponentActivity() {
             musicHistory = musicLibrary.loadHistory()
             musicFavorites = musicLibrary.loadFavorites()
         }
+        var status by remember {
+            mutableStateOf("الإصدار 1.2.0 — يحتاج إعداد خادم API")
+        }
+
+        var selectedImageDataUrl by remember {
+            mutableStateOf<String?>(null)
+        }
+
         val audioPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenMultipleDocuments()
         ) { uris ->
@@ -168,15 +176,6 @@ class MainActivity : ComponentActivity() {
                 selectedTab = "موسيقى"
                 status = "بدأ تشغيل ملفاتك الصوتية"
             }
-        }
-
-        // تعريف الحالة قبل استخدامها داخل imagePicker
-        var status by remember {
-            mutableStateOf("الإصدار 1.2.0 — يحتاج إعداد خادم API")
-        }
-
-        var selectedImageDataUrl by remember {
-            mutableStateOf<String?>(null)
         }
 
         val imagePicker = rememberLauncherForActivityResult(
