@@ -1,7 +1,7 @@
 # نشر خادم صديقي على Cloudflare Workers
 
 ملف Worker الفعلي هو `backend/src/worker.js`، وإعداد Wrangler في جذر المستودع هو `wrangler.jsonc`. اسم Worker المعتمد في المشروع هو `sadeeqi-ai`، لذلك يكون العنوان المتوقع:
-`https://sadeeqi-ai.<workers-dev-subdomain>.workers.dev`
+`https://sadeeqi-ai.azamfai155.workers.dev`
 
 ## إعداد Cloudflare
 
@@ -40,7 +40,7 @@
 ## فحص الصحة بعد النشر
 
 افتح:
-`https://sadeeqi-ai.<workers-dev-subdomain>.workers.dev/health`
+`https://sadeeqi-ai.azamfai155.workers.dev/health`
 
 يجب أن يعرض JSON:
 - `runtime: cloudflare-workers`
