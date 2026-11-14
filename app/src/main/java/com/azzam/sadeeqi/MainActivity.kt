@@ -4,6 +4,8 @@ package com.azzam.sadeeqi
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.content.Intent
+import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +29,9 @@ import androidx.core.content.ContextCompat
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.voice.VoiceController
 import com.azzam.sadeeqi.memory.EncryptedMemory
+import com.azzam.sadeeqi.music.MusicPlaybackState
+import com.azzam.sadeeqi.music.MusicPlaybackService
+import com.azzam.sadeeqi.music.MusicPlayerManager
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -109,6 +115,42 @@ class MainActivity : ComponentActivity() {
         }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         var searchQuery by remember { mutableStateOf("") }
+        var musicState by remember { mutableStateOf(MusicPlaybackState()) }
+        var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
+        var saveDataMode by remember { mutableStateOf(true) }
+        val musicManager = remember {
+            MusicPlayerManager(this@MainActivity) { state -> musicState = state }
+        }
+        DisposableEffect(musicManager) {
+            onDispose { musicManager.release() }
+        }
+        val audioPicker = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenMultipleDocuments()
+        ) { uris ->
+            if (uris.isNotEmpty()) {
+                val tracks = uris.map { uri ->
+                    runCatching {
+                        contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    }
+                    val title = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                        } ?: uri.lastPathSegment ?: "ملف صوتي"
+                    uri to title
+                }
+                musicQueue = tracks
+                ContextCompat.startForegroundService(
+                    this@MainActivity,
+                    Intent(this@MainActivity, MusicPlaybackService::class.java)
+                )
+                musicManager.playQueue(tracks)
+                selectedTab = "موسيقى"
+                status = "بدأ تشغيل ملفاتك الصوتية"
+            }
+        }
 
         // تعريف الحالة قبل استخدامها داخل imagePicker
         var status by remember {
@@ -352,6 +394,100 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    "موسيقى" -> {
+                        Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
+                        Text("مشغّل ملفاتك الصوتية • يعمل دون اتصال", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xE526293A))
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(164.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = Color(0xFF292238)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("♫", color = Color(0xFFE6C77A), style = MaterialTheme.typography.displayLarge)
+                                    }
+                                }
+                                Text(musicState.title, color = Color.White, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                                Text(if (musicState.isPlaying) "يعمل الآن" else "متوقف مؤقتاً", color = Color(0xFFC7B8E8))
+                                val duration = musicState.durationMs.coerceAtLeast(1L)
+                                Slider(
+                                    value = musicState.positionMs.coerceIn(0L, duration).toFloat(),
+                                    onValueChange = { musicManager.seekTo(it.toLong()) },
+                                    valueRange = 0f..duration.toFloat()
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(onClick = { musicManager.cycleRepeat() }) {
+                                        Text(when (musicState.repeatMode) { 1 -> "تكرار الكل"; 2 -> "تكرار المقطع"; else -> "تكرار: إيقاف" }, color = Color(0xFFE6C77A))
+                                    }
+                                    IconButton(onClick = { musicManager.previous() }) {
+                                        Text("⏮", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    FilledIconButton(
+                                        onClick = { musicManager.toggle() },
+                                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF9A7438))
+                                    ) {
+                                        Text(if (musicState.isPlaying) "Ⅱ" else "▶", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    IconButton(onClick = { musicManager.next() }) {
+                                        Text("⏭", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    TextButton(onClick = { musicManager.toggleShuffle() }) {
+                                        Text(if (musicState.shuffleEnabled) "عشوائي ✓" else "عشوائي", color = Color(0xFFE6C77A))
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { audioPicker.launch(arrayOf("audio/*")) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("＋ اختر ملفات صوتية من الهاتف") }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("وضع توفير الإنترنت", color = Color.White)
+                                Text("مفعّل افتراضياً؛ لا يوجد بث شبكي حالياً", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = saveDataMode, onCheckedChange = { saveDataMode = it })
+                        }
+                        Text("قائمة التشغيل الحالية", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                        if (musicQueue.isEmpty()) {
+                            Text("لم تختر ملفات بعد. اختر ملفات صوتية من جهازك للبدء.", color = Color(0xFFD2D0DC))
+                        } else {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                items(musicQueue) { track ->
+                                    TextButton(
+                                        onClick = {
+                                            val index = musicQueue.indexOf(track)
+                                            ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                                            musicManager.playQueue(musicQueue, index)
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("♫  " + track.second, color = Color.White, modifier = Modifier.fillMaxWidth(), maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                        Text(
+                            "المكتبة العالمية وخدمات البث لم تُربط بعد. لن تظهر نتائج أو موسيقى عبر الإنترنت قبل إضافة مزود مرخّص ومفاتيح API الخاصة به.",
+                            color = Color(0xFFE6C77A),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     "الأدوات" -> {
                         Text("أدوات صديقي", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
@@ -391,11 +527,11 @@ class MainActivity : ComponentActivity() {
                     Spacer(Modifier.height(8.dp))
                 }
                 NavigationBar(containerColor = Color(0xF0181926), contentColor = Color.White, tonalElevation = 0.dp) {
-                    listOf("الرئيسية", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات").forEach { tab ->
+                    listOf("الرئيسية", "موسيقى", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات").forEach { tab ->
                         NavigationBarItem(
                             selected = selectedTab == tab,
                             onClick = { selectedTab = tab },
-                            icon = { Text(when (tab) { "الرئيسية" -> "⌂"; "البحث" -> "⌕"; "الذاكرة" -> "◈"; "المهام" -> "✓"; "الأدوات" -> "✧"; else -> "⚙" }, color = if (selectedTab == tab) Color(0xFFE6C77A) else Color.LightGray) },
+                            icon = { Text(when (tab) { "الرئيسية" -> "⌂"; "موسيقى" -> "♫"; "البحث" -> "⌕"; "الذاكرة" -> "◈"; "المهام" -> "✓"; "الأدوات" -> "✧"; else -> "⚙" }, color = if (selectedTab == tab) Color(0xFFE6C77A) else Color.LightGray) },
                             label = { Text(tab, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                             alwaysShowLabel = true
                         )
