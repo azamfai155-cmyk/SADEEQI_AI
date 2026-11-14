@@ -1,7 +1,6 @@
 name: SADEEQI AI - tests and Android build
 
-# Keep only the newest run for a branch; rapid commits should not exhaust
-# runner capacity with multiple stale Android SDK/Gradle builds.
+# Keep only the newest run for a branch.
 concurrency:
   group: sadeeqi-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -49,30 +48,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - name: Run Android instrumentation tests on API 35 emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        env:
-          SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          # Avoid post-boot ADB settings calls; this runner's emulator loses
-          # the settings service intermittently after its slow software boot.
-          disable-animations: false
-          emulator-boot-timeout: 900
-          script: |
-            set -eu
-            if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-              echo "::error::Missing required Supabase build secrets."
-              exit 1
-            fi
-            gradle :app:connectedDebugAndroidTest \
-              -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" \
-              -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
-              -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
-      - name: Build debug APK
+      - name: Run Android unit tests and build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
@@ -92,3 +68,35 @@ jobs:
         with:
           name: SADEEQI-AI-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  android-instrumentation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Run Android instrumentation tests on API 35 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: false
+          emulator-boot-timeout: 900
+          script: |
+            set -eu; if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then echo "::error::Missing required Supabase build secrets."; exit 1; fi; gradle :app:connectedDebugAndroidTest -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
