@@ -25,6 +25,7 @@ object PhoneCommandParser {
         .map { digitMap[it] ?: it }
         .joinToString("")
         .lowercase()
+        .replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا')
         .replace(Regex("[!！؟?،,.؛;]+"), " ")
         .replace(Regex("\\s+"), " ")
         .trim()
@@ -68,10 +69,10 @@ object PhoneCommandParser {
         val sms = Regex("^(?:اكتب|جهز|افتح) رسالة (?:الى|ل|إلى) ([+0-9]{5,16}) (?:نص|محتوى) (.+)$").find(text)
         if (sms != null) return PhoneCommand.ComposeSms(sms.groupValues[1], sms.groupValues[2].trim())
 
-        val dial = Regex("^(?:اتصل|اتصل على|اتصل بـ|اطلب) ([+0-9]{5,16})$").find(text)
+        val dial = Regex("^(?:اتصل على|اتصل بـ|اتصل|اطلب) ([+0-9]{5,16})$").find(text)
         if (dial != null) return PhoneCommand.Dial(dial.groupValues[1])
 
-        if (text.contains("منبه") || text.contains("منبه")) {
+        if (text.contains("منبه")) {
             val time = Regex("(?:الساعة\\s*)?([0-9]{1,2})(?::([0-9]{2}))?").find(text)
             if (time != null) {
                 val hour = time.groupValues[1].toIntOrNull() ?: return null
