@@ -23,6 +23,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -214,10 +216,11 @@ class MainActivity : ComponentActivity() {
                 onSurface = TextMain
             )
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Ink
-            ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Ink
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -283,6 +286,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
+                }
                 }
             }
         }
