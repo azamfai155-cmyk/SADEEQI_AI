@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.azzam.sadeeqi.core.OpenAiGateway
+import com.azzam.sadeeqi.auth.AuthActivity
+import com.azzam.sadeeqi.auth.EncryptedSessionStore
+import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.music.MusicPlaybackState
@@ -73,6 +76,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (EncryptedSessionStore.accessToken(this).isNullOrBlank()) {
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+            return
+        }
 
         // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
         window.setBackgroundDrawableResource(R.drawable.sadeeqi_background)
@@ -128,7 +137,7 @@ class MainActivity : ComponentActivity() {
         onInterrupt: () -> Unit
     ) {
 
-        val gateway = remember { OpenAiGateway() }
+        val gateway = remember { OpenAiGateway { SupabaseAuthClient(this@MainActivity).accessToken() } }
         val phoneControl = remember { PhoneControl(this@MainActivity) }
         val memory = remember { EncryptedMemory(this@MainActivity) }
         val scope = rememberCoroutineScope()
@@ -1023,7 +1032,7 @@ class MainActivity : ComponentActivity() {
                         TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
                     }
                     "SOCIAL HUB" -> {
-                        SocialHubScreen(modifier = Modifier.weight(1f))
+                        SocialHubScreen(accessTokenProvider = { SupabaseAuthClient(this@MainActivity).accessToken() }, modifier = Modifier.weight(1f))
                     }
                     "الأدوات" -> {
                         Text("أدوات صديقي", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)

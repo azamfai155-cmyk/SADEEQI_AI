@@ -1,11 +1,15 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
+const AUTH_MODE = (process.env.AUTH_MODE || 'legacy').toLowerCase();
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
 const PROVIDER = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -29,6 +33,52 @@ function safeEqual(a, b) {
   const right = Buffer.from(b);
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
+
+export async function verifySupabaseAccessToken(token) {
+  if (!SUPABASE_JWKS || !SUPABASE_URL) throw new Error('Supabase auth is not configured.');
+  const { payload } = await jwtVerify(token, SUPABASE_JWKS, {
+    issuer: `${SUPABASE_URL}/auth/v1`,
+    audience: 'authenticated',
+    algorithms: ['ES256', 'RS256']
+  });
+  if (typeof payload.sub !== 'string' || !payload.sub || payload.role !== 'authenticated') {
+    throw new Error('Invalid authenticated user claims.');
+  }
+  return { userId: payload.sub, email: typeof payload.email === 'string' ? payload.email : null };
+}
+
+export function createAuthMiddleware() {
+  return async (req, res, next) => {
+    const token = extractBearerToken(req.headers.authorization);
+    if (AUTH_MODE === 'supabase') {
+      if (!SUPABASE_JWKS) return res.status(503).json({ error: 'Supabase authentication is not configured.' });
+      if (!token) return res.status(401).json({ error: 'Authentication required.' });
+      try {
+        req.auth = await verifySupabaseAccessToken(token);
+        return next();
+      } catch {
+        return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
+      }
+    }
+    if (AUTH_MODE === 'dual' && SUPABASE_JWKS && token) {
+      try {
+        req.auth = await verifySupabaseAccessToken(token);
+        return next();
+      } catch {
+        // During the controlled migration only, allow the existing app token below.
+      }
+    }
+    if (AUTH_MODE === 'dual' && !SUPABASE_JWKS && !APP_TOKEN) {
+      return res.status(503).json({ error: 'Neither Supabase nor legacy authentication is configured.' });
+    }
+    if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
+    if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
+    req.auth = { userId: null, email: null };
+    return next();
+  };
+}
+
+const requireAuth = createAuthMiddleware();
 
 export function validateInput(input) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
@@ -60,18 +110,15 @@ export function validateInput(input) {
 app.get('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
     service: 'sadeeqi-ai',
-    version: '1.3.0',
+    version: '1.4.0',
     provider: PROVIDER,
     model: MODEL,
-    configured: Boolean(API_KEY && APP_TOKEN && MODEL)
+    auth_mode: AUTH_MODE,
+    configured: Boolean(API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN))
   });
 });
 
-app.get('/v1/social/providers', (req, res) => {
-  if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = extractBearerToken(req.headers.authorization);
-  if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
-
+app.get('/v1/social/providers', requireAuth, (req, res) => {
   // This endpoint reports developer-side API readiness only. It never claims
   // that a user's social account is connected; OAuth flows and token storage
   // are intentionally unavailable until implemented and reviewed.
@@ -102,10 +149,7 @@ app.get('/v1/social/providers', (req, res) => {
   });
 });
 
-app.post('/v1/chat', async (req, res) => {
-  if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = extractBearerToken(req.headers.authorization);
-  if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
+app.post('/v1/chat', requireAuth, async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
   const validationError = validateInput(req.body?.input);
@@ -137,7 +181,7 @@ app.post('/v1/chat', async (req, res) => {
       });
     }
     const output = (result.output || []).flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text').map(part => part.text).join('\\n').trim();
+      .filter(part => part.type === 'output_text').map(part => part.text).join('\n').trim();
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
     return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
   } catch {

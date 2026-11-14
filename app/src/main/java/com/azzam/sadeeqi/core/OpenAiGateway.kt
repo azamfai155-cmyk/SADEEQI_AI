@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
-    private val appToken: String = BuildConfig.SADEEQI_APP_TOKEN
+    private val accessTokenProvider: () -> String
 ) {
     @Volatile private var activeCall: okhttp3.Call? = null
 
@@ -33,8 +33,9 @@ class OpenAiGateway(
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
 
-        require(appToken.isNotBlank()) {
-            "لم يتم ضبط رمز التطبيق للخادم."
+        val accessToken = accessTokenProvider()
+        require(accessToken.isNotBlank()) {
+            "انتهت جلسة تسجيل الدخول. سجّل الدخول مجدداً."
         }
 
         val input = JSONArray()
@@ -74,7 +75,7 @@ class OpenAiGateway(
 
         val request = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/v1/chat")
-            .header("Authorization", "Bearer $appToken")
+            .header("Authorization", "Bearer $accessToken")
             .header("Content-Type", "application/json")
             .post(
                 payload.toString().toRequestBody(

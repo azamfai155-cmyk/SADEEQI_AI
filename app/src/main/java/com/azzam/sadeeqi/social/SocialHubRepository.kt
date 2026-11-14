@@ -6,7 +6,7 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class SocialHubRepository {
+class SocialHubRepository(private val accessTokenProvider: () -> String) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -16,13 +16,14 @@ class SocialHubRepository {
         require(BuildConfig.SADEEQI_API_BASE_URL.startsWith("https://")) {
             "عنوان الخادم غير آمن أو غير مضبوط."
         }
-        require(BuildConfig.SADEEQI_APP_TOKEN.isNotBlank()) {
-            "رمز التطبيق غير مضبوط في نسخة البناء."
+        val accessToken = accessTokenProvider()
+        require(accessToken.isNotBlank()) {
+            "انتهت جلسة تسجيل الدخول. سجّل الدخول مجدداً."
         }
 
         val request = Request.Builder()
             .url(BuildConfig.SADEEQI_API_BASE_URL.trimEnd('/') + "/v1/social/providers")
-            .header("Authorization", "Bearer ${BuildConfig.SADEEQI_APP_TOKEN}")
+            .header("Authorization", "Bearer $accessToken")
             .get()
             .build()
 

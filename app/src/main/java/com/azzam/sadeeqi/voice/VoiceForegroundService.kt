@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
 import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
+import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.phone.DeviceCommand
@@ -31,7 +32,7 @@ import java.util.concurrent.Executors
 class VoiceForegroundService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
-    private val gateway by lazy { OpenAiGateway() }
+    private val gateway by lazy { OpenAiGateway { SupabaseAuthClient(this@VoiceForegroundService).accessToken() } }
     private val history = mutableListOf<OpenAiGateway.Turn>()
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null

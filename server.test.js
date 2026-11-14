@@ -3,52 +3,35 @@ import assert from 'node:assert/strict';
 import { app, extractBearerToken, validateInput } from './server.js';
 import http from 'node:http';
 
-test('health endpoint exposes service metadata without secrets', async () => {
+async function withServer(run) {
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  try {
+  try { await run(server.address().port); }
+  finally { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+}
+
+test('health endpoint exposes service metadata without secrets', async () => {
+  await withServer(async port => {
     const response = await fetch(`http://127.0.0.1:${port}/health`);
     const data = await response.json();
     assert.equal(response.status, 200);
     assert.equal(data.service, 'sadeeqi-ai');
-    assert.equal(data.version, '1.3.0');
+    assert.equal(data.version, '1.4.0');
     assert.equal('api_key' in data, false);
-  } finally {
-    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  }
+  });
 });
 
-test('chat rejects requests without a bearer token', async () => {
-  const server = http.createServer(app);
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/chat`, {
+test('chat and social endpoints require authentication', async () => {
+  await withServer(async port => {
+    const chat = await fetch(`http://127.0.0.1:${port}/v1/chat`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ input: [{ role: 'user', content: 'hello' }] })
     });
-    assert.equal(response.status, 503);
-  } finally {
-    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  }
+    const social = await fetch(`http://127.0.0.1:${port}/v1/social/providers`);
+    assert.ok([401, 503].includes(chat.status));
+    assert.ok([401, 503].includes(social.status));
+  });
 });
-
-
-test('social provider catalogue exists and refuses unauthenticated setup', async () => {
-  const server = http.createServer(app);
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address();
-  try {
-    const response = await fetch(`http://127.0.0.1:${port}/v1/social/providers`);
-    assert.equal(response.status, 503);
-    const data = await response.json();
-    assert.equal(typeof data.error, 'string');
-  } finally {
-    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  }
-});
-
 
 test('bearer token parser strips the authorization scheme', () => {
   assert.equal(extractBearerToken('Bearer test-token'), 'test-token');
@@ -56,7 +39,6 @@ test('bearer token parser strips the authorization scheme', () => {
   assert.equal(extractBearerToken('test-token'), 'test-token');
   assert.equal(extractBearerToken(undefined), '');
 });
-
 
 test('chat input validator rejects malformed multimodal parts', () => {
   assert.equal(validateInput([{ role: 'user', content: [{ type: 'unexpected', value: 'bad' }] }]), 'Invalid content part.');

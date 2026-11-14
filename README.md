@@ -56,3 +56,18 @@ This is source code only, not a built APK. The canonical Vercel backend health e
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
 **Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+
+## Supabase user authentication (migration rollout)
+
+The Android client no longer embeds the shared backend bearer token. It signs users in with Supabase Auth and stores the access/refresh session encrypted with an AES-GCM key held by Android Keystore. Chat and Social Hub requests send the user's short-lived access token; the backend validates its signature and claims against the Supabase JWKS endpoint. The Supabase anon/public key is a client identifier, not a service-role secret.
+
+### Required configuration
+
+1. Create a Supabase project on the free plan and enable Email/Password under Authentication providers.
+2. Copy the Project URL and the anon/public key (never use the service-role key in Android).
+3. Add GitHub Actions repository secrets: `SADEEQI_SUPABASE_URL` and `SADEEQI_SUPABASE_ANON_KEY`.
+4. Add Vercel Production environment variables: `SUPABASE_URL` = the Project URL, and `AUTH_MODE` = `dual` during migration. Keep the existing `SADEEQI_APP_TOKEN` only during migration so already-installed older APKs continue to work.
+5. Deploy the backend and build/install the new APK. Test sign-up, email confirmation (if enabled), sign-in, chat, Social Hub, and token refresh.
+6. Only after the new APK is distributed and old clients are retired, change Vercel `AUTH_MODE` to `supabase` and delete the legacy `SADEEQI_APP_TOKEN` variable. This permanently rejects the shared-token scheme.
+
+Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user passwords. The project URL and anon/public key may be embedded in the APK; backend provider credentials remain server-only. These branch changes are source code and are not a production deployment.
