@@ -65,6 +65,27 @@ class MusicPlayerManager(
         publish()
     }
 
+    fun playRemoteQueue(tracks: List<RemoteMusicTrack>, startIndex: Int = 0) {
+        val player = controller ?: return
+        if (tracks.isEmpty()) return
+        val items = tracks.map { track ->
+            MediaItem.Builder()
+                .setUri(track.streamUrl)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(track.title)
+                        .setArtist(track.artist)
+                        .setArtworkUri(track.artworkUrl?.let(Uri::parse))
+                        .build()
+                )
+                .build()
+        }
+        player.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
+        player.prepare()
+        player.play()
+        publish()
+    }
+
     fun toggle() {
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
         publish()
