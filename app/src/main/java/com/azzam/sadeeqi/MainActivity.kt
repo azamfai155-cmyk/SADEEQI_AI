@@ -1066,9 +1066,13 @@ class MainActivity : ComponentActivity() {
                                 Button(
                                     onClick = {
                                         startService(Intent(this@MainActivity, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP))
-                                        EncryptedSessionStore.clear(this@MainActivity)
-                                        startActivity(Intent(this@MainActivity, AuthActivity::class.java))
-                                        finish()
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                runCatching { SupabaseAuthClient(this@MainActivity).signOut() }
+                                            }
+                                            startActivity(Intent(this@MainActivity, AuthActivity::class.java))
+                                            finish()
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("تسجيل الخروج") }
