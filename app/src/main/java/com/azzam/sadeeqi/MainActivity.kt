@@ -37,6 +37,7 @@ import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.music.MusicLibraryStore
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
+import com.azzam.sadeeqi.social.SocialHubScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "موسيقى", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -787,6 +788,9 @@ class MainActivity : ComponentActivity() {
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
+                    "SOCIAL HUB" -> {
+                        SocialHubScreen(modifier = Modifier.weight(1f))
+                    }
                     "الأدوات" -> {
                         Text("أدوات صديقي", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
@@ -820,7 +824,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (selectedTab == "المهام" || selectedTab == "الأدوات" || selectedTab == "الإعدادات") {
+                if (selectedTab == "المهام" || selectedTab == "الأدوات" || selectedTab == "الإعدادات" || selectedTab == "SOCIAL HUB") {
                     Spacer(Modifier.weight(1f))
                 } else {
                     Spacer(Modifier.height(8.dp))
