@@ -42,11 +42,14 @@ jobs:
           gradle-version: "8.11.1"
       - name: Build debug APK
         env:
-          SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
           SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
         run: |
-          API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai.vercel.app}"
+          API_URL="https://sadeeqi-ai.vercel.app"
           APP_TOKEN="${SADEEQI_APP_TOKEN:-}"
+          if [ -z "$APP_TOKEN" ]; then
+            echo "::error::Missing GitHub Actions secret SADEEQI_APP_TOKEN. APK chat would not authenticate."
+            exit 1
+          fi
           gradle :app:testDebugUnitTest :app:assembleDebug \
             -PsadeeqiApiBaseUrl="$API_URL" \
             -PsadeeqiAppToken="$APP_TOKEN"
