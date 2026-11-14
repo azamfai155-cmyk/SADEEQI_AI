@@ -265,7 +265,8 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                             },
-                            recentMessage = messages.lastOrNull()?.second.orEmpty()
+                            recentMessage = messages.lastOrNull()?.second.orEmpty(),
+                            userName = profile.preferredName
                         )
 
                         "المحادثة" -> ChatScreen(
@@ -383,7 +384,8 @@ private fun ColumnScope.HomeScreen(
     onOpenChat: () -> Unit,
     onListen: () -> Unit,
     onChooseImage: () -> Unit,
-    recentMessage: String
+    recentMessage: String,
+    userName: String
 ) {
     Column(
         modifier = Modifier
@@ -394,7 +396,7 @@ private fun ColumnScope.HomeScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Spacer(Modifier.height(4.dp))
-        Text("مساء الخير، عزام 👋", color = Muted, fontSize = 14.sp)
+        Text("مرحباً، $userName 👋", color = Muted, fontSize = 14.sp)
         PremiumCore(
             modifier = Modifier.fillMaxWidth().height(278.dp),
             stateLabel = "النواة الذكية • متاحة"
