@@ -26,11 +26,6 @@ android {
             "\"${providers.gradleProperty("sadeeqiApiBaseUrl").orElse("https://sadeeqi-ai.azamfai155.workers.dev").get()}\""
         )
 
-        buildConfigField(
-            "String",
-            "SADEEQI_APP_TOKEN",
-            "\"${providers.gradleProperty("sadeeqiAppToken").orElse("CONFIGURE_AT_BUILD_TIME").get()}\""
-        )
     }
 
     buildFeatures {
