@@ -66,11 +66,23 @@ export default {
         configured:Boolean(env.OPENAI_API_KEY && env.SADEEQI_SESSION_SECRET && env.SADEEQI_SESSION_SECRET.length >= 32 && env.OPENAI_MODEL && env.SESSION_RATE_LIMITER && env.CHAT_RATE_LIMITER)},200,cors);
     }
     if (url.pathname === '/v1/session' && request.method === 'POST') {
+      if (!env.SESSION_RATE_LIMITER || typeof env.SESSION_RATE_LIMITER.limit !== 'function')
+        return json({error:'Session rate limiting is not configured.'},503,cors);
+      let limited;
+      try { limited = await isRateLimited(env.SESSION_RATE_LIMITER, request, 'session'); }
+      catch { return json({error:'Session rate limiting is unavailable.'},503,cors); }
+      if (limited === true) return json({error:'Too many session requests. Try again later.'},429,cors);
       if (!env.SADEEQI_SESSION_SECRET || env.SADEEQI_SESSION_SECRET.length < 32)
         return json({error:'Session signing is not configured.'},503,cors);
       return json({token:await issueSession(env.SADEEQI_SESSION_SECRET),token_type:'Bearer',expires_in:600},200,cors);
     }
     if (url.pathname !== '/v1/chat' || request.method !== 'POST') return json({error:'Not found'},404,cors);
+    if (!env.CHAT_RATE_LIMITER || typeof env.CHAT_RATE_LIMITER.limit !== 'function')
+      return json({error:'Chat rate limiting is not configured.'},503,cors);
+    let limited;
+    try { limited = await isRateLimited(env.CHAT_RATE_LIMITER, request, 'chat'); }
+    catch { return json({error:'Chat rate limiting is unavailable.'},503,cors); }
+    if (limited === true) return json({error:'Too many chat requests. Try again later.'},429,cors);
     if (!env.SADEEQI_SESSION_SECRET || env.SADEEQI_SESSION_SECRET.length < 32)
       return json({error:'Session signing is not configured.'},503,cors);
     const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i,'');
