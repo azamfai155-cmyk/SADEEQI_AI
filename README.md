@@ -5,12 +5,12 @@
 ## الإضافات
 - ذاكرة Room دائمة، محتواها مشفر AES-256-GCM بمفتاح Android Keystore.
 - واجهة حفظ محادثات واسترجاعها، مع API للبحث والحذف والتصدير والاستيراد المشفر.
-- طبقة PhoneControl لواجهات Android الرسمية (فتح تطبيقات/إعدادات، الصوت، الكاميرا، المنبه، SAF، الاتصال، SMS، جهات الاتصال بإذن).
+- طبقة PhoneControl لأوامر Android المسموح بها: فتح WhatsApp وTelegram وYouTube، الكاميرا، الإعدادات، مستوى صوت الوسائط، وإعداد المنبه عبر تطبيق الساعة؛ تتطلب أوامر الهاتف تأكيداً من المستخدم.
 - عميل تحديث GitHub Releases-compatible يدعم قراءة الإصدار والملاحظات والتنزيل وفحص شهادة APK وفتح مثبت النظام.
 
 ## قيود مهمة
 - لا يوجد Wake Word حقيقي «يا صديقي» أو استماع دائم؛ الميكروفون يعمل فقط بالاستدعاء اليدوي داخل الواجهة.
-- PhoneControl ليس موصولاً بعد بمحلل أوامر المحادثة، ولا توجد لوحة إدارة أذونات مكتملة.
+- أوامر الهاتف المسموح بها موصولة بالمحادثة مع مربع تأكيد، وبجلسة الصوت مع تأكيد منطوق بنعم/لا. لا توجد أتمتة لمس عامة أو لوحة إدارة أذونات مكتملة.
 - نظام التحديث يحتاج endpoint رسمي للمشروع وبصمة شهادة توقيع ثابتة.
 - لم يُبنَ APK ولم يتم اختبار المشروع على هاتف فعلي؛ راجع `TEST_REPORT_1.1.0.md`.
 
@@ -35,7 +35,7 @@ The memory store now encrypts logical IDs, categories, timestamps, and values in
 - Setup guide: `docs/OPENAI_BACKEND_SETUP_AR.md`.
 
 ## 1.2.0 limitations
-This is source code only, not a built APK. Backend deployment and API credentials are not configured. Android build/device tests were not possible in the current environment. The app bootstrap bearer token is embedded at build time and is extractable; production must use short-lived user authentication. Image upload size is capped at 8 MiB in the app. Live audio/realtime and wake-word operation are not implemented here.
+This is source code only, not a built APK. The canonical Vercel backend health endpoint currently responds HTTP 200 and reports Groq configured; this confirms configuration health only, not a successful authenticated chat request. New Vercel deployments are currently blocked by the Hobby deployment-rate limit. Android build/device tests have not yet been verified. The app bootstrap bearer token is embedded at build time and is extractable; production must use short-lived user authentication. Image upload size is capped at 8 MiB in the app. Live audio/realtime and wake-word operation are not implemented here.
 
 
 ## SADEEQI MUSIC (source integration)
