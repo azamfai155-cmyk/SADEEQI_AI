@@ -30,6 +30,14 @@ test('session endpoint issues a signed ten-minute token', async () => {
   assert.equal(response.status,200); assert.equal(data.token_type,'Bearer');
   assert.equal(data.expires_in,600); assert.equal(data.token.split('.').length,3);
 });
+test('chat endpoint fails closed when rate limiting is not configured', async () => {
+  const response = await worker.fetch(new Request('https://example.workers.dev/v1/chat',{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({input:[{role:'user',content:'مرحبا'}]})}),
+    {OPENAI_API_KEY:'test-key',SADEEQI_SESSION_SECRET:secret,OPENAI_MODEL:'test-model',
+      SESSION_RATE_LIMITER:allow});
+  assert.equal(response.status,503);
+});
 test('chat rejects requests over the configured rate limit', async () => {
   const response = await worker.fetch(new Request('https://example.workers.dev/v1/chat',{
     method:'POST',headers:{'content-type':'application/json'},
