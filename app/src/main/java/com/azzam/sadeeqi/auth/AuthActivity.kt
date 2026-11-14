@@ -2,6 +2,8 @@ package com.azzam.sadeeqi.auth
 
 import android.app.Activity
 import android.os.Bundle
+import android.content.Intent
+import com.azzam.sadeeqi.MainActivity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -35,6 +37,16 @@ class AuthActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val client = SupabaseAuthClient(this)
         setContent {
+            LaunchedEffect(Unit) {
+                val saved = EncryptedSessionStore.read(this@AuthActivity)
+                if (saved != null && saved.optLong("expires_at", 0L) <= System.currentTimeMillis() / 1000L) {
+                    val refreshed = withContext(Dispatchers.IO) { runCatching { client.accessToken() } }
+                    if (refreshed.isSuccess) {
+                        startActivity(Intent(this@AuthActivity, MainActivity::class.java))
+                        finish()
+                    }
+                }
+            }
             var email by remember { mutableStateOf("") }
             var password by remember { mutableStateOf("") }
             var createAccount by remember { mutableStateOf(false) }
@@ -92,6 +104,7 @@ class AuthActivity : ComponentActivity() {
                                         result.onSuccess { data ->
                                             if (data.has("access_token")) {
                                                 setResult(Activity.RESULT_OK)
+                                                startActivity(Intent(this@AuthActivity, MainActivity::class.java))
                                                 finish()
                                             } else {
                                                 message = "تم إنشاء الحساب. تحقق من بريدك لتأكيده ثم سجّل الدخول."
