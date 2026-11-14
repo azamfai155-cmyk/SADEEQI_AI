@@ -73,7 +73,7 @@ object PhoneCommandParser {
         if (dial != null) return PhoneCommand.Dial(dial.groupValues[1])
 
         if (text.contains("منبه")) {
-            val time = Regex("(?:الساعة\\s*)?([0-9]{1,2})(?::([0-9]{2}))?").find(text)
+            val time = Regex("(?:الساعة\\s*|على\\s*الساعة\\s*|منبه\\s+)([0-9]{1,2})(?::([0-9]{2}))?").find(text)
             if (time != null) {
                 val hour = time.groupValues[1].toIntOrNull() ?: return null
                 val minute = time.groupValues[2].takeIf { it.isNotBlank() }?.toIntOrNull() ?: 0
