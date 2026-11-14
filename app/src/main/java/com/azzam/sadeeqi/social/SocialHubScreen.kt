@@ -36,13 +36,18 @@ fun SocialHubScreen(accessTokenProvider: () -> String, modifier: Modifier = Modi
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf("يتم جلب حالة تكاملات المنصات من الخادم.") }
+    var connectedCount by remember { mutableStateOf(0) }
+    var configuredCount by remember { mutableStateOf(0) }
+    var refreshKey by remember { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         loading = true
         runCatching {
             withContext(Dispatchers.IO) { SocialHubRepository(accessTokenProvider).loadProviders() }
         }.onSuccess { result ->
             providers = result.providers
+            connectedCount = result.connectedCount
+            configuredCount = result.configuredCount
             notice = result.notice
             error = null
         }.onFailure {
@@ -74,7 +79,11 @@ fun SocialHubScreen(accessTokenProvider: () -> String, modifier: Modifier = Modi
             ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("حالة الربط", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
-                    Text("الحسابات المتصلة فعلياً: 0", color = Color.White)
+                    Text("الحسابات المتصلة فعلياً: $connectedCount", color = Color.White)
+                    Text("المنصات التي اكتملت إعداداتها: $configuredCount من 15", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { refreshKey += 1 }, enabled = !loading) {
+                        Text(if (loading) "جارٍ التحديث..." else "تحديث الحالة")
+                    }
                     Text(
                         "لا يوجد أي حساب موصول حالياً. لن نعرض اتصالاً وهمياً أو نطلب كلمة مرور حسابك.",
                         color = Color(0xFFD2D0DC),
