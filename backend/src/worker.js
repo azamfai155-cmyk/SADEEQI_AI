@@ -133,7 +133,7 @@ export default {
     if (url.pathname === '/v1/social/providers' && request.method === 'GET') {
       if (!env.SADEEQI_APP_TOKEN) return json({ error: 'Backend auth is not configured.' }, 503, cors);
       const authorization = request.headers.get('Authorization') || '';
-      const token = authorization.replace(/^Bearer\\s+/i, '');
+      const token = authorization.replace(/^Bearer\s+/i, '');
       if (!safeEqual(token, env.SADEEQI_APP_TOKEN)) return json({ error: 'Unauthorized.' }, 401, cors);
       return json({
         service: 'sadeeqi-social-hub',
