@@ -264,7 +264,7 @@ class MainActivity : ComponentActivity() {
             Column(
                 Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF10111A))
+                    .background(Color.Transparent)
                     .padding(16.dp)
             ) {
 
