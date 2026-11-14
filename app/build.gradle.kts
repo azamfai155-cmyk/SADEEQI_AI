@@ -19,7 +19,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val apiBaseUrl = providers.gradleProperty("sadeeqiApiBaseUrl")
-            .orElse("https://sadeeqi-ai.azamfai155.workers.dev").get()
+            .orElse("https://sadeeqi-ai-v2.azamfai155.workers.dev").get()
         val appToken = providers.gradleProperty("sadeeqiAppToken").orElse("").get()
 
         buildConfigField("String", "SADEEQI_API_BASE_URL", "\"$apiBaseUrl\"")
