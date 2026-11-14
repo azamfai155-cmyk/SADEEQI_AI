@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app } from './server.js';
+import { app, validateInput } from './server.js';
 import http from 'node:http';
 
 test('health endpoint exposes service metadata without secrets', async () => {
@@ -47,4 +47,16 @@ test('social provider catalogue exists and refuses unauthenticated setup', async
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
+});
+
+
+test('chat input validator rejects malformed multimodal parts', () => {
+  assert.equal(validateInput([{ role: 'user', content: [{ type: 'unexpected', value: 'bad' }] }]), 'Invalid content part.');
+  assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_text', text: 42 }] }]), 'Invalid input text.');
+  assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_image', image_url: 'data:text/plain;base64,SGVsbG8=' }] }]), 'Invalid image input.');
+});
+
+test('chat input validator accepts text and supported image inputs', () => {
+  assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
+  assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_text', text: 'حلل الصورة' }, { type: 'input_image', image_url: 'https://example.com/image.jpg' }] }]), null);
 });

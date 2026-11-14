@@ -18,7 +18,7 @@ function safeEqual(a, b) {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function validateInput(input) {
+export function validateInput(input) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
   for (const turn of input) {
     if (!turn || !['user', 'assistant'].includes(turn.role)) return 'Invalid role.';

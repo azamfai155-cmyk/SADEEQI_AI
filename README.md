@@ -56,3 +56,11 @@ This is source code only, not a built APK. Backend deployment and API credential
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
 **Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+
+## Verified CI status — 2026-11-14
+
+- GitHub Actions run [43599223011](https://github.com/azamfai155-cmyk/SADEEQI_AI/actions/runs/43599223011) completed successfully for backend tests and Android debug APK assembly.
+- The `SADEEQI-AI-debug-APK` artifact was present and had not expired at the time of verification.
+- A successful CI build is not a physical-device acceptance test. Install and validate chat, microphone, speech output, playback, and encrypted-memory behavior before public release.
+- The backend health endpoint only reports configuration presence; it does not prove that the OpenAI Responses API key is valid or that a real chat request succeeds.
+- Shared app bearer authentication is compiled into the APK and can be extracted. Do not treat this debug build as safe for broad public distribution; move to per-user short-lived authentication before public release.
