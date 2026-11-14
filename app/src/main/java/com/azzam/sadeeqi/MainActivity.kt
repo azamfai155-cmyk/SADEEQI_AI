@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -364,7 +366,8 @@ private fun ColumnScope.HomeScreen(
         modifier = Modifier
             .weight(1f)
             .fillMaxWidth()
-            .padding(top = 8.dp),
+             .padding(top = 8.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Spacer(Modifier.height(4.dp))
@@ -438,7 +441,7 @@ private fun ColumnScope.HomeScreen(
                 )
             }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(8.dp))
         Text(
             "خصوصيتك مهمة — تُحفظ الذاكرة محلياً بتشفير Android Keystore.",
             color = Muted,
