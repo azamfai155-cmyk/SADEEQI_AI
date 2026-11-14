@@ -44,7 +44,7 @@ jobs:
         env:
           SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
         run: |
-          API_URL="https://sadeeqi-ai.vercel.app"
+          API_URL="https://sadeeqi-ai-pdrk.vercel.app"
           APP_TOKEN="${SADEEQI_APP_TOKEN:-}"
           if [ -z "$APP_TOKEN" ]; then
             echo "::error::Missing GitHub Actions secret SADEEQI_APP_TOKEN. APK chat would not authenticate."
