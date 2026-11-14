@@ -60,6 +60,17 @@ export function createAuthMiddleware() {
         return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
       }
     }
+    if (AUTH_MODE === 'dual' && SUPABASE_JWKS && token) {
+      try {
+        req.auth = await verifySupabaseAccessToken(token);
+        return next();
+      } catch {
+        // During the controlled migration only, allow the existing app token below.
+      }
+    }
+    if (AUTH_MODE === 'dual' && !SUPABASE_JWKS && !APP_TOKEN) {
+      return res.status(503).json({ error: 'Neither Supabase nor legacy authentication is configured.' });
+    }
     if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
     if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
     req.auth = { userId: null, email: null };
@@ -103,7 +114,7 @@ app.get('/health', (_req, res) => {
     provider: PROVIDER,
     model: MODEL,
     auth_mode: AUTH_MODE,
-    configured: Boolean(API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : APP_TOKEN))
+    configured: Boolean(API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN))
   });
 });
 
