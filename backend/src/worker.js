@@ -196,7 +196,7 @@ export default {
           : 'تعذر إكمال طلب الذكاء الاصطناعي.'},upstream.status === 429 ? 429 : 502,cors);
       }
       const output = (raw?.output || []).flatMap(item=>item.content || [])
-        .filter(part=>part.type==='output_text').map(part=>part.text).join('\\n').trim();
+        .filter(part=>part.type==='output_text').map(part=>part.text).join('\n').trim();
       if (!output) return json({error:'وصل رد فارغ من محرك الذكاء الاصطناعي.'},502,cors);
       return json({id:raw?.id || null,model:raw?.model || env.OPENAI_MODEL,output_text:output,usage:raw?.usage || null},200,cors);
     } catch {
