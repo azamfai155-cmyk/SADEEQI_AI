@@ -73,6 +73,10 @@ class MusicPlayerManager(
     fun previous() { controller?.seekToPreviousMediaItem(); publish() }
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs); publish() }
     fun setVolume(volume: Float) { controller?.volume = volume.coerceIn(0f, 1f) }
+    fun adjustVolume(delta: Float) {
+        controller?.let { it.volume = (it.volume + delta).coerceIn(0f, 1f) }
+        publish()
+    }
     fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }; publish() }
     fun cycleRepeat() {
         controller?.let {
