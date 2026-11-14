@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app, extractBearerToken, validateInput } from './server.js';
+import { app, buildSocialProviders, extractBearerToken, validateInput } from './server.js';
 import http from 'node:http';
 
 async function withServer(run) {
@@ -49,4 +49,23 @@ test('chat input validator rejects malformed multimodal parts', () => {
 test('chat input validator accepts text and supported image inputs', () => {
   assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
   assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_text', text: 'حلل الصورة' }, { type: 'input_image', image_url: 'https://example.com/image.jpg' }] }]), null);
+});
+
+test('social provider readiness exposes all 15 providers without leaking credentials', () => {
+  const providers = buildSocialProviders({
+    META_CLIENT_ID: 'test-id',
+    META_CLIENT_SECRET: 'test-secret',
+    WHATSAPP_TOKEN: 'test-whatsapp-token',
+    WHATSAPP_PHONE_NUMBER_ID: '12345',
+    TWITCH_CLIENT_ID: 'test-twitch-id',
+    TWITCH_CLIENT_SECRET: 'test-twitch-secret'
+  });
+  assert.equal(providers.length, 15);
+  assert.ok(providers.some(provider => provider.id === 'twitch' && provider.configured));
+  assert.ok(providers.some(provider => provider.id === 'whatsapp' && provider.configured));
+  assert.ok(providers.filter(provider => ['facebook', 'instagram', 'messenger', 'threads'].includes(provider.id))
+    .every(provider => provider.configured));
+  assert.ok(providers.every(provider => provider.connected === false));
+  assert.ok(providers.every(provider => !('env' in provider)));
+  assert.ok(providers.every(provider => !JSON.stringify(provider).includes('test-secret')));
 });
