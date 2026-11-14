@@ -48,14 +48,11 @@ jobs:
       - name: Build debug APK
         env:
           SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
-          SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
         run: |
           API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai.azamfai155.workers.dev}"
-          APP_TOKEN="${SADEEQI_APP_TOKEN:-CONFIGURE_AT_BUILD_TIME}"
 
           gradle :app:assembleDebug \
             -PsadeeqiApiBaseUrl="$API_URL" \
-            -PsadeeqiAppToken="$APP_TOKEN"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
