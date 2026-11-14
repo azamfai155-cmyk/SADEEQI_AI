@@ -42,7 +42,7 @@ app.get('/health', (_req, res) => {
 
 app.get('/v1/social/providers', (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
 
   // This endpoint reports developer-side API readiness only. It never claims
