@@ -25,7 +25,6 @@
 ## Encrypted memory hardening (source update)
 The memory store now encrypts logical IDs, categories, timestamps, and values inside AES-GCM payloads; Room rows retain only opaque IDs and ciphertext metadata. Portable backups use PBKDF2-HMAC-SHA256 and AES-256-GCM with a user password. See `reports/01_ENCRYPTED_MEMORY.md` and the Android instrumentation test. These changes are source-level only until built and run on a physical Android device.
 
-
 ## OpenAI API integration (1.2.0)
 - Android chat now calls `OpenAiGateway` over HTTPS; it no longer returns canned offline responses on the send path.
 - Node backend in `backend/` proxies to the official OpenAI Responses API. Keep `OPENAI_API_KEY` on the server only.
@@ -34,25 +33,21 @@ The memory store now encrypts logical IDs, categories, timestamps, and values in
 - Image picker sends selected image as a data URL to the Responses API. Android speech input and TTS remain system services.
 - Setup guide: `docs/OPENAI_BACKEND_SETUP_AR.md`.
 
-## 1.2.0 limitations
-This is source code only, not a built APK. Backend deployment and API credentials are not configured. Android build/device tests were not possible in the current environment. The app bootstrap bearer token is embedded at build time and is extractable; production must use short-lived user authentication. Image upload size is capped at 8 MiB in the app. Live audio/realtime and wake-word operation are not implemented here.
-
-
 ## SADEEQI MUSIC (source integration)
 - Added AndroidX Media3 ExoPlayer and MediaSession service foundation.
 - Local user-selected audio playback, queue, seek, repeat, shuffle, volume, persistent favorites/history and Arabic playback voice commands are implemented in source.
 - A remote global catalogue or licensed streaming provider is **not connected** yet. Search commands clearly report this limitation rather than pretending to stream.
 - See [docs/SADEEQI_MUSIC.md](docs/SADEEQI_MUSIC.md) for architecture, data estimates, legal integration requirements and device-validation checklist.
-- CI now runs Android unit tests before building the debug APK. No APK/device success should be claimed until the relevant run succeeds and the artifact is verified.
 
+## Social Hub — developer onboarding
+- Protected `GET /v1/social/providers` endpoint lists developer API readiness only; all user accounts remain disconnected until real OAuth is implemented.
+- OAuth callbacks, authenticated user identity, encrypted token persistence, webhooks, inbox and publishing are not yet implemented.
+- Follow [the Arabic official social platform registration guide](docs/SOCIAL_PLATFORM_REGISTRATION_AR.md) to create the official developer apps. Do not register callback URLs until the OAuth callback endpoints have been implemented and deployed.
+- Never put provider client secrets or Telegram bot tokens in Android, GitHub source, or chat. Store them as server-side Vercel environment secrets only after the secure OAuth foundation is ready.
+- The current shared app bearer token embedded in APK is extractable and must not be treated as a user identity.
 
 ## Ultimate Premium development audit — 2026-11-14
-- Added a protected `GET /v1/social/providers` readiness endpoint. It lists provider API setup status but intentionally reports all accounts as disconnected; OAuth and account-management actions are not implemented.
-- Social Hub network loading now runs on an IO dispatcher rather than the UI thread.
-- Activated the Room-backed AES-GCM encrypted memory implementation in the Android app source and added a migration from the earlier encrypted SharedPreferences store.
-- Moved the encrypted-memory instrumentation acceptance test into `app/src/androidTest`. It has not yet been run on an emulator or physical device.
 - Android version is 1.5.1 (versionCode 7), and Android/CI configuration targets `https://sadeeqi-ai-pdrk.vercel.app`.
-- Vercel deployment status currently reports a build-rate limit. No new deployment or APK artifact is claimed as verified.
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
-**Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+**Security note:** the current shared app bearer token is compiled into the Android build and can be extracted. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
