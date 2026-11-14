@@ -145,7 +145,9 @@ class VoiceController(
             tts?.setSpeechRate(0.96f)
             tts?.setPitch(0.98f)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) { speaking = true }
+                override fun onStart(utteranceId: String?) {
+                    if (utteranceId == lastUtteranceId) speaking = true
+                }
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
@@ -160,8 +162,10 @@ class VoiceController(
                     }
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    speaking = false
-                    if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    }
                 }
             })
             if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
