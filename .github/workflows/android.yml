@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/premium-compose-ui
   pull_request:
     branches:
       - main
@@ -23,6 +24,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -33,8 +39,14 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
-      - name: Run Cloudflare Worker unit tests
+      - name: Check Worker JavaScript syntax
+        run: node --check backend/src/worker.js
+
+      - name: Run Cloudflare Worker security tests
         run: node --test worker.test.js
+
+      - name: Validate Wrangler configuration and Worker bundle
+        run: npx --yes wrangler@4.36.0 deploy --dry-run
 
       - name: Validate Android Manifest
         run: |
@@ -50,9 +62,7 @@ jobs:
           SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
         run: |
           API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai.azamfai155.workers.dev}"
-
-          gradle :app:assembleDebug \
-            -PsadeeqiApiBaseUrl="$API_URL" \
+          gradle :app:assembleDebug -PsadeeqiApiBaseUrl="$API_URL"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
