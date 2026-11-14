@@ -123,6 +123,8 @@ class MainActivity : ComponentActivity() {
         var voiceSessionActive by remember { mutableStateOf(false) }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
+        val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+        val navigationItems = listOf("الرئيسية", "موسيقى", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -146,6 +148,9 @@ class MainActivity : ComponentActivity() {
             musicHistory = musicLibrary.loadHistory()
             musicFavorites = musicLibrary.loadFavorites()
             saveDataMode = musicLibrary.isDataSaverEnabled()
+        }
+        LaunchedEffect(saveDataMode) {
+            musicManager.setDataSaver(saveDataMode)
         }
         var status by remember {
             mutableStateOf("الإصدار 1.3.0 — المحادثة الصوتية العربية")
@@ -331,7 +336,7 @@ class MainActivity : ComponentActivity() {
             scope.launch {
                 try {
                     val results = withContext(Dispatchers.IO) {
-                        audiusRepository.search(cleanQuery)
+                        audiusRepository.search(cleanQuery, limit = if (saveDataMode) 8 else 20)
                     }
                     remoteMusicResults = results
                     musicNotice = if (results.isEmpty()) {
@@ -420,6 +425,58 @@ class MainActivity : ComponentActivity() {
             )
         ) {
 
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet(
+                        drawerContainerColor = Color(0xFF171824),
+                        drawerContentColor = Color.White
+                    ) {
+                        Text(
+                            "صديقي",
+                            modifier = Modifier.padding(start = 22.dp, top = 24.dp, bottom = 4.dp),
+                            color = Color(0xFFE6C77A),
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Text(
+                            "مساعدك الرقمي",
+                            modifier = Modifier.padding(start = 22.dp, bottom = 18.dp),
+                            color = Color(0xFFB9B4C7),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                messages.clear()
+                                messages.add("صديقي" to "أهلاً! أنا صديقي. كيف أستطيع مساعدتك؟")
+                                input = ""
+                                selectedTab = "الرئيسية"
+                                scope.launch { drawerState.close() }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp)
+                        ) {
+                            Text("＋ محادثة جديدة", color = Color(0xFFE6C77A))
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        navigationItems.forEach { tab ->
+                            NavigationDrawerItem(
+                                label = { Text(tab) },
+                                selected = selectedTab == tab,
+                                onClick = {
+                                    selectedTab = tab
+                                    scope.launch { drawerState.close() }
+                                },
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = Color(0xFF393044),
+                                    selectedTextColor = Color(0xFFE6C77A),
+                                    unselectedTextColor = Color(0xFFE4E1EA)
+                                )
+                            )
+                        }
+                    }
+                },
+                gesturesEnabled = true
+            ) {
             Column(
                 Modifier
                     .fillMaxSize()
@@ -436,6 +493,9 @@ class MainActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Text("☰", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
+                        }
                         Surface(modifier = Modifier.size(46.dp), shape = RoundedCornerShape(15.dp), color = Color(0xFF332A4A)) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text("✦", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineMedium)
@@ -673,10 +733,11 @@ class MainActivity : ComponentActivity() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("وضع توفير الإنترنت", color = Color.White)
-                                Text("يقلل استهلاك البيانات عند استخدام المصادر المتوافقة", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
+                                Text("يختصر نتائج البحث ويخزن أجزاء الصوت مؤقتاً؛ خفض الجودة يعمل فقط إذا أتاحه مصدر البث", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
                             }
                             Switch(checked = saveDataMode, onCheckedChange = { enabled ->
                                 saveDataMode = enabled
+                                musicManager.setDataSaver(enabled)
                                 scope.launch { musicLibrary.setDataSaverEnabled(enabled) }
                             })
                         }
@@ -752,7 +813,7 @@ class MainActivity : ComponentActivity() {
                                 Text("المساعد: صديقي", color = Color(0xFFD2D0DC))
                                 Divider(color = Color(0xFF555064))
                                 Text("حالة الخادم: " + status, color = Color(0xFFD2D0DC))
-                                Text("https://sadeeqi-ai.vercel.app", color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
+                                Text(BuildConfig.SADEEQI_API_BASE_URL, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
                                 Text("الإصدار: " + BuildConfig.VERSION_NAME, color = Color(0xFFD2D0DC))
                                 Text("اللغة: العربية  •  المظهر: داكن", color = Color(0xFFD2D0DC))
                             }
@@ -764,17 +825,8 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Spacer(Modifier.height(8.dp))
                 }
-                NavigationBar(containerColor = Color(0xF0181926), contentColor = Color.White, tonalElevation = 0.dp) {
-                    listOf("الرئيسية", "موسيقى", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات").forEach { tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == tab,
-                            onClick = { selectedTab = tab },
-                            icon = { Text(when (tab) { "الرئيسية" -> "⌂"; "موسيقى" -> "♫"; "البحث" -> "⌕"; "الذاكرة" -> "◈"; "المهام" -> "✓"; "الأدوات" -> "✧"; else -> "⚙" }, color = if (selectedTab == tab) Color(0xFFE6C77A) else Color.LightGray) },
-                            label = { Text(tab, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
-                            alwaysShowLabel = true
-                        )
-                    }
-                }
+                Spacer(Modifier.height(4.dp))
+            }
             }
         }
     }
