@@ -55,6 +55,7 @@ test('social provider readiness exposes all 15 providers without leaking credent
   const providers = buildSocialProviders({
     META_CLIENT_ID: 'test-id',
     META_CLIENT_SECRET: 'test-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'test-encryption-key',
     WHATSAPP_TOKEN: 'test-whatsapp-token',
     WHATSAPP_PHONE_NUMBER_ID: '12345',
     TWITCH_CLIENT_ID: 'test-twitch-id',
@@ -70,6 +71,18 @@ test('social provider readiness exposes all 15 providers without leaking credent
   assert.ok(providers.every(provider => !JSON.stringify(provider).includes('test-secret')));
 });
 
+
+
+test('OAuth providers are not marked ready without server-side token encryption', () => {
+  const providers = buildSocialProviders({
+    META_CLIENT_ID: 'test-id',
+    META_CLIENT_SECRET: 'test-secret',
+    TIKTOK_CLIENT_KEY: 'test-tiktok-id',
+    TIKTOK_CLIENT_SECRET: 'test-tiktok-secret'
+  });
+  assert.ok(providers.filter(provider => ['facebook', 'instagram', 'messenger', 'threads', 'tiktok'].includes(provider.id))
+    .every(provider => provider.configured === false && provider.status === 'setup_required'));
+});
 
 test('chat rate limiter returns 429 after the configured request budget', async () => {
   const { createRateLimiter } = await import('./server.js');
