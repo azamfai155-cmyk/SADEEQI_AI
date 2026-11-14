@@ -85,7 +85,7 @@ fun SocialHubScreen(accessTokenProvider: () -> String, modifier: Modifier = Modi
                         Text(if (loading) "جارٍ التحديث..." else "تحديث الحالة")
                     }
                     Text(
-                        "لا يوجد أي حساب موصول حالياً. لن نعرض اتصالاً وهمياً أو نطلب كلمة مرور حسابك.",
+                        if (connectedCount == 0) "لا يوجد أي حساب موصول حالياً. لن نعرض اتصالاً وهمياً أو نطلب كلمة مرور حسابك." else "تم جلب عدد الاتصالات من الخادم. لا تُنفذ أي عملية نشر أو إرسال دون موافقتك.",
                         color = Color(0xFFD2D0DC),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -160,5 +160,7 @@ data class SocialProvider(
 
 data class SocialProviderResponse(
     val providers: List<SocialProvider>,
+    val connectedCount: Int,
+    val configuredCount: Int,
     val notice: String
 )
