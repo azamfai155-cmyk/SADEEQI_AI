@@ -36,3 +36,11 @@ The memory store now encrypts logical IDs, categories, timestamps, and values in
 
 ## 1.2.0 limitations
 This is source code only, not a built APK. Backend deployment and API credentials are not configured. Android build/device tests were not possible in the current environment. The app bootstrap bearer token is embedded at build time and is extractable; production must use short-lived user authentication. Image upload size is capped at 8 MiB in the app. Live audio/realtime and wake-word operation are not implemented here.
+
+
+## SADEEQI MUSIC (source integration)
+- Added AndroidX Media3 ExoPlayer and MediaSession service foundation.
+- Local user-selected audio playback, queue, seek, repeat, shuffle, volume, persistent favorites/history and Arabic playback voice commands are implemented in source.
+- A remote global catalogue or licensed streaming provider is **not connected** yet. Search commands clearly report this limitation rather than pretending to stream.
+- See [docs/SADEEQI_MUSIC.md](docs/SADEEQI_MUSIC.md) for architecture, data estimates, legal integration requirements and device-validation checklist.
+- CI now runs Android unit tests before building the debug APK. No APK/device success should be claimed until the relevant run succeeds and the artifact is verified.
