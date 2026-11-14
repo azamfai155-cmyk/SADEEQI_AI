@@ -180,6 +180,8 @@ class MainActivity : ComponentActivity() {
                 } catch (error: Exception) {
                     val reason = error.message ?: "خطأ غير معروف"
                     messages.add("صديقي" to "لم أتمكن من إكمال الطلب. $reason")
+                    // Keep the persisted user turn visible in the memory screen after a failed request.
+                    memoryItems = memory.search("chat:").sortedByDescending { it.first }
                     status = "تعذر الاتصال — تحقق من إعداد الخادم والإنترنت"
                 } finally {
                     isSending = false
