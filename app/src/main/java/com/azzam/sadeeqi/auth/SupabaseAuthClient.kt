@@ -50,8 +50,16 @@ class SupabaseAuthClient(private val context: Context) {
             val raw = response.body?.string().orEmpty()
             val result = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
             if (!response.isSuccessful || !result.has("access_token")) {
-                EncryptedSessionStore.clear(context)
-                error("انتهت الجلسة. سجّل الدخول مجدداً.")
+                // A transient server/rate-limit response must not erase a valid
+                // refresh token. Clear only when Supabase rejects the token itself.
+                if (response.code == 400 || response.code == 401) {
+                    EncryptedSessionStore.clear(context)
+                    error("انتهت الجلسة. سجّل الدخول مجدداً.")
+                }
+                if (response.code == 429 || response.code >= 500) {
+                    error("تعذر تجديد الجلسة مؤقتاً. تحقق من الإنترنت وحاول مجدداً.")
+                }
+                error("تعذر تجديد الجلسة. حاول تسجيل الدخول مجدداً.")
             }
             val refreshedAt = System.currentTimeMillis() / 1000L
             result.put("expires_at", refreshedAt + result.optLong("expires_in", 3600L))
