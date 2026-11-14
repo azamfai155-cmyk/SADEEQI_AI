@@ -153,11 +153,14 @@ class MainActivity : ComponentActivity() {
             }
 
             messages.add("أنت" to effectiveQuestion)
+            val userMemoryKey = "chat:${System.currentTimeMillis()}:1"
             isSending = true
             status = "صديقي يفكر الآن…"
 
             scope.launch {
                 try {
+                    // Save the user turn before network I/O so outages do not erase it.
+                    memory.save(userMemoryKey, "conversation", "أنت\n$effectiveQuestion")
                     val turns = messages.takeLast(24).map { (speaker, body) ->
                         OpenAiGateway.Turn(
                             if (speaker == "صديقي") "assistant" else "user",
@@ -169,9 +172,8 @@ class MainActivity : ComponentActivity() {
                     }
                     messages.add("صديقي" to answer)
 
-                    val stamp = System.currentTimeMillis()
-                    memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
-                    memory.save("chat:$stamp:2", "conversation", "صديقي\n$answer")
+                    val answerMemoryKey = userMemoryKey.removeSuffix(":1") + ":2"
+                    memory.save(answerMemoryKey, "conversation", "صديقي\n$answer")
                     memoryItems = memory.search("chat:").sortedByDescending { it.first }
                     onReply(answer)
                     status = "متصل — الإصدار ${BuildConfig.VERSION_NAME}"
