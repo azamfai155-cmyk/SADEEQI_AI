@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app } from './server.js';
+import { app, extractBearerToken } from './server.js';
 import http from 'node:http';
 
 test('health endpoint exposes service metadata without secrets', async () => {
@@ -47,4 +47,12 @@ test('social provider catalogue exists and refuses unauthenticated setup', async
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
+});
+
+
+test('bearer token parser strips the authorization scheme', () => {
+  assert.equal(extractBearerToken('Bearer test-token'), 'test-token');
+  assert.equal(extractBearerToken('bearer test-token'), 'test-token');
+  assert.equal(extractBearerToken('test-token'), 'test-token');
+  assert.equal(extractBearerToken(undefined), '');
 });
