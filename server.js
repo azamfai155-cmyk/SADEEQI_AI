@@ -1,143 +1,81 @@
-
 import express from 'express';
 import crypto from 'node:crypto';
 
-const app = express();
-
+export const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
 
-const GROQ_API_KEY = process.env.OPENAI_API_KEY;
+const API_KEY = process.env.OPENAI_API_KEY;
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 const MODEL = process.env.OPENAI_MODEL;
-const ALLOW_WEB_SEARCH = process.env.ALLOW_WEB_SEARCH !== 'false';
+const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
+  'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
-const SYSTEM_PROMPT =
-  process.env.SADEEQI_SYSTEM_PROMPT ||
-  `أنت صديقي، المساعد الرقمي الشخصي لعزام.
-أجب بالعربية، واستخدم اللهجة اليمنية بصورة طبيعية عندما تلائم السياق.
-كن عملياً ودقيقاً وصريحاً، ولا تدّع تنفيذ إجراء لم تنفذه.
-اطلب موافقة عزام قبل أي إجراء حساس أو شراء أو إرسال أو حذف.
-احترم الخصوصية ولا تطلب كلمات المرور أو مفاتيح API.
-وضّح عدم اليقين واستشهد بالمصادر عند استخدام البحث.`;
-
-function constantTimeEqual(a, b) {
+function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-
-  const aa = Buffer.from(a);
-  const bb = Buffer.from(b);
-
-  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-function auth(req, res, next) {
-  if (!APP_TOKEN) {
-    return res.status(503).json({ error: 'Backend auth is not configured.' });
+function validateInput(input) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
+  for (const turn of input) {
+    if (!turn || !['user', 'assistant'].includes(turn.role)) return 'Invalid role.';
+    if (typeof turn.content === 'string') {
+      if (turn.content.length > 16000) return 'Message too large.';
+    } else if (!Array.isArray(turn.content) || turn.content.length < 1 || turn.content.length > 4) {
+      return 'Invalid content.';
+    }
   }
-
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-
-  if (!constantTimeEqual(token, APP_TOKEN)) {
-    return res.status(401).json({ error: 'Unauthorized.' });
-  }
-
-  next();
+  return null;
 }
 
 app.get('/health', (_req, res) => {
-  res.json({
+  res.set('Cache-Control', 'no-store').json({
     service: 'sadeeqi-ai',
-    version: '1.2.0',
-    configured: Boolean(GROQ_API_KEY && APP_TOKEN && MODEL)
+    version: '1.2.1',
+    configured: Boolean(API_KEY && APP_TOKEN && MODEL)
   });
 });
 
-app.post('/v1/chat', auth, async (req, res) => {
-  if (!GROQ_API_KEY || !MODEL) {
-    return res.status(503).json({
-      error: 'API key and model must be configured on the server.'
-    });
-  }
+app.post('/v1/chat', async (req, res) => {
+  if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
+  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
+  if (!API_KEY || !MODEL) return res.status(503).json({ error: 'OpenAI server secrets are not configured.' });
 
-  const input = req.body?.input;
-
-  if (!Array.isArray(input) || input.length < 1 || input.length > 24) {
-    return res.status(400).json({
-      error: 'input must contain 1 to 24 turns.'
-    });
-  }
-
-  for (const turn of input) {
-    if (!['user', 'assistant'].includes(turn?.role)) {
-      return res.status(400).json({ error: 'Invalid role.' });
-    }
-
-    if (typeof turn.content !== 'string' && !Array.isArray(turn.content)) {
-      return res.status(400).json({ error: 'Invalid content.' });
-    }
-
-    if (typeof turn.content === 'string' && turn.content.length > 16000) {
-      return res.status(413).json({ error: 'Message too large.' });
-    }
-  }
-
-  const hasImage = input.some(turn =>
-    Array.isArray(turn.content) &&
-    turn.content.some(part => part?.type === 'input_image')
-  );
-
-  const selectedModel = hasImage ? 'qwen/qwen3.8-27b' : MODEL;
+  const validationError = validateInput(req.body?.input);
+  if (validationError) return res.status(400).json({ error: validationError });
 
   const payload = {
-    model: selectedModel,
+    model: MODEL,
     instructions: SYSTEM_PROMPT,
-    input
+    input: req.body.input,
+    store: false
   };
-
-  if (ALLOW_WEB_SEARCH && req.body?.enable_web_search === true && !hasImage) {
-    payload.tools = [{ type: 'browser_search' }];
+  if (process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true) {
+    payload.tools = [{ type: 'web_search' }];
   }
 
   try {
-    const upstream = await fetch(
-      'https://api.groq.com/openai/v1/responses',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(120000)
-      }
-    );
-
-    const raw = await upstream.json();
-
+    const upstream = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(110000)
+    });
+    const result = await upstream.json();
     if (!upstream.ok) {
-      return res.status(upstream.status).json({
-        error: raw?.error?.message || 'Groq request failed.'
-      });
+      const status = upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
+      return res.status(status).json({ error: result?.error?.message || 'OpenAI request failed.' });
     }
-
-    const output = (raw.output || [])
-      .flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text')
-      .map(part => part.text)
-      .join('\n')
-      .trim();
-
-    return res.json({
-      id: raw.id,
-      model: raw.model || selectedModel,
-      output_text: output,
-      usage: raw.usage || null
-    });
-
+    const output = (result.output || []).flatMap(item => item.content || [])
+      .filter(part => part.type === 'output_text').map(part => part.text).join('\\n').trim();
+    if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
+    return res.json({ id: result.id, model: result.model || MODEL, output_text: output, usage: result.usage || null });
   } catch {
-    return res.status(502).json({
-      error: 'AI provider unavailable. Check provider status and server logs.'
-    });
+    return res.status(502).json({ error: 'AI provider unavailable. Check provider status and server logs.' });
   }
 });
 
