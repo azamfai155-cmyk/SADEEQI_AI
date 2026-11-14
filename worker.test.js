@@ -48,3 +48,22 @@ test('chat rejects non-image data URLs before contacting provider', async () => 
   const response = await worker.fetch(request, env);
   assert.equal(response.status, 400);
 });
+
+
+test('social provider readiness requires app authentication', async () => {
+  const request = new Request('https://example.workers.dev/v1/social/providers');
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 401);
+});
+
+test('social provider readiness lists platforms without claiming fake connections', async () => {
+  const request = new Request('https://example.workers.dev/v1/social/providers', {
+    headers: { authorization: 'Bearer test-token' }
+  });
+  const response = await worker.fetch(request, env);
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.providers.length, 15);
+  assert.equal(data.connectedCount, 0);
+  assert.ok(data.providers.every(provider => provider.connected === false));
+});
