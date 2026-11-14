@@ -7,7 +7,11 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '12mb' }));
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
-const AUTH_MODE = (process.env.AUTH_MODE || 'legacy').toLowerCase();
+export function normalizeAuthMode(value) {
+  const mode = (value || 'legacy').toLowerCase();
+  return ['legacy', 'dual', 'supabase'].includes(mode) ? mode : 'invalid';
+}
+const AUTH_MODE = normalizeAuthMode(process.env.AUTH_MODE);
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
 const PROVIDER = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
@@ -49,6 +53,7 @@ export async function verifySupabaseAccessToken(token) {
 
 export function createAuthMiddleware() {
   return async (req, res, next) => {
+    if (AUTH_MODE === 'invalid') return res.status(503).json({ error: 'Backend authentication mode is invalid.' });
     const token = extractBearerToken(req.headers.authorization);
     if (AUTH_MODE === 'supabase') {
       if (!SUPABASE_JWKS) return res.status(503).json({ error: 'Supabase authentication is not configured.' });
@@ -156,7 +161,7 @@ app.get('/health', (_req, res) => {
     provider: PROVIDER,
     model: MODEL,
     auth_mode: AUTH_MODE,
-    configured: Boolean(API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN))
+    configured: Boolean(AUTH_MODE !== 'invalid' && API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN))
   });
 });
 
