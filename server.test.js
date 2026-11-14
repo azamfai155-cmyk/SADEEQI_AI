@@ -69,3 +69,38 @@ test('social provider readiness exposes all 15 providers without leaking credent
   assert.ok(providers.every(provider => !('env' in provider)));
   assert.ok(providers.every(provider => !JSON.stringify(provider).includes('test-secret')));
 });
+
+
+test('chat rate limiter returns 429 after the configured request budget', async () => {
+  const { createRateLimiter } = await import('./server.js');
+  let current = 1_000;
+  const limit = createRateLimiter({ windowMs: 60_000, max: 2, now: () => current });
+  const makeResponse = () => {
+    const headers = {};
+    return {
+      headers,
+      statusCode: 200,
+      body: null,
+      set(name, value) { headers[name] = value; return this; },
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+  };
+  const req = { auth: { userId: 'user-a' } };
+  const first = makeResponse();
+  const second = makeResponse();
+  const third = makeResponse();
+  let nextCalls = 0;
+  limit(req, first, () => { nextCalls += 1; });
+  limit(req, second, () => { nextCalls += 1; });
+  limit(req, third, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 2);
+  assert.equal(third.statusCode, 429);
+  assert.equal(third.headers['Retry-After'], '60');
+
+  current += 60_001;
+  const afterWindow = makeResponse();
+  limit(req, afterWindow, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 3);
+  assert.equal(afterWindow.statusCode, 200);
+});

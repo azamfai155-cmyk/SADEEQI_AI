@@ -71,6 +71,7 @@ jobs:
 
   android-instrumentation-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,12 +83,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - name: Run Android instrumentation tests on API 35 emulator
+      - name: Run Android instrumentation tests on API 34 emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
