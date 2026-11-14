@@ -118,33 +118,36 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.get('/v1/social/providers', requireAuth, (req, res) => {
-  // This endpoint reports developer-side API readiness only. It never claims
-  // that a user's social account is connected; OAuth flows and token storage
-  // are intentionally unavailable until implemented and reviewed.
-  const providers = [
-    { id: 'facebook', name: 'Facebook', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_APP_ID', 'META_APP_SECRET'], note: 'تتطلب صلاحيات Meta ومراجعة التطبيق حسب نوع البيانات.' },
-    { id: 'instagram', name: 'Instagram', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_APP_ID', 'META_APP_SECRET'], note: 'تقتصر الإدارة على حسابات وأنواع المحتوى التي تسمح بها واجهات Instagram الرسمية.' },
-    { id: 'messenger', name: 'Messenger', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_APP_ID', 'META_APP_SECRET'], note: 'تتطلب صفحة Facebook وصلاحيات Messenger المعتمدة.' },
+export function buildSocialProviders(env = process.env) {
+  const definitions = [
+    { id: 'facebook', name: 'Facebook', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_CLIENT_ID', 'META_CLIENT_SECRET'], note: 'تتطلب صلاحيات Meta ومراجعة التطبيق حسب نوع البيانات.' },
+    { id: 'instagram', name: 'Instagram', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_CLIENT_ID', 'META_CLIENT_SECRET'], note: 'تقتصر الإدارة على الحسابات وأنواع المحتوى التي تسمح بها واجهات Instagram الرسمية.' },
+    { id: 'messenger', name: 'Messenger', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_CLIENT_ID', 'META_CLIENT_SECRET'], note: 'تتطلب صفحة Facebook وصلاحيات Messenger المعتمدة.' },
     { id: 'whatsapp', name: 'WhatsApp', family: 'Meta', auth: 'WhatsApp Business Cloud API', env: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID'], note: 'واجهة Cloud API مخصصة للأعمال؛ لا تمنح وصولاً عاماً إلى محادثات WhatsApp الشخصية.' },
     { id: 'telegram', name: 'Telegram', family: 'Telegram', auth: 'Bot API', env: ['TELEGRAM_BOT_TOKEN'], note: 'Bot API للبوتات والمحادثات التي يُسمح للبوت بالوصول إليها، وليس حساب المستخدم الشخصي.' },
     { id: 'tiktok', name: 'TikTok', family: 'TikTok', auth: 'TikTok OAuth 2.0', env: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'], note: 'النشر والقراءة يعتمدان على موافقة TikTok ونطاقات المنتج المتاحة.' },
     { id: 'youtube', name: 'YouTube', family: 'Google', auth: 'Google OAuth 2.0', env: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'], note: 'إدارة القنوات عبر YouTube Data API وفق الحصص والصلاحيات.' },
     { id: 'x', name: 'X', family: 'X', auth: 'X OAuth 2.0', env: ['X_CLIENT_ID', 'X_CLIENT_SECRET'], note: 'القراءة والنشر مرتبطان بخطة API ونطاقات الوصول.' },
-    { id: 'snapchat', name: 'Snapchat', family: 'Snap', auth: 'Snap OAuth 2.0', env: ['SNAP_CLIENT_ID', 'SNAP_CLIENT_SECRET'], note: 'الوصول التجاري يتطلب منتج Snap معتمداً وصلاحيات مناسبة.' },
+    { id: 'snapchat', name: 'Snapchat', family: 'Snap', auth: 'Snap OAuth 2.0', env: ['SNAPCHAT_CLIENT_ID', 'SNAPCHAT_CLIENT_SECRET'], note: 'الوصول التجاري يتطلب منتج Snap معتمداً وصلاحيات مناسبة.' },
     { id: 'linkedin', name: 'LinkedIn', family: 'LinkedIn', auth: 'LinkedIn OAuth 2.0', env: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'], note: 'واجهات النشر والإدارة تتطلب منتجات وصلاحيات LinkedIn المناسبة.' },
     { id: 'discord', name: 'Discord', family: 'Discord', auth: 'Discord OAuth 2.0 / Bot', env: ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'], note: 'البوت لا يرى إلا الخوادم والقنوات التي أُضيف إليها ومنحته الصلاحيات.' },
     { id: 'reddit', name: 'Reddit', family: 'Reddit', auth: 'Reddit OAuth 2.0', env: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET'], note: 'تخضع القراءة والنشر لسياسات Reddit وحدود الاستخدام.' },
     { id: 'pinterest', name: 'Pinterest', family: 'Pinterest', auth: 'Pinterest OAuth 2.0', env: ['PINTEREST_APP_ID', 'PINTEREST_APP_SECRET'], note: 'تتطلب صلاحيات التطبيق المعتمدة لإدارة اللوحات والدبابيس.' },
-    { id: 'threads', name: 'Threads', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_APP_ID', 'META_APP_SECRET'], note: 'تتطلب صلاحيات Threads API ومراجعة التطبيق عند اللزوم.' }
-  ].map(({ env, ...provider }) => ({
+    { id: 'threads', name: 'Threads', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_CLIENT_ID', 'META_CLIENT_SECRET'], note: 'تتطلب صلاحيات Threads API ومراجعة التطبيق عند اللزوم.' },
+    { id: 'twitch', name: 'Twitch', family: 'Twitch', auth: 'Twitch OAuth 2.0', env: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET'], note: 'الوظائف تعتمد على نطاقات OAuth وتسجيل تطبيق Twitch.' }
+  ];
+
+  return definitions.map(({ env: required, ...provider }) => ({
     ...provider,
-    configured: env.every((name) => Boolean(process.env[name])),
+    configured: required.every((name) => Boolean(env[name])),
     connected: false
   }));
+}
 
+app.get('/v1/social/providers', requireAuth, (_req, res) => {
+  // Readiness only: OAuth, account linking and social actions are not implemented.
   res.set('Cache-Control', 'no-store').json({
-    providers,
+    providers: buildSocialProviders(),
     notice: 'هذه حالة إعداد واجهات المطور فقط. لا توجد حسابات اجتماعية متصلة حالياً، ولا يمكن الربط أو النشر قبل تنفيذ OAuth وموافقة المستخدم.'
   });
 });
