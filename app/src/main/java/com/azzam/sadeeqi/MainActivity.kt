@@ -127,10 +127,13 @@ class MainActivity : ComponentActivity() {
                 runCatching {
                     val bytes = contentResolver.openInputStream(picked)
                         ?.use { it.readBytes() } ?: error("تعذرت قراءة الصورة")
-                    require(bytes.size <= 8 * 1024 * 1024) {
-                        "حجم الصورة أكبر من 8 ميغابايت"
+                    require(bytes.size <= 3 * 1024 * 1024) {
+                        "حجم الصورة أكبر من 3 ميغابايت"
                     }
                     val mime = contentResolver.getType(picked) ?: "image/jpeg"
+                    require(mime in setOf("image/jpeg", "image/png", "image/webp")) {
+                        "صيغة الصورة غير مدعومة. استخدم JPEG أو PNG أو WebP."
+                    }
                     "data:$mime;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
                 }.getOrElse {
                     status = it.message ?: "تعذر تحميل الصورة"
