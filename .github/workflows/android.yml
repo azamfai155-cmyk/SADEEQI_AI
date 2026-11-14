@@ -6,9 +6,11 @@ on:
     branches:
       - main
       - feature/premium-compose-ui
+      - fix/cloudflare-session-deploy-alignment
   pull_request:
     branches:
       - main
+      - feature/premium-compose-ui
 
 jobs:
   build:

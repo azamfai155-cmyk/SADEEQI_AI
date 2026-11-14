@@ -141,6 +141,17 @@ test('chat rejects remote image URLs and accepts only inline image data', async 
   assert.equal(response.status,400);
 });
 
+test('chat rejects inline images above the supported 3 MiB source-image budget', async () => {
+  const issued = await worker.fetch(request('https://example.workers.dev/v1/session',{method:'POST'}),env);
+  const {token} = await issued.json();
+  const oversizedImage = 'data:image/jpeg;base64,' + 'A'.repeat(4 * 1024 * 1024 + 1);
+  const response = await worker.fetch(request('https://example.workers.dev/v1/chat',{
+    method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({input:[{role:'user',content:[{type:'input_image',image_url:oversizedImage}]}]})
+  }),env);
+  assert.equal(response.status,400);
+});
+
 test('non-API paths are not exposed', async () => {
   const response = await worker.fetch(request('https://example.workers.dev/admin'),env);
   assert.equal(response.status,404);
