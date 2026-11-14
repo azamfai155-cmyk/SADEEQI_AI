@@ -17,7 +17,8 @@ data class MusicPlaybackState(
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
-    val shuffleEnabled: Boolean = false
+    val shuffleEnabled: Boolean = false,
+    val volume: Float = 1f
 )
 
 class MusicPlayerManager(
@@ -101,7 +102,8 @@ class MusicPlayerManager(
                 durationMs = p.duration.coerceAtLeast(0L),
                 positionMs = p.currentPosition.coerceAtLeast(0L),
                 repeatMode = p.repeatMode,
-                shuffleEnabled = p.shuffleModeEnabled
+                shuffleEnabled = p.shuffleModeEnabled,
+                volume = p.volume
             )
         )
     }
