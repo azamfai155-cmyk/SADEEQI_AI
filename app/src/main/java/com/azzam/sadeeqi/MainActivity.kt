@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -348,7 +349,7 @@ private fun Header(status: String) {
 }
 
 @Composable
-private fun HomeScreen(
+private fun ColumnScope.HomeScreen(
     onOpenChat: () -> Unit,
     onListen: () -> Unit,
     onChooseImage: () -> Unit,
@@ -463,7 +464,7 @@ private fun QuickAction(
 }
 
 @Composable
-private fun ChatScreen(
+private fun ColumnScope.ChatScreen(
     messages: List<Pair<String, String>>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     input: String,
@@ -602,7 +603,7 @@ private fun SmallAction(symbol: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MemoryScreen(items: List<Pair<String, String>>) {
+private fun ColumnScope.MemoryScreen(items: List<Pair<String, String>>) {
     Column(
         modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -648,7 +649,7 @@ private fun MemoryScreen(items: List<Pair<String, String>>) {
 }
 
 @Composable
-private fun SettingsScreen(status: String) {
+private fun ColumnScope.SettingsScreen(status: String) {
     Column(
         modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
