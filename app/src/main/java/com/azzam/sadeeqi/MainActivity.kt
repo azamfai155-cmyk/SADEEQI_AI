@@ -1063,6 +1063,15 @@ class MainActivity : ComponentActivity() {
                                 Text(BuildConfig.SADEEQI_API_BASE_URL, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
                                 Text("الإصدار: " + BuildConfig.VERSION_NAME, color = Color(0xFFD2D0DC))
                                 Text("اللغة: العربية  •  المظهر: داكن", color = Color(0xFFD2D0DC))
+                                Button(
+                                    onClick = {
+                                        startService(Intent(this@MainActivity, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP))
+                                        EncryptedSessionStore.clear(this@MainActivity)
+                                        startActivity(Intent(this@MainActivity, AuthActivity::class.java))
+                                        finish()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("تسجيل الخروج") }
                             }
                         }
                     }
