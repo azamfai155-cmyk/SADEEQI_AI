@@ -33,7 +33,7 @@ jobs:
   android:
     name: Android - unit tests, APK and emulator tests
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,7 +71,18 @@ jobs:
             -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
             -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
 
+      # Publish the built APK before emulator execution so a slow emulator
+      # cannot block delivery of an otherwise successful debug build.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SADEEQI-AI-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Run instrumentation tests on API 34 emulator
+        timeout-minutes: 30
         uses: reactivecircus/android-emulator-runner@v2
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
@@ -86,24 +97,14 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
             set -euo pipefail
-            # Disable emulator-side package verification so CI can install the
-            # locally built debug APK without Play Protect verifier timeouts.
             adb shell settings put global verifier_verify_adb_installs 0
             adb shell settings put global package_verifier_enable 0
             set +e
-            gradle :app:connectedDebugAndroidTest --stacktrace -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
+            gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
             test_status=$?
             adb logcat -d -v threadtime > android-instrumentation-logcat.txt
             adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1
             exit "$test_status"
-
-      - name: Upload APK artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: SADEEQI-AI-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: ignore
 
       - name: Upload Android instrumentation diagnostics
         if: always()
@@ -114,3 +115,4 @@ jobs:
             android-instrumentation-logcat.txt
             android-process-exit-info.txt
           if-no-files-found: ignore
+          retention-days: 7
