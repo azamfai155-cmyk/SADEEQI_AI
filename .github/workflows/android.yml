@@ -1,5 +1,14 @@
 name: SADEEQI AI - tests and Android build
 
+# Keep only the newest run for a branch; rapid commits should not exhaust
+# runner capacity with multiple stale Android SDK/Gradle builds.
+concurrency:
+  group: sadeeqi-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
   push:
