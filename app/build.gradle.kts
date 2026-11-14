@@ -13,13 +13,13 @@ android {
         applicationId = "com.azzam.sadeeqi"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val apiBaseUrl = providers.gradleProperty("sadeeqiApiBaseUrl")
-            .orElse("https://sadeeqi-ai.vercel.app").get()
+            .orElse("https://sadeeqi-ai-pdrk.vercel.app").get()
         val appToken = providers.gradleProperty("sadeeqiAppToken").orElse("").get()
 
         buildConfigField("String", "SADEEQI_API_BASE_URL", "\"$apiBaseUrl\"")
