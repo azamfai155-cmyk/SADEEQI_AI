@@ -369,6 +369,10 @@ private fun ColumnScope.HomeScreen(
     ) {
         Spacer(Modifier.height(4.dp))
         Text("مساء الخير، عزام 👋", color = Muted, fontSize = 14.sp)
+        PremiumCore(
+            modifier = Modifier.fillMaxWidth().height(278.dp),
+            stateLabel = "النواة الذكية • متاحة"
+        )
         Text(
             "كيف أقدر أساعدك\nاليوم؟",
             color = TextMain,
