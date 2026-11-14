@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
 import com.azzam.sadeeqi.BuildConfig
 
 @Composable
-fun SocialHubScreen(accessToken: String, modifier: Modifier = Modifier) {
+fun SocialHubScreen(accessTokenProvider: () -> String, modifier: Modifier = Modifier) {
     var providers by remember { mutableStateOf<List<SocialProvider>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -40,7 +40,7 @@ fun SocialHubScreen(accessToken: String, modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         loading = true
         runCatching {
-            withContext(Dispatchers.IO) { SocialHubRepository(accessToken).loadProviders() }
+            withContext(Dispatchers.IO) { SocialHubRepository(accessTokenProvider).loadProviders() }
         }.onSuccess { result ->
             providers = result.providers
             notice = result.notice
