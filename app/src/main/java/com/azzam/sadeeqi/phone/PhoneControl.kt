@@ -1,6 +1,6 @@
 package com.azzam.sadeeqi.phone
 
-import android.app.AlarmClock
+import android.provider.AlarmClock
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
