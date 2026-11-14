@@ -193,6 +193,18 @@ class MainActivity : ComponentActivity() {
                     if (parts.size == 2) messages.add(parts[0] to parts[1])
                 }
             }
+
+            status = "جارٍ فحص اتصال صديقي…"
+            try {
+                val health = withContext(Dispatchers.IO) { gateway.health() }
+                status = if (health.configured) {
+                    "متصل بالخادم • إصدار " + health.version
+                } else {
+                    "الخادم متاح — إعدادات الذكاء الاصطناعي غير مكتملة"
+                }
+            } catch (error: Exception) {
+                status = "الخادم غير متاح — " + (error.message ?: "تعذر الاتصال")
+            }
         }
 
         LaunchedEffect(messages.size, selectedTab) {
