@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "if [ \"$VERCEL_PROJECT_NAME\" = \"sadeeqi-ai\" ] || [ \"$VERCEL_PROJECT_NAME\" = \"sadeeqi-ai-kh3l\" ]; then echo 'Skipping legacy duplicate SADEEQI deployment'; exit 0; else echo 'Building canonical SADEEQI backend'; exit 1; fi"
+}
