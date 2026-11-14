@@ -86,4 +86,7 @@ class SupabaseAuthClient(private val context: Context) {
             return result
         }
     }
+    companion object {
+        private val REFRESH_LOCK = Any()
+    }
 }
