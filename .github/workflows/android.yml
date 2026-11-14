@@ -84,4 +84,5 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          disk-size: 2048M
           script: gradle :app:connectedDebugAndroidTest -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app"
