@@ -13,7 +13,7 @@ This report separates source implementation from deployed, built, and device-ver
 - Playback: AndroidX Media3 ExoPlayer + MediaSession.
 - Local persistence: Preferences DataStore and Room.
 - Networking: OkHttp on Android; Node.js 20 + Express on the server.
-- AI: server-side OpenAI Responses API proxy. The OpenAI API key must remain in Vercel environment variables.
+- AI: server-side Responses API proxy with Groq as the current configured provider; OpenAI remains an optional provider. Provider credentials remain server-side in Vercel.
 - CI: GitHub Actions workflow for backend tests, Android unit tests, and debug APK artifact creation.
 
 ## 2. Implemented in source
@@ -54,7 +54,7 @@ This report separates source implementation from deployed, built, and device-ver
 
 ## 3. Not complete or not integrated
 
-- `PhoneControl.kt` exists at repository root, outside the Android app source set. It is not yet integrated into the live chat command dispatcher or a permissions/confirmation UI.
+- `PhoneControl` is in the Android app source set and is integrated with the allow-listed `DeviceCommandParser`. Chat commands require an on-screen confirmation; foreground voice commands now require a separate spoken yes/no confirmation. Pending voice commands are cleared when the session ends.
 - Social account connection and management are not implemented.
 - A licensed commercial global music provider is not connected.
 - Adaptive bitrate selection is not available for the current progressive Audius stream.
@@ -67,7 +67,7 @@ This report separates source implementation from deployed, built, and device-ver
 - The Android version was advanced to 1.5.1 / versionCode 7 in source.
 - The Android build configuration and GitHub Actions workflow now target `sadeeqi-ai-pdrk.vercel.app`.
 - Vercel status checks on the latest source commits report `build-rate-limit`. This indicates Vercel deployment is blocked by the account's build limit; it is not evidence of a successful deployment.
-- The health endpoint could not be independently verified from this environment.
+- The canonical `https://sadeeqi-ai-pdrk.vercel.app/health` endpoint was verified with HTTP 200 and reports `provider: groq`, `model: openai/gpt-oss-20b`, and `configured: true`. An authenticated `POST /v1/chat` and an actual model response were not verified in this session; opening that POST-only route with a browser GET is expected to return 404.
 - No verified APK artifact has been produced in this work session.
 - No emulator or physical-device test has been run in this work session.
 - The current workflow runs backend tests and Android unit tests before creating a debug APK. The new Room instrumentation test still requires a connected emulator/device test run.
@@ -85,4 +85,4 @@ This report separates source implementation from deployed, built, and device-ver
 
 ## 6. Current conclusion
 
-**Source development is underway; final acceptance is not passed.** The current work improves the backend Social Hub status endpoint, fixes its main-thread network call, activates Room-backed encrypted memory with a legacy migration, places its instrumentation test in the correct source set, and aligns the Android/CI backend URL. It does not yet deliver a verified APK, connected social accounts, a licensed worldwide commercial music catalogue, or full-duplex realtime voice.
+**Source development is underway; final acceptance is not passed.** In addition to the backend Social Hub readiness endpoint, Room-backed encrypted memory, and Android/CI URL alignment, safe phone commands are integrated into chat and the user-started voice session with explicit confirmation. The Tasks placeholder was removed. Vercel's Hobby deployment limit currently blocks a new production deployment; a repository-level ignore command now suppresses the two legacy duplicate Vercel projects so `sadeeqi-ai-pdrk` remains the canonical backend. This work does not yet deliver a verified APK, connected social accounts, a licensed worldwide commercial music catalogue, full-duplex realtime voice, or physical-device acceptance.
