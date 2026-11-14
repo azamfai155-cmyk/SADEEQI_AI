@@ -136,6 +136,7 @@ class MainActivity : ComponentActivity() {
             musicQueue = musicLibrary.loadQueue()
             musicHistory = musicLibrary.loadHistory()
             musicFavorites = musicLibrary.loadFavorites()
+            saveDataMode = musicLibrary.isDataSaverEnabled()
         }
         var status by remember {
             mutableStateOf("الإصدار 1.2.0 — يحتاج إعداد خادم API")
@@ -541,7 +542,10 @@ class MainActivity : ComponentActivity() {
                                 Text("وضع توفير الإنترنت", color = Color.White)
                                 Text("مفعّل افتراضياً؛ لا يوجد بث شبكي حالياً", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
                             }
-                            Switch(checked = saveDataMode, onCheckedChange = { saveDataMode = it })
+                            Switch(checked = saveDataMode, onCheckedChange = { enabled ->
+                                saveDataMode = enabled
+                                scope.launch { musicLibrary.setDataSaverEnabled(enabled) }
+                            })
                         }
                         Text("قائمة التشغيل الحالية", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
                         if (musicQueue.isEmpty()) {
