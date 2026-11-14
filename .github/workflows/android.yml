@@ -45,7 +45,7 @@ jobs:
           SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
           SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
         run: |
-          API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai.vercel.app}"
+          API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai-pdrk.vercel.app}"
           APP_TOKEN="${SADEEQI_APP_TOKEN:-}"
           gradle :app:testDebugUnitTest :app:assembleDebug \
             -PsadeeqiApiBaseUrl="$API_URL" \
