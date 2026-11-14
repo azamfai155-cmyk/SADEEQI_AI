@@ -20,10 +20,12 @@ android {
 
         val apiBaseUrl = providers.gradleProperty("sadeeqiApiBaseUrl")
             .orElse("https://sadeeqi-ai-pdrk.vercel.app").get()
-        val appToken = providers.gradleProperty("sadeeqiAppToken").orElse("").get()
+        val supabaseUrl = providers.gradleProperty("sadeeqiSupabaseUrl").orElse("").get()
+        val supabaseAnonKey = providers.gradleProperty("sadeeqiSupabaseAnonKey").orElse("").get()
 
         buildConfigField("String", "SADEEQI_API_BASE_URL", "\"$apiBaseUrl\"")
-        buildConfigField("String", "SADEEQI_APP_TOKEN", "\"$appToken\"")
+        buildConfigField("String", "SADEEQI_SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SADEEQI_SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     buildFeatures {
