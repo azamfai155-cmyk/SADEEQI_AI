@@ -27,6 +27,36 @@ class SupabaseAuthClient(private val context: Context) {
         "/auth/v1/signup", email, password
     )
 
+    fun accessToken(): String {
+        val session = EncryptedSessionStore.read(context)
+            ?: error("سجّل الدخول إلى حسابك أولاً.")
+        val now = System.currentTimeMillis() / 1000L
+        if (session.optLong("expires_at", 0L) > now + 60L) {
+            return session.optString("access_token").takeIf { it.isNotBlank() }
+                ?: error("جلسة الدخول غير صالحة.")
+        }
+        val refreshToken = session.optString("refresh_token")
+        require(refreshToken.isNotBlank()) { "انتهت الجلسة. سجّل الدخول مجدداً." }
+        val body = JSONObject().put("refresh_token", refreshToken)
+        val request = Request.Builder()
+            .url(BuildConfig.SADEEQI_SUPABASE_URL.trimEnd('/') + "/auth/v1/token?grant_type=refresh_token")
+            .header("apikey", BuildConfig.SADEEQI_SUPABASE_ANON_KEY)
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+        http.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            val result = runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
+            if (!response.isSuccessful || !result.has("access_token")) {
+                EncryptedSessionStore.clear(context)
+                error("انتهت الجلسة. سجّل الدخول مجدداً.")
+            }
+            result.put("expires_at", now + result.optLong("expires_in", 3600L))
+            EncryptedSessionStore.save(context, result)
+            return result.getString("access_token")
+        }
+    }
+
     private fun authenticate(path: String, email: String, password: String): JSONObject {
         require(isConfigured()) { "لم يتم إعداد Supabase بعد. أضف عنوان المشروع والمفتاح العام في إعدادات البناء." }
         val body = JSONObject().put("email", email.trim()).put("password", password)
