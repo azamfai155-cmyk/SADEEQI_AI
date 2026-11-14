@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
-    private val accessToken: String
+    private val accessTokenProvider: () -> String
 ) {
     @Volatile private var activeCall: okhttp3.Call? = null
 
@@ -33,6 +33,7 @@ class OpenAiGateway(
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
 
+        val accessToken = accessTokenProvider()
         require(accessToken.isNotBlank()) {
             "انتهت جلسة تسجيل الدخول. سجّل الدخول مجدداً."
         }
