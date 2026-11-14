@@ -18,6 +18,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.azzam.sadeeqi.MainActivity
+import com.azzam.sadeeqi.R
 import java.io.File
 
 @UnstableApi
@@ -78,7 +79,7 @@ class MusicPlaybackService : MediaSessionService() {
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this)
                 .setChannelId(MUSIC_CHANNEL_ID)
-                .setChannelName("SADEEQI MUSIC")
+                .setChannelName(R.string.sadeeqi_music_channel_name)
                 .build()
         )
     }
