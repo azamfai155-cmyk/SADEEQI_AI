@@ -59,9 +59,9 @@ const SOCIAL_PROVIDERS = [
 ];
 
 const SOCIAL_ENV = {
-  facebook: ['FACEBOOK_CLIENT_ID', 'FACEBOOK_CLIENT_SECRET'],
-  instagram: ['INSTAGRAM_CLIENT_ID', 'INSTAGRAM_CLIENT_SECRET'],
-  whatsapp: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
+  facebook: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
+  instagram: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
+  whatsapp: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID'],
   messenger: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
   tiktok: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'],
   youtube: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
@@ -70,7 +70,7 @@ const SOCIAL_ENV = {
   linkedin: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET'],
   discord: ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'],
   reddit: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET'],
-  pinterest: ['PINTEREST_CLIENT_ID', 'PINTEREST_CLIENT_SECRET'],
+  pinterest: ['PINTEREST_APP_ID', 'PINTEREST_APP_SECRET'],
   threads: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
   twitch: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET']
 };
@@ -135,11 +135,13 @@ export default {
       const authorization = request.headers.get('Authorization') || '';
       const token = authorization.replace(/^Bearer\s+/i, '');
       if (!safeEqual(token, env.SADEEQI_APP_TOKEN)) return json({ error: 'Unauthorized.' }, 401, cors);
+      const providers = socialProviders(env);
       return json({
         service: 'sadeeqi-social-hub',
         phase: 'provider_readiness',
-        connectedCount: 0,
-        providers: socialProviders(env),
+        connectedCount: providers.filter(provider => provider.connected).length,
+        configuredCount: providers.filter(provider => provider.configured).length,
+        providers,
         notice: 'No social account is connected. OAuth and API actions remain disabled until provider credentials, encrypted token storage and user authentication are configured.'
       }, 200, cors);
     }
