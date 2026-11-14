@@ -32,6 +32,9 @@ import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
 import com.azzam.sadeeqi.music.MusicPlayerManager
+import com.azzam.sadeeqi.music.MusicCommand
+import com.azzam.sadeeqi.music.MusicCommandParser
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -118,6 +121,7 @@ class MainActivity : ComponentActivity() {
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var saveDataMode by remember { mutableStateOf(true) }
+        var musicNotice by remember { mutableStateOf("اختر ملفات صوتية من جهازك لبدء التشغيل.") }
         val musicManager = remember {
             MusicPlayerManager(this@MainActivity) { state -> musicState = state }
         }
@@ -292,7 +296,50 @@ class MainActivity : ComponentActivity() {
 
         onVoiceText = { spoken ->
             if (spoken.isNotBlank()) {
-                sendQuestion(spoken)
+                when (val command = MusicCommandParser.parse(spoken)) {
+                    MusicCommand.Pause -> {
+                        musicManager.pause()
+                        musicNotice = "تم إيقاف الموسيقى مؤقتاً."
+                        selectedTab = "موسيقى"
+                    }
+                    MusicCommand.Resume -> {
+                        musicManager.resume()
+                        musicNotice = "تم طلب استئناف التشغيل."
+                        selectedTab = "موسيقى"
+                    }
+                    MusicCommand.Next -> {
+                        musicManager.next()
+                        musicNotice = "انتقلت إلى المقطع التالي."
+                        selectedTab = "موسيقى"
+                    }
+                    MusicCommand.Previous -> {
+                        musicManager.previous()
+                        musicNotice = "عدت إلى المقطع السابق."
+                        selectedTab = "موسيقى"
+                    }
+                    MusicCommand.VolumeUp -> {
+                        musicManager.adjustVolume(0.1f)
+                        musicNotice = "تم رفع مستوى صوت المشغل."
+                        selectedTab = "موسيقى"
+                    }
+                    MusicCommand.VolumeDown -> {
+                        musicManager.adjustVolume(-0.1f)
+                        musicNotice = "تم خفض مستوى صوت المشغل."
+                        selectedTab = "موسيقى"
+                    }
+                    is MusicCommand.Search -> {
+                        musicNotice = "طلب البحث: ${command.query}. البحث عبر الإنترنت ينتظر ربط مزود موسيقى مرخّص."
+                        selectedTab = "موسيقى"
+                    }
+                    null -> sendQuestion(spoken)
+                }
+            }
+        }
+
+        LaunchedEffect(musicState.isPlaying, selectedTab) {
+            while (selectedTab == "موسيقى" && musicState.isPlaying) {
+                delay(1000)
+                musicManager.refresh()
             }
         }
 
@@ -397,6 +444,7 @@ class MainActivity : ComponentActivity() {
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
                         Text("مشغّل ملفاتك الصوتية • يعمل دون اتصال", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Text(musicNotice, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(12.dp))
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -431,7 +479,7 @@ class MainActivity : ComponentActivity() {
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     TextButton(onClick = { musicManager.cycleRepeat() }) {
-                                        Text(when (musicState.repeatMode) { 1 -> "تكرار الكل"; 2 -> "تكرار المقطع"; else -> "تكرار: إيقاف" }, color = Color(0xFFE6C77A))
+                                        Text(when (musicState.repeatMode) { 1 -> "تكرار المقطع"; 2 -> "تكرار الكل"; else -> "تكرار: إيقاف" }, color = Color(0xFFE6C77A))
                                     }
                                     IconButton(onClick = { musicManager.previous() }) {
                                         Text("⏮", color = Color.White, style = MaterialTheme.typography.headlineSmall)
