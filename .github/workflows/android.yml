@@ -49,6 +49,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
+      - name: Run Android instrumentation tests on API 35 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+              echo "::error::Missing required Supabase build secrets."
+              exit 1
+            fi
+            gradle :app:connectedDebugAndroidTest \
+              -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" \
+              -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
+              -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
       - name: Build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
