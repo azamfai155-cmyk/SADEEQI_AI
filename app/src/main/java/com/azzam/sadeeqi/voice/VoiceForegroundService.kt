@@ -17,6 +17,8 @@ import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
+import com.azzam.sadeeqi.phone.PhoneCommandParser
+import com.azzam.sadeeqi.phone.PhoneCommandExecutor
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import java.util.concurrent.Executors
@@ -112,6 +114,20 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+
+        // Explicit allow-listed phone commands are handled locally, not guessed by the AI.
+        val phoneCommand = PhoneCommandParser.parse(spoken)
+        if (phoneCommand != null) {
+            val reply = runCatching {
+                PhoneCommandExecutor.execute(this, phoneCommand)
+            }.getOrElse { error ->
+                "تعذر تنفيذ الأمر على الهاتف: ${error.message ?: "تحقق من إعدادات الجهاز."}"
+            }
+            updateNotification(reply)
+            voice?.speak(reply)
+            return
+        }
+
         when (val command = MusicCommandParser.parse(spoken)) {
             MusicCommand.Pause -> { musicManager?.pause(); voice?.speak("تم إيقاف الموسيقى مؤقتاً"); return }
             MusicCommand.Resume -> { musicManager?.resume(); voice?.speak("تم استئناف الموسيقى"); return }
