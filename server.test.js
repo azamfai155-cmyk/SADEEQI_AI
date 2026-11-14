@@ -16,7 +16,7 @@ test('health endpoint exposes service metadata without secrets', async () => {
     const data = await response.json();
     assert.equal(response.status, 200);
     assert.equal(data.service, 'sadeeqi-ai');
-    assert.equal(data.version, '1.4.0');
+    assert.equal(data.version, '1.5.1');
     assert.equal('api_key' in data, false);
   });
 });
