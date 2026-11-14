@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
     ) {
         val gateway = remember { OpenAiGateway() }
         val memory = remember { EncryptedMemory(this@MainActivity) }
+        val profileStore = remember { LocalProfileStore(memory) }
         val scope = rememberCoroutineScope()
         val messages = remember {
             mutableStateListOf(
@@ -119,6 +120,7 @@ class MainActivity : ComponentActivity() {
         var isSending by remember { mutableStateOf(false) }
         var selectedImageDataUrl by remember { mutableStateOf<String?>(null) }
         var memoryItems by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+        var profile by remember { mutableStateOf(LocalProfile()) }
 
         val imagePicker = rememberLauncherForActivityResult(PickVisualMedia()) { uri ->
             selectedImageDataUrl = uri?.let { picked ->
@@ -184,6 +186,7 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(Unit) {
+            profile = profileStore.load()
             val saved = memory.search("chat:").sortedBy { it.first }
             memoryItems = saved.reversed()
             if (saved.isNotEmpty()) {
@@ -289,7 +292,15 @@ class MainActivity : ComponentActivity() {
                         )
 
                         "الذاكرة" -> MemoryScreen(memoryItems)
-                        else -> SettingsScreen(status)
+                        else -> SettingsScreen(
+                            status = status,
+                            profile = profile,
+                            onProfileChange = { profile = it },
+                            onSaveProfile = {
+                                profileStore.save(profile)
+                                status = "تم حفظ الملف الشخصي محلياً بتشفير آمن"
+                            }
+                        )
                     }
 
                     BottomNavigation(
@@ -673,24 +684,54 @@ private fun ColumnScope.MemoryScreen(items: List<Pair<String, String>>) {
 }
 
 @Composable
-private fun ColumnScope.SettingsScreen(status: String) {
+private fun ColumnScope.SettingsScreen(
+    status: String,
+    profile: LocalProfile,
+    onProfileChange: (LocalProfile) -> Unit,
+    onSaveProfile: () -> Unit
+) {
     Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp),
+        modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("الإعدادات", color = TextMain, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Text("إدارة تجربة صديقي", color = Muted, fontSize = 12.sp)
+        Text("الإعدادات والملف الشخصي", color = TextMain, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("بياناتك محفوظة محلياً ويمكنك تعديلها", color = Muted, fontSize = 12.sp)
+        Text("الملف الشخصي", color = VioletLight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        ProfileField("الاسم الكامل", profile.fullName) { onProfileChange(profile.copy(fullName = it)) }
+        ProfileField("الاسم المفضل", profile.preferredName) { onProfileChange(profile.copy(preferredName = it)) }
+        ProfileField("تاريخ الميلاد (يوم/شهر/سنة)", profile.birthDate) { onProfileChange(profile.copy(birthDate = it)) }
+        ProfileField("اللغة الأساسية", profile.primaryLanguage) { onProfileChange(profile.copy(primaryLanguage = it)) }
+        Button(
+            onClick = onSaveProfile,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = VioletLight, contentColor = Ink),
+            shape = RoundedCornerShape(14.dp)
+        ) { Text("حفظ بيانات الملف الشخصي", fontWeight = FontWeight.Bold) }
+        Text("حالة النظام", color = VioletLight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         SettingRow("✦", "هوية المساعد", "صديقي — مساعدك الشخصي")
         SettingRow("◉", "حالة الاتصال", status)
         SettingRow("🎙", "الصوت", "التعرف على الكلام والنطق عبر خدمات Android")
         SettingRow("🔐", "الخصوصية", "الذاكرة المحلية مشفّرة على الجهاز")
         SettingRow("⬆", "الإصدار", BuildConfig.VERSION_NAME)
-        Spacer(Modifier.height(8.dp))
         Text(
             "تنبيه: التحكم بالتطبيقات وإجراءات الهاتف يحتاج أذونات وموافقات صريحة، ولم يتم تفعيل تنفيذ الأوامر على مستوى النظام في هذه النسخة.",
-            color = Muted,
-            fontSize = 11.sp,
-            lineHeight = 17.sp
+            color = Muted, fontSize = 11.sp, lineHeight = 17.sp
+        )
+    }
+}
+
+@Composable
+private fun ProfileField(label: String, value: String, onValueChange: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(label, color = Muted, fontSize = 11.sp)
+        OutlinedTextField(
+            value = value, onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = VioletLight, unfocusedBorderColor = PanelRaised,
+                focusedTextColor = TextMain, unfocusedTextColor = TextMain,
+                cursorColor = VioletLight
+            )
         )
     }
 }
