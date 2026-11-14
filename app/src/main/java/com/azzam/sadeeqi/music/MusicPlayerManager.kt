@@ -15,7 +15,9 @@ data class MusicPlaybackState(
     val title: String = "لم يتم اختيار مقطع",
     val isPlaying: Boolean = false,
     val durationMs: Long = 0L,
-    val positionMs: Long = 0L
+    val positionMs: Long = 0L,
+    val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val shuffleEnabled: Boolean = false
 )
 
 class MusicPlayerManager(
@@ -48,11 +50,15 @@ class MusicPlayerManager(
         }, MoreExecutors.directExecutor())
     }
 
-    fun play(uri: Uri, title: String) {
+    fun playQueue(tracks: List<Pair<Uri, String>>, startIndex: Int = 0) {
         val player = controller ?: return
-        val metadata = MediaMetadata.Builder().setTitle(title).build()
-        val item = MediaItem.Builder().setUri(uri).setMediaMetadata(metadata).build()
-        player.setMediaItem(item)
+        if (tracks.isEmpty()) return
+        val items = tracks.map { (uri, title) ->
+            MediaItem.Builder().setUri(uri)
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+                .build()
+        }
+        player.setMediaItems(items, startIndex.coerceIn(0, items.lastIndex), 0L)
         player.prepare()
         player.play()
         publish()
@@ -67,6 +73,17 @@ class MusicPlayerManager(
     fun previous() { controller?.seekToPreviousMediaItem(); publish() }
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs); publish() }
     fun setVolume(volume: Float) { controller?.volume = volume.coerceIn(0f, 1f) }
+    fun toggleShuffle() { controller?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }; publish() }
+    fun cycleRepeat() {
+        controller?.let {
+            it.repeatMode = when (it.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+        }
+        publish()
+    }
 
     private fun publish() {
         val p = controller ?: return
@@ -75,7 +92,9 @@ class MusicPlayerManager(
                 title = p.currentMediaItem?.mediaMetadata?.title?.toString() ?: "ملف صوتي",
                 isPlaying = p.isPlaying,
                 durationMs = p.duration.coerceAtLeast(0L),
-                positionMs = p.currentPosition.coerceAtLeast(0L)
+                positionMs = p.currentPosition.coerceAtLeast(0L),
+                repeatMode = p.repeatMode,
+                shuffleEnabled = p.shuffleModeEnabled
             )
         )
     }
