@@ -385,8 +385,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                Spacer(Modifier.height(8.dp))
+                if (selectedTab == "المهام" || selectedTab == "الأدوات" || selectedTab == "الإعدادات") {
+                    Spacer(Modifier.weight(1f))
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                }
                 NavigationBar(containerColor = Color(0xF0181926), contentColor = Color.White, tonalElevation = 0.dp) {
                     listOf("الرئيسية", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات").forEach { tab ->
                         NavigationBarItem(
