@@ -1,0 +1,89 @@
+package com.azzam.sadeeqi.music
+
+import android.content.ComponentName
+import android.content.Context
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
+
+data class MusicPlaybackState(
+    val title: String = "لم يتم اختيار مقطع",
+    val isPlaying: Boolean = false,
+    val durationMs: Long = 0L,
+    val positionMs: Long = 0L
+)
+
+class MusicPlayerManager(
+    context: Context,
+    private val onState: (MusicPlaybackState) -> Unit
+) {
+    private val appContext = context.applicationContext
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controller: MediaController? = null
+    private val listener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = publish()
+        override fun onPlaybackStateChanged(playbackState: Int) = publish()
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) = publish()
+    }
+
+    init {
+        val token = SessionToken(appContext, ComponentName(appContext, MusicPlaybackService::class.java))
+        val future = MediaController.Builder(appContext, token).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            runCatching {
+                controller = future.get().also { it.addListener(listener) }
+                publish()
+            }
+        }, MoreExecutors.directExecutor())
+    }
+
+    fun play(uri: Uri, title: String) {
+        val player = controller ?: return
+        val metadata = MediaMetadata.Builder().setTitle(title).build()
+        val item = MediaItem.Builder().setUri(uri).setMediaMetadata(metadata).build()
+        player.setMediaItem(item)
+        player.prepare()
+        player.play()
+        publish()
+    }
+
+    fun toggle() {
+        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+        publish()
+    }
+
+    fun next() { controller?.seekToNextMediaItem(); publish() }
+    fun previous() { controller?.seekToPreviousMediaItem(); publish() }
+    fun seekTo(positionMs: Long) { controller?.seekTo(positionMs); publish() }
+    fun setVolume(volume: Float) { controller?.volume = volume.coerceIn(0f, 1f) }
+
+    private fun publish() {
+        val p = controller ?: return
+        onState(
+            MusicPlaybackState(
+                title = p.currentMediaItem?.mediaMetadata?.title?.toString() ?: "ملف صوتي",
+                isPlaying = p.isPlaying,
+                durationMs = p.duration.coerceAtLeast(0L),
+                positionMs = p.currentPosition.coerceAtLeast(0L)
+            )
+        )
+    }
+
+    fun release() {
+        controller?.removeListener(listener)
+        controller = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
+    }
+}
