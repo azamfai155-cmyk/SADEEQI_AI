@@ -563,7 +563,26 @@ class MainActivity : ComponentActivity() {
                                         unfocusedTextColor = Color.White
                                     )
                                 )
-                                if (input.isBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        if (voiceSessionActive) {
+                                            onStopVoice()
+                                            voiceSessionActive = false
+                                            status = "تم إيقاف الاستماع"
+                                        } else {
+                                            onStartVoice()
+                                            status = "الميكروفون جاهز — تحدث الآن"
+                                        }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Mic,
+                                        contentDescription = "الميكروفون",
+                                        tint = Color.White
+                                    )
+                                }
+                                if (input.isNotBlank() || voiceSessionActive) {
                                     IconButton(
                                         onClick = {
                                             if (voiceSessionActive) {
@@ -571,26 +590,28 @@ class MainActivity : ComponentActivity() {
                                                 voiceSessionActive = false
                                                 status = "تم إيقاف الاستماع"
                                             } else {
-                                                onStartVoice()
-                                                status = "الميكروفون جاهز — تحدث الآن"
+                                                val question = input
+                                                input = ""
+                                                sendQuestion(question)
                                             }
                                         },
-                                        modifier = Modifier.size(42.dp)
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .background(Color(0xFF1687F8), RoundedCornerShape(50))
                                     ) {
-                                        Text(if (voiceSessionActive) "◉" else "🎙",
-                                            color = if (voiceSessionActive) Color(0xFF9DE0B3) else Color(0xFFE6C77A),
-                                            style = MaterialTheme.typography.titleLarge)
-                                    }
-                                } else {
-                                    IconButton(
-                                        onClick = {
-                                            val question = input
-                                            input = ""
-                                            sendQuestion(question)
-                                        },
-                                        modifier = Modifier.size(42.dp).background(Color(0xFFE6C77A), RoundedCornerShape(50))
-                                    ) {
-                                        Text("↑", color = Color(0xFF211A2D), style = MaterialTheme.typography.headlineSmall)
+                                        if (voiceSessionActive) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(13.dp)
+                                                    .background(Color.White, RoundedCornerShape(3.dp))
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send,
+                                                contentDescription = "إرسال",
+                                                tint = Color.White
+                                            )
+                                        }
                                     }
                                 }
                             }
