@@ -1,4 +1,4 @@
-# صديقي | SADEEQI AI 1.2.0 — مصدر تطوير
+# صديقي | SADEEQI AI 1.5.1 — مصدر تطوير
 
 هذه نسخة مصدر مطوّرة، وليست APK مبنياً أو إصداراً تم اعتماده على جهاز فعلي.
 
@@ -44,3 +44,15 @@ This is source code only, not a built APK. Backend deployment and API credential
 - A remote global catalogue or licensed streaming provider is **not connected** yet. Search commands clearly report this limitation rather than pretending to stream.
 - See [docs/SADEEQI_MUSIC.md](docs/SADEEQI_MUSIC.md) for architecture, data estimates, legal integration requirements and device-validation checklist.
 - CI now runs Android unit tests before building the debug APK. No APK/device success should be claimed until the relevant run succeeds and the artifact is verified.
+
+
+## Ultimate Premium development audit — 2026-11-14
+- Added a protected `GET /v1/social/providers` readiness endpoint. It lists provider API setup status but intentionally reports all accounts as disconnected; OAuth and account-management actions are not implemented.
+- Social Hub network loading now runs on an IO dispatcher rather than the UI thread.
+- Activated the Room-backed AES-GCM encrypted memory implementation in the Android app source and added a migration from the earlier encrypted SharedPreferences store.
+- Moved the encrypted-memory instrumentation acceptance test into `app/src/androidTest`. It has not yet been run on an emulator or physical device.
+- Android version is 1.5.1 (versionCode 7), and Android/CI configuration targets `https://sadeeqi-ai-pdrk.vercel.app`.
+- Vercel deployment status currently reports a build-rate limit. No new deployment or APK artifact is claimed as verified.
+- Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
+
+**Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
