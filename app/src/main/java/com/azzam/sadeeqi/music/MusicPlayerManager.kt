@@ -106,6 +106,15 @@ class MusicPlayerManager(
     fun next() { controller?.seekToNextMediaItem(); publish() }
     fun previous() { controller?.seekToPreviousMediaItem(); publish() }
     fun seekTo(positionMs: Long) { controller?.seekTo(positionMs); publish() }
+    fun setDataSaver(enabled: Boolean) {
+        val player = controller ?: return
+        val maxBitrate = if (enabled) MusicPlaybackService.DATA_SAVER_MAX_AUDIO_BITRATE else Int.MAX_VALUE
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            .setMaxAudioBitrate(maxBitrate)
+            .build()
+    }
+
     fun setVolume(volume: Float) { controller?.volume = volume.coerceIn(0f, 1f); publish() }
     fun adjustVolume(delta: Float) {
         controller?.let { it.volume = (it.volume + delta).coerceIn(0f, 1f) }
