@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app, validateInput } from './server.js';
+import { app, extractBearerToken, validateInput } from './server.js';
 import http from 'node:http';
 
 test('health endpoint exposes service metadata without secrets', async () => {
@@ -12,7 +12,7 @@ test('health endpoint exposes service metadata without secrets', async () => {
     const data = await response.json();
     assert.equal(response.status, 200);
     assert.equal(data.service, 'sadeeqi-ai');
-    assert.equal(data.version, '1.2.1');
+    assert.equal(data.version, '1.3.0');
     assert.equal('api_key' in data, false);
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
@@ -47,6 +47,14 @@ test('social provider catalogue exists and refuses unauthenticated setup', async
   } finally {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
+});
+
+
+test('bearer token parser strips the authorization scheme', () => {
+  assert.equal(extractBearerToken('Bearer test-token'), 'test-token');
+  assert.equal(extractBearerToken('bearer test-token'), 'test-token');
+  assert.equal(extractBearerToken('test-token'), 'test-token');
+  assert.equal(extractBearerToken(undefined), '');
 });
 
 
