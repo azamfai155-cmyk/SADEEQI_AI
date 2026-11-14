@@ -45,9 +45,11 @@ jobs:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
         run: |
+          set -euo pipefail
           API_URL="https://sadeeqi-ai-pdrk.vercel.app"
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::Supabase GitHub Actions secrets are not configured. The APK will compile, but sign-in will remain disabled until configured."
+            echo "::error::Missing required GitHub Actions secrets: SADEEQI_SUPABASE_URL and/or SADEEQI_SUPABASE_ANON_KEY. Refusing to build a broken APK."
+            exit 1
           fi
           gradle :app:testDebugUnitTest :app:assembleDebug \
             -PsadeeqiApiBaseUrl="$API_URL" \
