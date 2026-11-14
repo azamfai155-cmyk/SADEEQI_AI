@@ -20,7 +20,7 @@ const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
 export function extractBearerToken(value) {
-  return typeof value === 'string' ? value.replace(/^Bearer\\s+/i, '').trim() : '';
+  return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
 }
 
 function safeEqual(a, b) {
@@ -55,7 +55,7 @@ app.get('/health', (_req, res) => {
 
 app.get('/v1/social/providers', (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  const token = extractBearerToken(req.headers.authorization);
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
 
   // This endpoint reports developer-side API readiness only. It never claims
@@ -90,7 +90,7 @@ app.get('/v1/social/providers', (req, res) => {
 
 app.post('/v1/chat', async (req, res) => {
   if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-  const token = (req.headers.authorization || '').replace(/^Bearer\\s+/i, '');
+  const token = extractBearerToken(req.headers.authorization);
   if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
