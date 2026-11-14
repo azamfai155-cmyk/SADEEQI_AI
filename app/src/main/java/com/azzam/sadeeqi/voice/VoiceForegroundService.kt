@@ -160,7 +160,10 @@ class VoiceForegroundService : Service() {
         voice?.close()
         voice = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
-        else {\n            @Suppress("DEPRECATION")\n            stopForeground(true)\n        }
+        else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
         stopSelf()
     }
 
@@ -175,7 +178,9 @@ class VoiceForegroundService : Service() {
     companion object {
         const val ACTION_START = "com.azzam.sadeeqi.voice.START"
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
-        const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"\n        const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"\n        const val EXTRA_MUTED = "microphone_muted"
+        const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
+        const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"
+        const val EXTRA_MUTED = "microphone_muted"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
     }
