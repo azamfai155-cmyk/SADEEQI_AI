@@ -38,10 +38,14 @@ class AuthActivity : ComponentActivity() {
         val client = SupabaseAuthClient(this)
         setContent {
             LaunchedEffect(Unit) {
+                // Validate every saved session, not only expired ones. accessToken()
+                // returns a still-valid token immediately or refreshes it when needed.
                 val saved = EncryptedSessionStore.read(this@AuthActivity)
-                if (saved != null && saved.optLong("expires_at", 0L) <= System.currentTimeMillis() / 1000L + 60L) {
-                    val refreshed = withContext(Dispatchers.IO) { runCatching { client.accessToken() } }
-                    if (refreshed.isSuccess) {
+                if (saved != null) {
+                    val session = withContext(Dispatchers.IO) {
+                        runCatching { client.accessToken() }
+                    }
+                    if (session.isSuccess) {
                         startActivity(Intent(this@AuthActivity, MainActivity::class.java))
                         finish()
                     }
