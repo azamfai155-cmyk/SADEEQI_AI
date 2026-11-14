@@ -34,6 +34,7 @@ import com.azzam.sadeeqi.music.MusicPlaybackService
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
+import com.azzam.sadeeqi.music.MusicLibraryStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -120,6 +121,9 @@ class MainActivity : ComponentActivity() {
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
+        var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
+        var musicFavorites by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
+        val musicLibrary = remember { MusicLibraryStore(this@MainActivity) }
         var saveDataMode by remember { mutableStateOf(true) }
         var musicNotice by remember { mutableStateOf("اختر ملفات صوتية من جهازك لبدء التشغيل.") }
         val musicManager = remember {
@@ -127,6 +131,11 @@ class MainActivity : ComponentActivity() {
         }
         DisposableEffect(musicManager) {
             onDispose { musicManager.release() }
+        }
+        LaunchedEffect(Unit) {
+            musicQueue = musicLibrary.loadQueue()
+            musicHistory = musicLibrary.loadHistory()
+            musicFavorites = musicLibrary.loadFavorites()
         }
         val audioPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.OpenMultipleDocuments()
@@ -146,6 +155,11 @@ class MainActivity : ComponentActivity() {
                     uri to title
                 }
                 musicQueue = tracks
+                scope.launch {
+                    musicLibrary.saveQueue(tracks)
+                    tracks.firstOrNull()?.let { musicLibrary.recordPlayed(it.first, it.second) }
+                    musicHistory = musicLibrary.loadHistory()
+                }
                 ContextCompat.startForegroundService(
                     this@MainActivity,
                     Intent(this@MainActivity, MusicPlaybackService::class.java)
@@ -497,7 +511,20 @@ class MainActivity : ComponentActivity() {
                                         Text(if (musicState.shuffleEnabled) "عشوائي ✓" else "عشوائي", color = Color(0xFFE6C77A))
                                     }
                                 }
-                                OutlinedButton(
+                                val currentTrack = musicQueue.firstOrNull { it.second == musicState.title }
+                        if (currentTrack != null) {
+                            val isFavorite = musicFavorites.any { it.first == currentTrack.first }
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        musicLibrary.toggleFavorite(currentTrack.first, currentTrack.second)
+                                        musicFavorites = musicLibrary.loadFavorites()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (isFavorite) "★ إزالة من المفضلة" else "☆ أضف إلى المفضلة") }
+                        }
+                        OutlinedButton(
                                     onClick = { audioPicker.launch(arrayOf("audio/*")) },
                                     modifier = Modifier.fillMaxWidth()
                                 ) { Text("＋ اختر ملفات صوتية من الهاتف") }
@@ -522,12 +549,33 @@ class MainActivity : ComponentActivity() {
                                             val index = musicQueue.indexOf(track)
                                             ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
                                             musicManager.playQueue(musicQueue, index)
+                                            scope.launch {
+                                                musicLibrary.recordPlayed(track.first, track.second)
+                                                musicHistory = musicLibrary.loadHistory()
+                                            }
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text("♫  " + track.second, color = Color.White, modifier = Modifier.fillMaxWidth(), maxLines = 1)
                                     }
                                 }
+                            }
+                        }
+                        if (musicFavorites.isNotEmpty()) {
+                            Text("المفضلة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            musicFavorites.forEach { favorite ->
+                                TextButton(onClick = {
+                                    ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                                    musicManager.playQueue(musicFavorites, musicFavorites.indexOf(favorite))
+                                }) {
+                                    Text("★  " + favorite.second, color = Color.White, modifier = Modifier.fillMaxWidth(), maxLines = 1)
+                                }
+                            }
+                        }
+                        if (musicHistory.isNotEmpty()) {
+                            Text("سجل الاستماع", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            musicHistory.take(5).forEach { historyItem ->
+                                Text("• " + historyItem.second, color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         Text(
