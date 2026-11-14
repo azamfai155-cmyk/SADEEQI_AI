@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.azzam.sadeeqi.core.OpenAiGateway
-import com.azzam.sadeeqi.voice.VoiceController
+import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
@@ -42,8 +42,6 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var voice: VoiceController
-
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
@@ -51,7 +49,7 @@ class MainActivity : ComponentActivity() {
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                voice.startConversation()
+                ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
                 onVoiceSession?.invoke(true)
             } else {
                 onVoiceSession?.invoke(false)
@@ -65,20 +63,6 @@ class MainActivity : ComponentActivity() {
         // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
         window.setBackgroundDrawableResource(R.drawable.sadeeqi_background)
 
-        voice = VoiceController(
-            this,
-            { text ->
-                runOnUiThread {
-                    onVoiceText?.invoke(text)
-                }
-            },
-            { err ->
-                runOnUiThread {
-                    onVoiceError?.invoke(err)
-                }
-            }
-        )
-
         setContent {
             SadeeqiApp(
                 onStartVoice = {
@@ -88,34 +72,27 @@ class MainActivity : ComponentActivity() {
                             Manifest.permission.RECORD_AUDIO
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        voice.startConversation()
+                        ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
                         onVoiceSession?.invoke(true)
                     } else {
                         requestMic.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 onStopVoice = {
-                    voice.stopConversation()
+                    startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP))
                     onVoiceSession?.invoke(false)
                 },
                 onInterruptVoice = {
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        voice.interruptAndListen()
+                        ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_INTERRUPT))
                         onVoiceSession?.invoke(true)
                     } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
-                onReply = {
-                    voice.speak(it)
-                },
-                onStopListening = { voice.stopConversation() },
-                onInterrupt = { voice.interruptAndListen() }
+                onReply = { },
+                onStopListening = { startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP)) },
+                onInterrupt = { ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_INTERRUPT)) }
             )
         }
-    }
-
-    override fun onDestroy() {
-        voice.close()
-        super.onDestroy()
     }
 
     @Composable
@@ -311,7 +288,7 @@ class MainActivity : ComponentActivity() {
                     )
 
                     status = "تعذر الاتصال بالخادم"
-                    voice.resumeAfterTurnFailure()
+                    // The foreground voice service manages its own retry loop.
                 }
             }
         }
@@ -485,7 +462,7 @@ class MainActivity : ComponentActivity() {
                                         colors = ButtonDefaults.buttonColors(containerColor = if (voiceSessionActive) Color(0xFF7A3434) else Color(0xFF8E6B35))
                                     ) { Text(if (voiceSessionActive) "إنهاء" else "ابدأ التحدث") }
                                     OutlinedButton(
-                                        onClick = { microphoneMuted = !microphoneMuted; voice.setMicrophoneMuted(microphoneMuted) },
+                                        onClick = { microphoneMuted = !microphoneMuted; startService(Intent(this@MainActivity, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_MUTE).putExtra(VoiceForegroundService.EXTRA_MUTED, microphoneMuted)) },
                                         enabled = voiceSessionActive,
                                         modifier = Modifier.weight(1f)
                                     ) { Text(if (microphoneMuted) "تشغيل الميكروفون" else "كتم الميكروفون") }
