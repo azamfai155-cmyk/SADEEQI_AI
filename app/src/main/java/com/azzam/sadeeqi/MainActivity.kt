@@ -106,7 +106,9 @@ class MainActivity : ComponentActivity() {
                 },
                 onReply = {
                     voice.speak(it)
-                }
+                },
+                onStopListening = { voice.stopConversation() },
+                onInterrupt = { voice.interruptAndListen() }
             )
         }
     }
@@ -121,7 +123,9 @@ class MainActivity : ComponentActivity() {
         onStartVoice: () -> Unit,
         onStopVoice: () -> Unit,
         onInterruptVoice: () -> Unit,
-        onReply: (String) -> Unit
+        onReply: (String) -> Unit,
+        onStopListening: () -> Unit,
+        onInterrupt: () -> Unit
     ) {
 
         val gateway = remember { OpenAiGateway() }
