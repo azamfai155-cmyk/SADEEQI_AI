@@ -93,10 +93,34 @@ jobs:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
           profile: pixel_2
-          disable-animations: false
+          force-avd-creation: true
+          disable-animations: true
           emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
-            set -eu; if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then echo "::error::Missing required Supabase build secrets."; exit 1; fi; gradle :app:connectedDebugAndroidTest -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
+            set -u
+            if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+              echo "::error::Missing required Supabase build secrets."
+              exit 1
+            fi
+            set +e
+            gradle :app:connectedDebugAndroidTest --stacktrace \
+              -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" \
+              -PsadeeqiSupabaseUrl="$SUPABASE_URL" \
+              -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
+            test_status=$?
+            adb logcat -d -v threadtime > android-instrumentation-logcat.txt
+            adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1
+            exit "$test_status"
+      - name: Upload Android instrumentation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SADEEQI-Android-instrumentation-diagnostics
+          path: |
+            android-instrumentation-logcat.txt
+            android-process-exit-info.txt
+          if-no-files-found: ignore
