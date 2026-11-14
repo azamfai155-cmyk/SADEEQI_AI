@@ -38,6 +38,7 @@ import com.azzam.sadeeqi.music.MusicLibraryStore
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
+import com.azzam.sadeeqi.trading.TradingIntelligenceScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +126,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -787,6 +788,9 @@ class MainActivity : ComponentActivity() {
                             color = Color(0xFFB9B4C7),
                             style = MaterialTheme.typography.bodySmall
                         )
+                    }
+                    "التداول" -> {
+                        TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
                     }
                     "SOCIAL HUB" -> {
                         SocialHubScreen(modifier = Modifier.weight(1f))
