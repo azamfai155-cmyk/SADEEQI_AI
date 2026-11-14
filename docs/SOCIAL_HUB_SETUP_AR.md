@@ -4,7 +4,7 @@
 
 هذه المرحلة تضيف:
 - شاشة عربية RTL ضمن القائمة الجانبية.
-- endpoint محمي `GET /v1/social/providers` يعرض 15 موصلاً وحالة تهيئة مفاتيح المطور.
+- endpoint محمي `GET /v1/social/providers` يعرض 15 موصلاً، وعدد المنصات التي اكتملت بيانات المطور والتشفير لها، وعدد الحسابات المتصلة فعلياً.
 - لا يتم الادعاء بأن أي حساب متصل؛ جميع الحسابات تعرض «غير مربوط» حتى إكمال OAuth وتخزين الرمز والتحقق من حساب المنصة.
 - اختبارات للخادم تتحقق من المصادقة ومن عدم إظهار اتصالات وهمية.
 
@@ -78,7 +78,7 @@ npx wrangler secret put SOCIAL_TOKEN_ENCRYPTION_KEY
 - WhatsApp Business Cloud API: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
 - Telegram Bot API: `TELEGRAM_BOT_TOKEN` (ليس OAuth ولا كلمة مرور حسابك).
 
-حتى بعد إضافة المفاتيح، لا تعتبر المنصة جاهزة للإنتاج قبل ضبط redirect URIs، scopes، webhook URLs، مراجعة التطبيق، واختبار كل API.
+في الخادم الحالي لا تُعد موصلات OAuth مهيأة إلا عند وجود بيانات المطور ومفتاح `SOCIAL_TOKEN_ENCRYPTION_KEY` معاً. Telegram Bot API استثناء لأنه يستخدم Bot Token خادماً ولا يربط حساب Telegram الشخصي. وحتى بعد إضافة المفاتيح، لا تعتبر المنصة جاهزة للإنتاج قبل ضبط redirect URIs، scopes، webhook URLs، مراجعة التطبيق، واختبار كل API.
 
 ## المراجع الرسمية
 
