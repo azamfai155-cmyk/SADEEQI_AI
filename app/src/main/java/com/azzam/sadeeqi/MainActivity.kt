@@ -487,6 +487,12 @@ class MainActivity : ComponentActivity() {
                                     onValueChange = { musicManager.seekTo(it.toLong()) },
                                     valueRange = 0f..duration.toFloat()
                                 )
+                                Text("مستوى الصوت", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                                Slider(
+                                    value = musicState.volume,
+                                    onValueChange = { musicManager.setVolume(it) },
+                                    valueRange = 0f..1f
+                                )
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -563,7 +569,7 @@ class MainActivity : ComponentActivity() {
                         }
                         if (musicFavorites.isNotEmpty()) {
                             Text("المفضلة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
-                            musicFavorites.forEach { favorite ->
+                            musicFavorites.take(5).forEach { favorite ->
                                 TextButton(onClick = {
                                     ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
                                     musicManager.playQueue(musicFavorites, musicFavorites.indexOf(favorite))
