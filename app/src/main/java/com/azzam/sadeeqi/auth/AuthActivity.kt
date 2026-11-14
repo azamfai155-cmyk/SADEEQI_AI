@@ -39,7 +39,7 @@ class AuthActivity : ComponentActivity() {
         setContent {
             LaunchedEffect(Unit) {
                 val saved = EncryptedSessionStore.read(this@AuthActivity)
-                if (saved != null && saved.optLong("expires_at", 0L) <= System.currentTimeMillis() / 1000L) {
+                if (saved != null && saved.optLong("expires_at", 0L) <= System.currentTimeMillis() / 1000L + 60L) {
                     val refreshed = withContext(Dispatchers.IO) { runCatching { client.accessToken() } }
                     if (refreshed.isSuccess) {
                         startActivity(Intent(this@AuthActivity, MainActivity::class.java))
