@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -43,6 +44,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import android.graphics.Bitmap
 import java.io.ByteArrayOutputStream
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -128,6 +131,12 @@ class MainActivity : ComponentActivity() {
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
+        var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
+        val messageReader = remember { TextToSpeech(this@MainActivity, null) }
+        DisposableEffect(messageReader) {
+            messageReader.language = Locale("ar")
+            onDispose { messageReader.stop(); messageReader.shutdown() }
+        }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -291,8 +300,8 @@ class MainActivity : ComponentActivity() {
                     }
                     messages.add("صديقي" to answer)
                     val stamp = System.currentTimeMillis()
-                    memory.save("chat:$stamp:1", "conversation", "أنت\\n$effectiveQuestion")
-                    memory.save("chat:$stamp:2", "conversation", "صديقي\\n$answer")
+                    memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                    memory.save("chat:$stamp:2", "conversation", "صديقي\n$answer")
                     onReply(answer)
                     status = "متصل — ${BuildConfig.VERSION_NAME}"
                 } catch (e: kotlinx.coroutines.CancellationException) {
@@ -519,11 +528,82 @@ class MainActivity : ComponentActivity() {
                         Text("أنا هنا لمساعدتك في التفكير والبحث وإنجاز المهام.", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         Text(status, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-                            items(messages) { (who, body) ->
+                            itemsIndexed(messages) { index, (who, body) ->
                                 Card(shape = RoundedCornerShape(17.dp), colors = CardDefaults.cardColors(containerColor = if (who == "صديقي") Color(0xE626293A) else Color(0xE6332D43))) {
                                     Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(who, color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(who, color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                            Spacer(Modifier.weight(1f))
+                                            Box {
+                                                TextButton(onClick = { openMessageMenuIndex = index }) {
+                                                    Text("⋯", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.titleLarge)
+                                                }
+                                                DropdownMenu(
+                                                    expanded = openMessageMenuIndex == index,
+                                                    onDismissRequest = { openMessageMenuIndex = null },
+                                                    modifier = Modifier.background(Color(0xFF242333))
+                                                ) {
+                                                    if (who == "صديقي") {
+                                                        DropdownMenuItem(text = { Text("نسخ الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                                                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("رد صديقي", body))
+                                                            status = "تم نسخ الرد."
+                                                        })
+                                                        DropdownMenuItem(text = { Text("قراءة الرد صوتياً") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            messageReader.speak(body, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-reply")
+                                                        })
+                                                        DropdownMenuItem(text = { Text("إيقاف القراءة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            messageReader.stop()
+                                                        })
+                                                        DropdownMenuItem(text = { Text("مشاركة الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val share = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(Intent.EXTRA_TEXT, body)
+                                                            }
+                                                            startActivity(Intent.createChooser(share, "مشاركة رد صديقي"))
+                                                        })
+                                                        DropdownMenuItem(text = { Text("حفظ الرد في الذاكرة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            scope.launch {
+                                                                memory.save("saved-reply:${System.currentTimeMillis()}", "saved_reply", body)
+                                                                status = "تم حفظ الرد في ذاكرتك."
+                                                            }
+                                                        })
+                                                        DropdownMenuItem(text = { Text("إعادة توليد الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val previousUser = messages.take(index).lastOrNull { it.first == "أنت" }?.second.orEmpty()
+                                                            if (previousUser.isNotBlank()) {
+                                                                while (messages.size > index) messages.removeAt(messages.lastIndex)
+                                                                sendQuestion(previousUser)
+                                                            } else status = "لا توجد رسالة سابقة لإعادة المحاولة."
+                                                        })
+                                                    } else {
+                                                        DropdownMenuItem(text = { Text("تعديل الرسالة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            input = body
+                                                            messages.removeAt(index)
+                                                        })
+                                                        DropdownMenuItem(text = { Text("نسخ الرسالة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            getSystemService(android.content.ClipboardManager::class.java)
+                                                                ?.setPrimaryClip(android.content.ClipData.newPlainText("رسالة", body))
+                                                            status = "تم نسخ الرسالة."
+                                                        })
+                                                    }
+                                                }
+                                            }
+                                        }
                                         Text(body, color = Color.White)
+                                        if (who == "صديقي") {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                TextButton(onClick = { status = "شكراً على تقييمك 👍" }) { Text("👍", color = Color(0xFFB9B4C7)) }
+                                                TextButton(onClick = { status = "شكراً على ملاحظتك 👎" }) { Text("👎", color = Color(0xFFB9B4C7)) }
+                                            }
+                                        }
                                     }
                                 }
                             }
