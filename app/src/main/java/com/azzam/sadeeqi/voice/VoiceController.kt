@@ -26,6 +26,7 @@ class VoiceController(
     @Volatile private var conversationActive = false
     @Volatile private var listening = false
     @Volatile private var microphoneMuted = false
+    @Volatile private var speaking = false
     private var lastUtteranceId: String? = null
 
     init { tts = TextToSpeech(appContext, this) }
@@ -35,6 +36,8 @@ class VoiceController(
     fun startConversation() {
         microphoneMuted = false
         conversationActive = true
+        runCatching { tts?.stop() }
+        speaking = false
         startListeningInternal()
     }
 
@@ -46,6 +49,7 @@ class VoiceController(
         runCatching { recognizer?.cancel() }
         listening = false
         runCatching { tts?.stop() }
+        speaking = false
     }
 
     fun interruptAndListen() {
@@ -54,6 +58,7 @@ class VoiceController(
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { tts?.stop() }
+        speaking = false
         runCatching { recognizer?.cancel() }
         listening = false
         startListeningInternal()
@@ -70,7 +75,7 @@ class VoiceController(
         if (muted) {
             runCatching { recognizer?.cancel() }
             listening = false
-        } else if (conversationActive) {
+        } else if (conversationActive && !speaking) {
             startListeningInternal()
         }
     }
@@ -80,7 +85,7 @@ class VoiceController(
     }
 
     private fun startListeningInternal() {
-        if (microphoneMuted) return
+        if (microphoneMuted || speaking) return
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             onError("خدمة التعرف على الكلام غير متاحة على هذا الجهاز.")
             return
@@ -128,6 +133,7 @@ class VoiceController(
         }
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
+        speaking = true
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
     }
 
@@ -139,16 +145,23 @@ class VoiceController(
             tts?.setSpeechRate(0.96f)
             tts?.setPitch(0.98f)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
+                override fun onStart(utteranceId: String?) { speaking = true }
                 override fun onDone(utteranceId: String?) {
-                    if (utteranceId == lastUtteranceId && conversationActive && !microphoneMuted) scheduleListening(250)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(250)
+                    }
                 }
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    if (utteranceId == lastUtteranceId && conversationActive && !microphoneMuted) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    }
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    if (conversationActive) scheduleListening(700)
+                    speaking = false
+                    if (conversationActive && !microphoneMuted) scheduleListening(700)
                 }
             })
             if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
@@ -161,7 +174,7 @@ class VoiceController(
         if (!conversationActive || microphoneMuted) return
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.postDelayed({
-            if (conversationActive && !microphoneMuted) {
+            if (conversationActive && !microphoneMuted && !speaking) {
                 listening = false
                 startListeningInternal()
             }
@@ -218,6 +231,7 @@ class VoiceController(
         recognizer?.destroy()
         recognizer = null
         runCatching { tts?.stop() }
+        speaking = false
         tts?.shutdown()
         tts = null
         ttsReady = false
