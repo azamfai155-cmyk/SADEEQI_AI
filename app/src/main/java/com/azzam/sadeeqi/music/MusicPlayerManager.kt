@@ -68,6 +68,9 @@ class MusicPlayerManager(
         controller?.let { if (it.isPlaying) it.pause() else it.play() }
         publish()
     }
+    fun pause() { controller?.pause(); publish() }
+    fun resume() { controller?.play(); publish() }
+    fun refresh() = publish()
 
     fun next() { controller?.seekToNextMediaItem(); publish() }
     fun previous() { controller?.seekToPreviousMediaItem(); publish() }
