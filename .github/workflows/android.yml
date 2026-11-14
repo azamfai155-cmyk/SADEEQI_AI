@@ -58,7 +58,10 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_2
-          disable-animations: true
+          # Avoid post-boot ADB settings calls; this runner's emulator loses
+          # the settings service intermittently after its slow software boot.
+          disable-animations: false
+          emulator-boot-timeout: 900
           script: |
             set -eu
             if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
