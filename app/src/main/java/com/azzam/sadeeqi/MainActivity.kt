@@ -796,6 +796,187 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    "موسيقى" -> {
+                        Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
+                        Text("بث موسيقى عالمي عبر Audius + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Text(musicNotice, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(
+                            value = remoteSearchQuery,
+                            onValueChange = { remoteSearchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("ابحث عن أغنية أو فنان عالمياً") }
+                        )
+                        Button(
+                            onClick = { searchOnlineMusic(remoteSearchQuery) },
+                            enabled = !isSearchingMusic && remoteSearchQuery.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E6B35))
+                        ) {
+                            Text(if (isSearchingMusic) "جاري البحث…" else "⌕ ابحث وشغّل")
+                        }
+                        if (remoteMusicResults.isNotEmpty()) {
+                            Text("نتائج الموسيقى العالمية", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            remoteMusicResults.take(12).forEachIndexed { index, track ->
+                                TextButton(
+                                    onClick = {
+                                        ContextCompat.startForegroundService(
+                                            this@MainActivity,
+                                            Intent(this@MainActivity, MusicPlaybackService::class.java)
+                                        )
+                                        musicManager.playRemoteQueue(remoteMusicResults, index)
+                                        musicNotice = "يتم تشغيل ${track.title} — ${track.artist}"
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(Modifier.fillMaxWidth()) {
+                                        Text("♫  ${track.title}", color = Color.White, maxLines = 1)
+                                        Text(track.artist, color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xE526293A))
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(
+                                    modifier = Modifier.size(164.dp),
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = Color(0xFF292238)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text("♫", color = Color(0xFFE6C77A), style = MaterialTheme.typography.displayLarge)
+                                    }
+                                }
+                                Text(musicState.title, color = Color.White, style = MaterialTheme.typography.titleLarge, maxLines = 2)
+                                Text(if (musicState.isPlaying) "يعمل الآن" else "متوقف مؤقتاً", color = Color(0xFFC7B8E8))
+                                val duration = musicState.durationMs.coerceAtLeast(1L)
+                                Slider(
+                                    value = musicState.positionMs.coerceIn(0L, duration).toFloat(),
+                                    onValueChange = { musicManager.seekTo(it.toLong()) },
+                                    valueRange = 0f..duration.toFloat()
+                                )
+                                Text("مستوى الصوت", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                                Slider(
+                                    value = musicState.volume,
+                                    onValueChange = { musicManager.setVolume(it) },
+                                    valueRange = 0f..1f
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(onClick = { musicManager.cycleRepeat() }) {
+                                        Text(when (musicState.repeatMode) { 1 -> "تكرار المقطع"; 2 -> "تكرار الكل"; else -> "تكرار: إيقاف" }, color = Color(0xFFE6C77A))
+                                    }
+                                    IconButton(onClick = { musicManager.previous() }) {
+                                        Text("⏮", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    FilledIconButton(
+                                        onClick = { musicManager.toggle() },
+                                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF9A7438))
+                                    ) {
+                                        Text(if (musicState.isPlaying) "Ⅱ" else "▶", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    IconButton(onClick = { musicManager.next() }) {
+                                        Text("⏭", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
+                                    TextButton(onClick = { musicManager.toggleShuffle() }) {
+                                        Text(if (musicState.shuffleEnabled) "عشوائي ✓" else "عشوائي", color = Color(0xFFE6C77A))
+                                    }
+                                }
+                                val currentTrack = musicQueue.firstOrNull { it.second == musicState.title }
+                        if (currentTrack != null) {
+                            val isFavorite = musicFavorites.any { it.first == currentTrack.first }
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        musicLibrary.toggleFavorite(currentTrack.first, currentTrack.second)
+                                        musicFavorites = musicLibrary.loadFavorites()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (isFavorite) "★ إزالة من المفضلة" else "☆ أضف إلى المفضلة") }
+                        }
+                        OutlinedButton(
+                                    onClick = { audioPicker.launch(arrayOf("audio/*")) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("＋ اختر ملفات صوتية من الهاتف") }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("وضع توفير الإنترنت", color = Color.White)
+                                Text("يقلل نتائج البحث إلى 8 ويحذف صور الأغاني ويخزن الصوت مؤقتاً؛ بث Audius نفسه يبقى بجودته الأصلية", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Switch(checked = saveDataMode, onCheckedChange = { enabled ->
+                                saveDataMode = enabled
+                                musicManager.setDataSaver(enabled)
+                                scope.launch { musicLibrary.setDataSaverEnabled(enabled) }
+                            })
+                        }
+                        Text("قائمة التشغيل الحالية", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                        if (musicQueue.isEmpty()) {
+                            Text("لم تختر ملفات بعد. اختر ملفات صوتية من جهازك للبدء.", color = Color(0xFFD2D0DC))
+                        } else {
+                            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                items(musicQueue) { track ->
+                                    TextButton(
+                                        onClick = {
+                                            val index = musicQueue.indexOf(track)
+                                            ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                                            musicManager.playQueue(musicQueue, index)
+                                            scope.launch {
+                                                musicLibrary.recordPlayed(track.first, track.second)
+                                                musicHistory = musicLibrary.loadHistory()
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("♫  " + track.second, color = Color.White, modifier = Modifier.fillMaxWidth(), maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                        if (musicFavorites.isNotEmpty()) {
+                            Text("المفضلة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            musicFavorites.take(5).forEach { favorite ->
+                                TextButton(onClick = {
+                                    ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                                    musicManager.playQueue(musicFavorites, musicFavorites.indexOf(favorite))
+                                }) {
+                                    Text("★  " + favorite.second, color = Color.White, modifier = Modifier.fillMaxWidth(), maxLines = 1)
+                                }
+                            }
+                        }
+                        if (musicHistory.isNotEmpty()) {
+                            Text("سجل الاستماع", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
+                            musicHistory.take(5).forEach { historyItem ->
+                                Text("• " + historyItem.second, color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Text(
+                            "المصدر: Audius — كتالوج مفتوح يضم موسيقى لفنانين مستقلين. توفر كل مقطع وحقوقه وشروط استخدامه تخضع لبيانات الفنان والمنصة؛ لا يعني ذلك توفر كل الإصدارات التجارية.",
+                            color = Color(0xFFB9B4C7),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    "التداول" -> {
+                        TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
+                    }
+                    "SOCIAL HUB" -> {
+                        SocialHubScreen(modifier = Modifier.weight(1f))
+                    }
                     "الأدوات" -> {
                         Text("أدوات صديقي", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
