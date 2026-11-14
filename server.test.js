@@ -33,3 +33,18 @@ test('chat rejects requests without a bearer token', async () => {
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 });
+
+
+test('social provider catalogue exists and refuses unauthenticated setup', async () => {
+  const server = http.createServer(app);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/v1/social/providers`);
+    assert.equal(response.status, 503);
+    const data = await response.json();
+    assert.equal(typeof data.error, 'string');
+  } finally {
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+});
