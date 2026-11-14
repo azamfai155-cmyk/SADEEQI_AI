@@ -38,6 +38,8 @@ import com.azzam.sadeeqi.music.MusicLibraryStore
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
+import com.azzam.sadeeqi.phone.PhoneCommandParser
+import com.azzam.sadeeqi.phone.PhoneCommandExecutor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +127,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "المهام", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -238,6 +240,20 @@ class MainActivity : ComponentActivity() {
         fun sendQuestion(question: String) {
 
             if (question.isBlank() && selectedImageDataUrl == null) return
+
+            val phoneCommand = PhoneCommandParser.parse(question)
+            if (phoneCommand != null) {
+                messages.add("أنت" to question)
+                val commandReply = runCatching {
+                    PhoneCommandExecutor.execute(this@MainActivity, phoneCommand)
+                }.getOrElse { error ->
+                    "تعذر تنفيذ الأمر على الهاتف: ${error.message ?: "تحقق من إعدادات الجهاز."}"
+                }
+                messages.add("صديقي" to commandReply)
+                onReply(commandReply)
+                status = "تم تنفيذ أمر الهاتف عبر Android"
+                return
+            }
 
             val imageForRequest = selectedImageDataUrl
             selectedImageDataUrl = null
@@ -603,16 +619,6 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    "المهام" -> {
-                        Text("المهام والأتمتة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
-                        Card(modifier = Modifier.padding(top = 12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
-                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("✦ مساحة تنظيم المهام", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                Text("ستظهر هنا مهامك ومتابعة تنفيذها. لا توجد مهام مجدولة حالياً.", color = Color(0xFFD2D0DC))
-                                Text("هذه واجهة أولية؛ الجدولة التلقائية غير مربوطة بعد.", color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
                         Text("بث موسيقى عالمي عبر Audius + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
@@ -824,7 +830,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (selectedTab == "المهام" || selectedTab == "الأدوات" || selectedTab == "الإعدادات" || selectedTab == "SOCIAL HUB") {
+                if (selectedTab == "الأدوات" || selectedTab == "الإعدادات" || selectedTab == "SOCIAL HUB") {
                     Spacer(Modifier.weight(1f))
                 } else {
                     Spacer(Modifier.height(8.dp))
