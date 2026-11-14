@@ -27,6 +27,28 @@ class SupabaseAuthClient(private val context: Context) {
         "/auth/v1/signup", email, password
     )
 
+    /**
+     * Revoke only this device's session when online, but always clear the
+     * encrypted local session so signing out never depends on network.
+     */
+    fun signOut() = synchronized(REFRESH_LOCK) {
+        try {
+            val token = runCatching { accessToken() }.getOrNull()
+            if (!token.isNullOrBlank() && isConfigured()) {
+                val request = Request.Builder()
+                    .url(BuildConfig.SADEEQI_SUPABASE_URL.trimEnd('/') + "/auth/v1/logout?scope=local")
+                    .header("apikey", BuildConfig.SADEEQI_SUPABASE_ANON_KEY)
+                    .header("Authorization", "Bearer $token")
+                    .post("".toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                http.newBuilder().callTimeout(5, TimeUnit.SECONDS).build()
+                    .newCall(request).execute().use { /* Best-effort server revocation. */ }
+            }
+        } finally {
+            EncryptedSessionStore.clear(context)
+        }
+    }
+
     fun accessToken(): String = synchronized(REFRESH_LOCK) {
         // Re-read only after acquiring the process-wide lock: another request may
         // already have rotated the refresh token and saved a newer session.
