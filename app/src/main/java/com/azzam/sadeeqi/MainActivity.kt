@@ -472,6 +472,10 @@ class MainActivity : ComponentActivity() {
                                 messages.clear()
                                 messages.add("صديقي" to "أهلاً! أنا صديقي. كيف أستطيع مساعدتك؟")
                                 input = ""
+                                scope.launch {
+                                    memory.clear()
+                                    status = "تم حذف سجل المحادثة من ذاكرة هذا الجهاز."
+                                }
                                 selectedTab = "الرئيسية"
                                 scope.launch { drawerState.close() }
                             },
