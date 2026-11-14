@@ -139,3 +139,95 @@ test('OPTIONS respects configured origin and unknown routes return 404', async (
   const missing = await handleRequest(request('/not-a-route'), {});
   assert.equal(missing.status, 404);
 });
+
+
+test('Supabase JWT accepts a valid JWKS-backed authenticated session', async () => {
+  const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
+  const { publicKey, privateKey } = await generateKeyPair('ES256');
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = 'sadeeqi-test-key';
+  jwk.alg = 'ES256';
+  const supabaseUrl = 'https://valid-auth-test.supabase.co';
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.equal(String(url), `${supabaseUrl}/auth/v1/.well-known/jwks.json`);
+    return new Response(JSON.stringify({ keys: [jwk] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const token = await new SignJWT({ role: 'authenticated', email: 'test@example.com' })
+      .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
+      .setIssuer(`${supabaseUrl}/auth/v1`)
+      .setAudience('authenticated')
+      .setSubject('user-test-123')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(privateKey);
+
+    const response = await handleRequest(request('/v1/social/providers', {
+      headers: { Authorization: `Bearer ${token}` }
+    }), { AUTH_MODE: 'supabase', SUPABASE_URL: supabaseUrl });
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.phase, 'provider_readiness');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Supabase JWT rejects expired tokens and incorrect issuer or audience', async () => {
+  const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
+  const { publicKey, privateKey } = await generateKeyPair('ES256');
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = 'sadeeqi-reject-test-key';
+  jwk.alg = 'ES256';
+  const supabaseUrl = 'https://reject-auth-test.supabase.co';
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    assert.equal(String(url), `${supabaseUrl}/auth/v1/.well-known/jwks.json`);
+    return new Response(JSON.stringify({ keys: [jwk] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  try {
+    const base = new SignJWT({ role: 'authenticated' })
+      .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
+      .setSubject('user-test-456')
+      .setIssuedAt();
+
+    const invalidTokens = [
+      await base.setIssuer(`${supabaseUrl}/auth/v1`).setAudience('authenticated').setExpirationTime('0s').sign(privateKey),
+      await new SignJWT({ role: 'authenticated' })
+        .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
+        .setIssuer('https://wrong-issuer.example/auth/v1')
+        .setAudience('authenticated')
+        .setSubject('user-test-456')
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .sign(privateKey),
+      await new SignJWT({ role: 'authenticated' })
+        .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
+        .setIssuer(`${supabaseUrl}/auth/v1`)
+        .setAudience('wrong-audience')
+        .setSubject('user-test-456')
+        .setIssuedAt()
+        .setExpirationTime('5m')
+        .sign(privateKey)
+    ];
+
+    for (const token of invalidTokens) {
+      const response = await handleRequest(request('/v1/social/providers', {
+        headers: { Authorization: `Bearer ${token}` }
+      }), { AUTH_MODE: 'supabase', SUPABASE_URL: supabaseUrl });
+      assert.equal(response.status, 401);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
