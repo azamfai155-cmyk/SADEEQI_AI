@@ -19,6 +19,10 @@ const API_URL = PROVIDER === 'groq'
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
+export function extractBearerToken(value) {
+  return typeof value === 'string' ? value.replace(/^Bearer\\s+/i, '').trim() : '';
+}
+
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const left = Buffer.from(a);
