@@ -23,11 +23,11 @@ class AudiusMusicRepository {
         .callTimeout(40, TimeUnit.SECONDS)
         .build()
 
-    fun search(query: String, limit: Int = 20): List<RemoteMusicTrack> {
+    fun search(query: String, limit: Int = 8): List<RemoteMusicTrack> {
         require(query.isNotBlank()) { "اكتب اسم أغنية أو فنان للبحث." }
         val url = Uri.parse("$BASE_URL/tracks/search").buildUpon()
             .appendQueryParameter("query", query.trim())
-            .appendQueryParameter("limit", limit.coerceIn(1, 30).toString())
+            .appendQueryParameter("limit", limit.coerceIn(1, 20).toString())
             .appendQueryParameter("app_name", APP_NAME)
             .build()
             .toString()
@@ -52,9 +52,8 @@ class AudiusMusicRepository {
                     val title = item.optString("title").ifBlank { "مقطع بدون عنوان" }
                     val user = item.optJSONObject("user")
                     val artist = user?.optString("name")?.ifBlank { "فنان مستقل" } ?: "فنان مستقل"
-                    val artwork = item.optJSONObject("artwork")
-                    val artworkUrl = artwork?.optString("150x150")?.takeIf { it.startsWith("https://") }
-                        ?: artwork?.optString("480x480")?.takeIf { it.startsWith("https://") }
+                    // Do not request remote artwork while data-saver mode is enabled.
+                    val artworkUrl: String? = null
                     val permalink = item.optString("permalink").takeIf { it.startsWith("/") }
                         ?.let { "https://audius.co$it" }
                     add(
