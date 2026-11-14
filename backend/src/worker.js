@@ -33,6 +33,12 @@ async function issueSession(secret, now = Math.floor(Date.now()/1000)) {
   const sig = await crypto.subtle.sign('HMAC', await signingKey(secret), new TextEncoder().encode(input));
   return input + '.' + b64url(new Uint8Array(sig));
 }
+async function isRateLimited(binding, request, scope) {
+  if (!binding || typeof binding.limit !== 'function') return null;
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const result = await binding.limit({key: scope + ':' + ip});
+  return result?.success === false;
+}
 async function verifySession(token, secret, now = Math.floor(Date.now()/1000)) {
   if (typeof token !== 'string') return false;
   const parts = token.split('.');
@@ -57,7 +63,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/health' && request.method === 'GET') {
       return json({service:'sadeeqi-ai',version:'1.3.0',runtime:'cloudflare-workers',
-        configured:Boolean(env.OPENAI_API_KEY && env.SADEEQI_SESSION_SECRET && env.SADEEQI_SESSION_SECRET.length >= 32 && env.OPENAI_MODEL)},200,cors);
+        configured:Boolean(env.OPENAI_API_KEY && env.SADEEQI_SESSION_SECRET && env.SADEEQI_SESSION_SECRET.length >= 32 && env.OPENAI_MODEL && env.SESSION_RATE_LIMITER && env.CHAT_RATE_LIMITER)},200,cors);
     }
     if (url.pathname === '/v1/session' && request.method === 'POST') {
       if (!env.SADEEQI_SESSION_SECRET || env.SADEEQI_SESSION_SECRET.length < 32)
