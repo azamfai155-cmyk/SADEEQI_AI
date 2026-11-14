@@ -576,11 +576,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     modifier = Modifier.size(40.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = androidx.compose.material.icons.Icons.Default.Mic,
-                                        contentDescription = "الميكروفون",
-                                        tint = Color.White
-                                    )
+                                    Text("🎙", color = Color.White, style = MaterialTheme.typography.titleLarge)
                                 }
                                 if (input.isNotBlank() || voiceSessionActive) {
                                     IconButton(
@@ -606,11 +602,7 @@ class MainActivity : ComponentActivity() {
                                                     .background(Color.White, RoundedCornerShape(3.dp))
                                             )
                                         } else {
-                                            Icon(
-                                                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.Send,
-                                                contentDescription = "إرسال",
-                                                tint = Color.White
-                                            )
+                                            Text("➤", color = Color.White, style = MaterialTheme.typography.titleLarge)
                                         }
                                     }
                                 }
