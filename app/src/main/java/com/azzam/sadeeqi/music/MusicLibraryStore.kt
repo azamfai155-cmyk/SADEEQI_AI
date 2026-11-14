@@ -3,6 +3,7 @@ package com.azzam.sadeeqi.music
 import android.content.Context
 import android.net.Uri
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -15,6 +16,13 @@ class MusicLibraryStore(context: Context) {
     private val queueKey = stringPreferencesKey("local_queue_v1")
     private val historyKey = stringPreferencesKey("listening_history_v1")
     private val favoritesKey = stringSetPreferencesKey("favorites_v1")
+    private val dataSaverKey = booleanPreferencesKey("data_saver_enabled")
+
+    suspend fun isDataSaverEnabled(): Boolean = store.data.first()[dataSaverKey] ?: true
+
+    suspend fun setDataSaverEnabled(enabled: Boolean) {
+        store.edit { it[dataSaverKey] = enabled }
+    }
 
     suspend fun saveQueue(tracks: List<Pair<Uri, String>>) {
         store.edit { prefs ->
