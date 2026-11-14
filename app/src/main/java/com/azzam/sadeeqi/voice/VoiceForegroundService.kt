@@ -137,7 +137,7 @@ class VoiceForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("صديقي — الاستماع الصوتي")
             .setContentText(message)
             .setContentIntent(openIntent)
@@ -160,7 +160,7 @@ class VoiceForegroundService : Service() {
         voice?.close()
         voice = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
-        else @Suppress("DEPRECATION") stopForeground(true)
+        else {\n            @Suppress("DEPRECATION")\n            stopForeground(true)\n        }
         stopSelf()
     }
 
@@ -175,7 +175,7 @@ class VoiceForegroundService : Service() {
     companion object {
         const val ACTION_START = "com.azzam.sadeeqi.voice.START"
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
-        const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
+        const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"\n        const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"\n        const val EXTRA_MUTED = "microphone_muted"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
     }
