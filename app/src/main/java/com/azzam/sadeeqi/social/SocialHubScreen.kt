@@ -26,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.azzam.sadeeqi.BuildConfig
 
 @Composable
@@ -38,7 +40,7 @@ fun SocialHubScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         loading = true
         runCatching {
-            SocialHubRepository().loadProviders()
+            withContext(Dispatchers.IO) { SocialHubRepository().loadProviders() }
         }.onSuccess { result ->
             providers = result.providers
             notice = result.notice
