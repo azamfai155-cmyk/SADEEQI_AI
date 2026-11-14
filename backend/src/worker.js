@@ -81,8 +81,8 @@ export default {
 
     if (url.pathname === '/health' && request.method === 'GET') {
       return json({
-        service: 'sadeeqi-ai',
-        version: '1.2.1',
+        service: 'sadeeqi-ai-v2',
+        version: '1.3.0',
         runtime: 'cloudflare-workers',
         configured: Boolean(env.OPENAI_API_KEY && env.SADEEQI_APP_TOKEN && env.OPENAI_MODEL)
       }, 200, cors);
@@ -155,7 +155,7 @@ export default {
         .flatMap(item => item.content || [])
         .filter(part => part.type === 'output_text')
         .map(part => part.text)
-        .join('\\n')
+        .join('\n')
         .trim();
 
       if (!output) return json({ error: 'AI provider returned an empty response.' }, 502, cors);
