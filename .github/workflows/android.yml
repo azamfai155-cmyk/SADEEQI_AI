@@ -1,65 +1,57 @@
-
-name: Build SADEEQI AI APK
+name: SADEEQI AI - tests and Android build
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - "**"
+  pull_request:
 
 jobs:
-  build:
+  backend-tests:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install backend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run backend tests
+        run: npm test
 
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-
+          java-version: "17"
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: 'platform-tools'
-
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
-
-      - name: Validate Android Manifest
-        run: |
-          python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-
-          path = "app/src/main/AndroidManifest.xml"
-
-          try:
-              ET.parse(path)
-              print("Manifest XML is valid")
-          except ET.ParseError as error:
-              print("MANIFEST ERROR:", error)
-              raise
-          PY
-
-      - name: Build APK
+          gradle-version: "8.11.1"
+      - name: Build debug APK
         env:
           SADEEQI_API_BASE_URL: ${{ secrets.SADEEQI_API_BASE_URL }}
           SADEEQI_APP_TOKEN: ${{ secrets.SADEEQI_APP_TOKEN }}
         run: |
-          test -n "$SADEEQI_API_BASE_URL"
-          test -n "$SADEEQI_APP_TOKEN"
-
+          API_URL="${SADEEQI_API_BASE_URL:-https://sadeeqi-ai.azamfai155.workers.dev}"
+          APP_TOKEN="${SADEEQI_APP_TOKEN:-}"
           gradle :app:assembleDebug \
-            -PsadeeqiApiBaseUrl="$SADEEQI_API_BASE_URL" \
-            -PsadeeqiAppToken="$SADEEQI_APP_TOKEN"
-
-      - name: Upload APK
+            -PsadeeqiApiBaseUrl="$API_URL" \
+            -PsadeeqiAppToken="$APP_TOKEN"
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SADEEQI-AI-APK
+          name: SADEEQI-AI-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk

@@ -117,28 +117,40 @@ class MainActivity : ComponentActivity() {
         val imagePicker = rememberLauncherForActivityResult(
             PickVisualMedia()
         ) { uri ->
+            if (uri == null) {
+                selectedImageDataUrl = null
+            } else {
+                status = "جاري تجهيز الصورة بأمان…"
+                scope.launch {
+                    val loaded = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val bytes = contentResolver
+                                .openInputStream(uri)
+                                ?.use { it.readBytes() }
+                                ?: error("تعذر قراءة الصورة")
 
-            selectedImageDataUrl = uri?.let { picked ->
+                            require(bytes.isNotEmpty()) { "الصورة فارغة." }
+                            require(bytes.size <= 8 * 1024 * 1024) {
+                                "حجم الصورة أكبر من 8 ميغابايت"
+                            }
 
-                runCatching {
+                            val mime = contentResolver.getType(uri) ?: "image/jpeg"
+                            require(mime.startsWith("image/")) {
+                                "الملف المحدد ليس صورة."
+                            }
 
-                    val bytes = contentResolver
-                        .openInputStream(picked)
-                        ?.use { it.readBytes() }
-                        ?: error("تعذر قراءة الصورة")
-
-                    require(bytes.size <= 8 * 1024 * 1024) {
-                        "حجم الصورة أكبر من 8 ميغابايت"
+                            "data:$mime;base64," +
+                                Base64.encodeToString(bytes, Base64.NO_WRAP)
+                        }
                     }
 
-                    val mime = contentResolver.getType(picked) ?: "image/jpeg"
-
-                    "data:$mime;base64," +
-                        Base64.encodeToString(bytes, Base64.NO_WRAP)
-
-                }.getOrElse {
-                    status = it.message ?: "تعذر تحميل الصورة"
-                    null
+                    loaded.onSuccess { dataUrl ->
+                        selectedImageDataUrl = dataUrl
+                        status = "تم تجهيز الصورة — اكتب سؤالك واضغط إرسال."
+                    }.onFailure { error ->
+                        selectedImageDataUrl = null
+                        status = error.message ?: "تعذر تحميل الصورة."
+                    }
                 }
             }
         }
@@ -154,7 +166,13 @@ class MainActivity : ComponentActivity() {
                 "حلل هذه الصورة واشرح ما يظهر فيها."
             }
 
-            messages.add("أنت" to effectiveQuestion)
+            messages.add(
+                "أنت" to if (imageForRequest != null) {
+                    "$effectiveQuestion\n[صورة مرفقة]"
+                } else {
+                    effectiveQuestion
+                }
+            )
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
