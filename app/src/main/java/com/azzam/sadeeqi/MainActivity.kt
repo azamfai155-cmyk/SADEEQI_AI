@@ -260,7 +260,7 @@ class MainActivity : ComponentActivity() {
 
         MaterialTheme(
             colorScheme = darkColorScheme(
-                primary = Color(0xFFB9A5FF),
+                primary = Color(0xFFE6C77A),
                 background = Color(0xFF10111A),
                 surface = Color(0xFF1B1D2A)
             )
