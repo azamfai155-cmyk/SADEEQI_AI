@@ -15,6 +15,9 @@ import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
 import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
+import com.azzam.sadeeqi.music.MusicCommand
+import com.azzam.sadeeqi.music.MusicCommandParser
+import com.azzam.sadeeqi.music.MusicPlayerManager
 import java.util.concurrent.Executors
 
 /**
@@ -27,6 +30,7 @@ class VoiceForegroundService : Service() {
     private val gateway by lazy { OpenAiGateway() }
     private val history = mutableListOf<OpenAiGateway.Turn>()
     private var voice: VoiceController? = null
+    private var musicManager: MusicPlayerManager? = null
     private var started = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -70,6 +74,7 @@ class VoiceForegroundService : Service() {
 
         started = true
         history.clear()
+        if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
@@ -80,6 +85,16 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        when (val command = MusicCommandParser.parse(spoken)) {
+            MusicCommand.Pause -> { musicManager?.pause(); voice?.speak("تم إيقاف الموسيقى مؤقتاً"); return }
+            MusicCommand.Resume -> { musicManager?.resume(); voice?.speak("تم استئناف الموسيقى"); return }
+            MusicCommand.Next -> { musicManager?.next(); voice?.speak("انتقلت إلى المقطع التالي"); return }
+            MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
+            MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
+            MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
+            is MusicCommand.Search -> { voice?.speak("طلب البحث عن ${command.query}. البحث الموسيقي عبر الإنترنت يحتاج إلى ربط مزود بث مرخص"); return }
+            null -> Unit
+        }
         val normalized = spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "")
         if (normalized in setOf("ياصديقي", "صديقي")) {
             val greeting = "نعم يا عزام، أنا معك"
@@ -171,6 +186,8 @@ class VoiceForegroundService : Service() {
         started = false
         voice?.close()
         voice = null
+        musicManager?.release()
+        musicManager = null
         executor.shutdownNow()
         super.onDestroy()
     }
