@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,11 +42,17 @@ import com.azzam.sadeeqi.social.SocialHubScreen
 import com.azzam.sadeeqi.trading.TradingIntelligenceScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
+    private var requestedVoiceAction: String = VoiceForegroundService.ACTION_START
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
@@ -53,7 +60,7 @@ class MainActivity : ComponentActivity() {
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
-                ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
+                ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(requestedVoiceAction))
                 onVoiceSession?.invoke(true)
             } else {
                 onVoiceSession?.invoke(false)
@@ -69,7 +76,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SadeeqiApp(
+                onStartDictation = {
+                    requestedVoiceAction = VoiceForegroundService.ACTION_DICTATE
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_DICTATE))
+                        onVoiceSession?.invoke(true)
+                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                },
                 onStartVoice = {
+                    requestedVoiceAction = VoiceForegroundService.ACTION_START
                     if (
                         ContextCompat.checkSelfPermission(
                             this,
@@ -101,6 +116,7 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun SadeeqiApp(
+        onStartDictation: () -> Unit,
         onStartVoice: () -> Unit,
         onStopVoice: () -> Unit,
         onInterruptVoice: () -> Unit,
@@ -123,6 +139,15 @@ class MainActivity : ComponentActivity() {
             mutableStateOf("")
         }
         var voiceSessionActive by remember { mutableStateOf(false) }
+        var isGenerating by remember { mutableStateOf(false) }
+        var generationJob by remember { mutableStateOf<Job?>(null) }
+        var attachmentMenuExpanded by remember { mutableStateOf(false) }
+        var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
+        val messageReader = remember { TextToSpeech(this@MainActivity, null) }
+        DisposableEffect(messageReader) {
+            messageReader.setLanguage(Locale("ar"))
+            onDispose { messageReader.stop(); messageReader.shutdown() }
+        }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -195,6 +220,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val cameraLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.TakePicturePreview()
+        ) { bitmap ->
+            if (bitmap != null) {
+                scope.launch {
+                    val dataUrl = withContext(Dispatchers.IO) {
+                        val output = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
+                        "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+                    }
+                    selectedImageDataUrl = dataUrl
+                    status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                }
+            } else {
+                status = "تم إلغاء التقاط الصورة."
+            }
+        }
+
         val imagePicker = rememberLauncherForActivityResult(
             PickVisualMedia()
         ) { uri ->
@@ -257,51 +300,30 @@ class MainActivity : ComponentActivity() {
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
-            scope.launch {
-
+            isGenerating = true
+            generationJob = scope.launch {
                 try {
-
                     val turns = messages.takeLast(24).map { (who, body) ->
-
-                        OpenAiGateway.Turn(
-                            if (who == "صديقي") "assistant" else "user",
-                            body
-                        )
+                        OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
-
                     val answer = withContext(Dispatchers.IO) {
                         gateway.reply(turns, imageForRequest)
                     }
-
                     messages.add("صديقي" to answer)
-
                     val stamp = System.currentTimeMillis()
-
-                    memory.save(
-                        "chat:$stamp:1",
-                        "conversation",
-                        "أنت\n$effectiveQuestion"
-                    )
-
-                    memory.save(
-                        "chat:$stamp:2",
-                        "conversation",
-                        "صديقي\n$answer"
-                    )
-
+                    memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                    memory.save("chat:$stamp:2", "conversation", "صديقي\n$answer")
                     onReply(answer)
-
                     status = "متصل — ${BuildConfig.VERSION_NAME}"
-
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    status = "تم إيقاف توليد الرد."
+                    throw e
                 } catch (e: Exception) {
-
-                    messages.add(
-                        "صديقي" to
-                            "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}"
-                    )
-
+                    messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
                     status = "تعذر الاتصال بالخادم"
-                    // The foreground voice service manages its own retry loop.
+                } finally {
+                    isGenerating = false
+                    generationJob = null
                 }
             }
         }
@@ -451,6 +473,10 @@ class MainActivity : ComponentActivity() {
                                 messages.clear()
                                 messages.add("صديقي" to "أهلاً! أنا صديقي. كيف أستطيع مساعدتك؟")
                                 input = ""
+                                scope.launch {
+                                    memory.search("chat:").forEach { (recordId, _) -> memory.delete(recordId) }
+                                    status = "تم حذف سجل المحادثة من ذاكرة هذا الجهاز."
+                                }
                                 selectedTab = "الرئيسية"
                                 scope.launch { drawerState.close() }
                             },
@@ -517,67 +543,213 @@ class MainActivity : ComponentActivity() {
                         Text("أنا هنا لمساعدتك في التفكير والبحث وإنجاز المهام.", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         Text(status, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-                            items(messages) { (who, body) ->
+                            itemsIndexed(messages) { index, (who, body) ->
                                 Card(shape = RoundedCornerShape(17.dp), colors = CardDefaults.cardColors(containerColor = if (who == "صديقي") Color(0xE626293A) else Color(0xE6332D43))) {
                                     Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(who, color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(who, color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                            Spacer(Modifier.weight(1f))
+                                            Box {
+                                                TextButton(onClick = { openMessageMenuIndex = index }) {
+                                                    Text("⋯", color = Color(0xFFB9B4C7), style = MaterialTheme.typography.titleLarge)
+                                                }
+                                                DropdownMenu(
+                                                    expanded = openMessageMenuIndex == index,
+                                                    onDismissRequest = { openMessageMenuIndex = null },
+                                                    modifier = Modifier.background(Color(0xFF242333))
+                                                ) {
+                                                    if (who == "صديقي") {
+                                                        DropdownMenuItem(text = { Text("نسخ الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                                                            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("رد صديقي", body))
+                                                            status = "تم نسخ الرد."
+                                                        })
+                                                        DropdownMenuItem(text = { Text("قراءة الرد صوتياً") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            messageReader.speak(body, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-reply")
+                                                        })
+                                                        DropdownMenuItem(text = { Text("إيقاف القراءة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            messageReader.stop()
+                                                        })
+                                                        DropdownMenuItem(text = { Text("مشاركة الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val share = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(Intent.EXTRA_TEXT, body)
+                                                            }
+                                                            startActivity(Intent.createChooser(share, "مشاركة رد صديقي"))
+                                                        })
+                                                        DropdownMenuItem(text = { Text("حفظ الرد في الذاكرة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            scope.launch {
+                                                                memory.save("saved-reply:${System.currentTimeMillis()}", "saved_reply", body)
+                                                                status = "تم حفظ الرد في ذاكرتك."
+                                                            }
+                                                        })
+                                                        DropdownMenuItem(text = { Text("إعادة توليد الرد") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            val previousUser = messages.take(index).lastOrNull { it.first == "أنت" }?.second.orEmpty()
+                                                            if (previousUser.isNotBlank()) {
+                                                                while (messages.size > index) messages.removeAt(messages.lastIndex)
+                                                                sendQuestion(previousUser)
+                                                            } else status = "لا توجد رسالة سابقة لإعادة المحاولة."
+                                                        })
+                                                    } else {
+                                                        DropdownMenuItem(text = { Text("تعديل الرسالة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            input = body
+                                                            messages.removeAt(index)
+                                                            scope.launch {
+                                                                memory.search("chat:").filter { it.second.endsWith(body) }.forEach { memory.delete(it.first) }
+                                                            }
+                                                        })
+                                                        DropdownMenuItem(text = { Text("نسخ الرسالة") }, onClick = {
+                                                            openMessageMenuIndex = null
+                                                            getSystemService(android.content.ClipboardManager::class.java)
+                                                                ?.setPrimaryClip(android.content.ClipData.newPlainText("رسالة", body))
+                                                            status = "تم نسخ الرسالة."
+                                                        })
+                                                    }
+                                                }
+                                            }
+                                        }
                                         Text(body, color = Color.White)
+                                        if (who == "صديقي") {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                TextButton(onClick = { status = "شكراً على تقييمك 👍" }) { Text("👍", color = Color(0xFFB9B4C7)) }
+                                                TextButton(onClick = { status = "شكراً على ملاحظتك 👎" }) { Text("👎", color = Color(0xFFB9B4C7)) }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                        Card(
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(22.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xE51A1B2A))
+                            color = Color(0xF01B1D2A),
+                            shape = RoundedCornerShape(30.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x553C3B4C)),
+                            shadowElevation = 5.dp
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(13.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier.size(76.dp).background(Color(0xFF30243B), RoundedCornerShape(38.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(if (voiceSessionActive) "◉" else "✦", color = Color(0xFFE6C77A), style = MaterialTheme.typography.displaySmall)
+                                Box {
+                                    IconButton(
+                                        onClick = { attachmentMenuExpanded = true },
+                                        modifier = Modifier.size(42.dp)
+                                    ) {
+                                        Text("+", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineMedium)
+                                    }
+                                    DropdownMenu(
+                                        expanded = attachmentMenuExpanded,
+                                        onDismissRequest = { attachmentMenuExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF242333))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("إرفاق صورة") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("التقاط صورة بالكاميرا") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                cameraLauncher.launch(null)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("البحث في الإنترنت") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                val query = input.trim()
+                                                if (query.isNotBlank()) {
+                                                    input = ""
+                                                    sendQuestion("ابحث في الإنترنت عن: $query")
+                                                } else {
+                                                    status = "اكتب موضوع البحث أولاً."
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
-                                Text(
-                                    when { !voiceSessionActive -> "صديقي الصوتي"; microphoneMuted -> "الميكروفون مكتوم"; else -> "المحادثة الصوتية نشطة" },
-                                    color = Color(0xFFE6C77A),
-                                    style = MaterialTheme.typography.titleMedium
+                                OutlinedTextField(
+                                    value = input,
+                                    onValueChange = { input = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("اسأل صديقي أي شيء", color = Color(0xFF9C9AAA)) },
+                                    singleLine = false,
+                                    maxLines = 4,
+                                    shape = RoundedCornerShape(22.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        cursorColor = Color(0xFFE6C77A),
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    )
                                 )
-                                Text(
-                                    if (voiceSessionActive) "تحدث بالعربية؛ سأجيبك ثم أستمع من جديد. اضغط مقاطعة للتحدث أثناء ردي." else "ابدأ محادثة صوتية متواصلة مع صديقي.",
-                                    color = Color(0xFFD2D0DC),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                                    Button(
-                                        onClick = { if (voiceSessionActive) { onStopVoice(); voiceSessionActive = false } else onStartVoice() },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.buttonColors(containerColor = if (voiceSessionActive) Color(0xFF7A3434) else Color(0xFF8E6B35))
-                                    ) { Text(if (voiceSessionActive) "إنهاء" else "ابدأ التحدث") }
-                                    OutlinedButton(
-                                        onClick = { microphoneMuted = !microphoneMuted; startService(Intent(this@MainActivity, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_MUTE).putExtra(VoiceForegroundService.EXTRA_MUTED, microphoneMuted)) },
-                                        enabled = voiceSessionActive,
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text(if (microphoneMuted) "تشغيل الميكروفون" else "كتم الميكروفون") }
-                                    OutlinedButton(
-                                        onClick = { onInterruptVoice(); microphoneMuted = false },
-                                        enabled = voiceSessionActive,
-                                        modifier = Modifier.weight(1f)
-                                    ) { Text("مقاطعة") }
+                                IconButton(
+                                    onClick = {
+                                        if (voiceSessionActive) {
+                                            onStopVoice()
+                                            voiceSessionActive = false
+                                            status = "تم إيقاف الاستماع"
+                                        } else {
+                                            onStartDictation()
+                                            status = "استمع صديقي إلى رسالتك الصوتية"
+                                        }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Text("🎙", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (voiceSessionActive) {
+                                            onStopVoice()
+                                            voiceSessionActive = false
+                                            status = "تم إيقاف المحادثة الصوتية"
+                                        } else {
+                                            onStartVoice()
+                                            status = "المحادثة الصوتية المباشرة نشطة"
+                                        }
+                                    },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Text("〰", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
+                                }
+                                if (isGenerating) {
+                                    IconButton(
+                                        onClick = {
+                                            gateway.cancelCurrentRequest()
+                                            generationJob?.cancel()
+                                        },
+                                        modifier = Modifier.size(38.dp).background(Color(0xFF1687F8), RoundedCornerShape(11.dp))
+                                    ) {
+                                        Box(Modifier.size(12.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                                    }
+                                } else if (input.isNotBlank() || selectedImageDataUrl != null) {
+                                    IconButton(
+                                        onClick = {
+                                            val question = input
+                                            input = ""
+                                            sendQuestion(question)
+                                        },
+                                        modifier = Modifier.size(38.dp).background(Color(0xFF1687F8), RoundedCornerShape(11.dp))
+                                    ) {
+                                        Text("↑", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                                    }
                                 }
                             }
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp), label = { Text("اكتب أمرك لصديقي") })
-                        Spacer(Modifier.height(7.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                            OutlinedButton(onClick = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.weight(1f)) { Text("📷 صورة") }
-                            OutlinedButton(onClick = { onStartVoice(); status = "بدأت المحادثة الصوتية" }, modifier = Modifier.weight(1f)) { Text("🎙 محادثة صوتية") }
-                            Button(onClick = { val q = input; input = ""; sendQuestion(q) }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E6B35))) { Text("إرسال") }
                         }
                         if (selectedImageDataUrl != null) Text("تم اختيار صورة — أرسل سؤالك لتحليلها", color = Color(0xFFE6C77A))
                     }

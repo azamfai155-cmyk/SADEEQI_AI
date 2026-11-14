@@ -46,9 +46,35 @@ class VoiceForegroundService : Service() {
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
+            ACTION_DICTATE -> startDictationSession()
             ACTION_START, null -> startSession()
         }
         return START_NOT_STICKY
+    }
+
+    private fun startDictationSession() {
+        if (started) stopSession()
+        createNotificationChannel()
+        val notification = buildNotification("استمع صديقي إلى رسالتك الصوتية")
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (error: Exception) {
+            stopSelf()
+            return
+        }
+        started = true
+        history.clear()
+        if (musicManager == null) musicManager = MusicPlayerManager(this) { }
+        voice = VoiceController(
+            applicationContext,
+            { spoken -> handleRecognizedSpeech(spoken) },
+            { message -> updateNotification(message) }
+        )
+        voice?.listen()
     }
 
     private fun startSession() {
@@ -220,6 +246,7 @@ class VoiceForegroundService : Service() {
 
     companion object {
         const val ACTION_START = "com.azzam.sadeeqi.voice.START"
+        const val ACTION_DICTATE = "com.azzam.sadeeqi.voice.DICTATE"
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
         const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"

@@ -14,6 +14,12 @@ class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
     private val appToken: String = BuildConfig.SADEEQI_APP_TOKEN
 ) {
+    @Volatile private var activeCall: okhttp3.Call? = null
+
+    fun cancelCurrentRequest() {
+        activeCall?.cancel()
+    }
+
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -77,24 +83,30 @@ class OpenAiGateway(
             )
             .build()
 
-        http.newCall(request).execute().use { response ->
-            val body = response.body?.string().orEmpty()
+        val call = http.newCall(request)
+        activeCall = call
+        try {
+            call.execute().use { response ->
+                val body = response.body?.string().orEmpty()
 
-            if (!response.isSuccessful) {
-                throw IllegalStateException(
-                    "الخادم رفض الطلب (${response.code}): " +
-                        runCatching {
-                            JSONObject(body).optString("error")
-                        }.getOrDefault("خطأ اتصال")
-                )
+                if (!response.isSuccessful) {
+                    throw IllegalStateException(
+                        "الخادم رفض الطلب (${response.code}): " +
+                            runCatching {
+                                JSONObject(body).optString("error")
+                            }.getOrDefault("خطأ اتصال")
+                    )
+                }
+
+                return JSONObject(body)
+                    .optString("output_text")
+                    .takeIf { it.isNotBlank() }
+                    ?: throw IllegalStateException(
+                        "وصل رد فارغ من محرك الذكاء الاصطناعي."
+                    )
             }
-
-            return JSONObject(body)
-                .optString("output_text")
-                .takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException(
-                    "وصل رد فارغ من محرك الذكاء الاصطناعي."
-                )
+        } finally {
+            if (activeCall === call) activeCall = null
         }
     }
 }
