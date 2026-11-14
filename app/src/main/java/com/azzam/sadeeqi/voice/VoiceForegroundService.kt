@@ -286,6 +286,7 @@ class VoiceForegroundService : Service() {
 
     private fun stopSession() {
         started = false
+        pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
         voice = null
@@ -299,6 +300,7 @@ class VoiceForegroundService : Service() {
 
     override fun onDestroy() {
         started = false
+        pendingPhoneCommand = null
         voice?.close()
         voice = null
         musicManager?.release()
