@@ -25,6 +25,7 @@ class VoiceController(
     private var ttsReady = false
     @Volatile private var conversationActive = false
     @Volatile private var listening = false
+    @Volatile private var microphoneMuted = false
     private var lastUtteranceId: String? = null
 
     init { tts = TextToSpeech(appContext, this) }
@@ -32,12 +33,15 @@ class VoiceController(
     fun isConversationActive(): Boolean = conversationActive
 
     fun startConversation() {
+        microphoneMuted = false
         conversationActive = true
         startListeningInternal()
     }
 
     fun stopConversation() {
         conversationActive = false
+        microphoneMuted = false
+        lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { recognizer?.cancel() }
         listening = false
@@ -46,6 +50,9 @@ class VoiceController(
 
     fun interruptAndListen() {
         conversationActive = true
+        microphoneMuted = false
+        lastUtteranceId = null
+        mainHandler.removeCallbacksAndMessages(null)
         runCatching { tts?.stop() }
         runCatching { recognizer?.cancel() }
         listening = false
@@ -53,11 +60,27 @@ class VoiceController(
     }
 
     fun listen() {
+        microphoneMuted = false
         conversationActive = false
         startListeningInternal()
     }
 
+    fun setMicrophoneMuted(muted: Boolean) {
+        microphoneMuted = muted
+        if (muted) {
+            runCatching { recognizer?.cancel() }
+            listening = false
+        } else if (conversationActive) {
+            startListeningInternal()
+        }
+    }
+
+    fun resumeAfterTurnFailure() {
+        if (conversationActive && !microphoneMuted) scheduleListening(400)
+    }
+
     private fun startListeningInternal() {
+        if (microphoneMuted) return
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             onError("خدمة التعرف على الكلام غير متاحة على هذا الجهاز.")
             return
@@ -118,11 +141,11 @@ class VoiceController(
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
                 override fun onDone(utteranceId: String?) {
-                    if (utteranceId == lastUtteranceId && conversationActive) scheduleListening(250)
+                    if (utteranceId == lastUtteranceId && conversationActive && !microphoneMuted) scheduleListening(250)
                 }
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) {
-                    if (conversationActive) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId && conversationActive && !microphoneMuted) scheduleListening(700)
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     if (conversationActive) scheduleListening(700)
@@ -135,10 +158,10 @@ class VoiceController(
     }
 
     private fun scheduleListening(delayMs: Long) {
-        if (!conversationActive) return
+        if (!conversationActive || microphoneMuted) return
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.postDelayed({
-            if (conversationActive) {
+            if (conversationActive && !microphoneMuted) {
                 listening = false
                 startListeningInternal()
             }
@@ -166,7 +189,7 @@ class VoiceController(
             else -> "حدث خطأ أثناء الاستماع."
         }
         onError(message)
-        if (conversationActive && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+        if (conversationActive && !microphoneMuted && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             scheduleListening(if (error == SpeechRecognizer.ERROR_NETWORK ||
                 error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) 1400 else 500)
         }
@@ -188,6 +211,8 @@ class VoiceController(
 
     fun close() {
         conversationActive = false
+        microphoneMuted = false
+        lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { recognizer?.cancel() }
         recognizer?.destroy()
