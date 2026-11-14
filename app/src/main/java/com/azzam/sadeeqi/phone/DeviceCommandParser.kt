@@ -34,7 +34,7 @@ object DeviceCommandParser {
             if (alias != null) return DeviceCommand.LaunchApp(alias.first, alias.second)
         }
 
-        val alarm = Regex("^(?:اضبط|انشئ|اعمل)\\s+(?:لي\\s+)?منبه(?:\\s+الساعة)?\\s+(\\d{1,2})(?::(\\d{1,2}))?$")
+        val alarm = Regex("^(?:اضبط|انشئ|اعمل)\\s+(?:لي\\s+)?منبه(?:\\s+الساعه)?\\s+(\\d{1,2})(?::(\\d{1,2}))?$")
             .matchEntire(text)
         if (alarm != null) {
             val hour = alarm.groupValues[1].toIntOrNull() ?: return null
