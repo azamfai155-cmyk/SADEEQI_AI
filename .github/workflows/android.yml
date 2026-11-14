@@ -60,7 +60,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
               echo "::error::Missing required Supabase build secrets."
               exit 1
