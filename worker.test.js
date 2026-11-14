@@ -32,3 +32,19 @@ test('chat refuses unsupported HTTP methods', async () => {
   const request = new Request('https://example.workers.dev/v1/chat', { method: 'GET' });
   assert.equal((await worker.fetch(request, env)).status, 405);
 });
+
+
+test('chat rejects non-image data URLs before contacting provider', async () => {
+  const request = new Request('https://example.workers.dev/v1/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer test-token' },
+    body: JSON.stringify({
+      input: [{
+        role: 'user',
+        content: [{ type: 'input_image', image_url: 'data:text/plain;base64,SGVsbG8=' }]
+      }]
+    })
+  });
+  const response = await worker.fetch(request, env);
+  assert.equal(response.status, 400);
+});
