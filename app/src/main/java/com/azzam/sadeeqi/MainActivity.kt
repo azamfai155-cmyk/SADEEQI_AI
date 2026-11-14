@@ -40,6 +40,9 @@ import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -122,6 +125,9 @@ class MainActivity : ComponentActivity() {
             mutableStateOf("")
         }
         var voiceSessionActive by remember { mutableStateOf(false) }
+        var isGenerating by remember { mutableStateOf(false) }
+        var generationJob by remember { mutableStateOf<Job?>(null) }
+        var attachmentMenuExpanded by remember { mutableStateOf(false) }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -194,6 +200,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val cameraLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.TakePicturePreview()
+        ) { bitmap ->
+            if (bitmap != null) {
+                scope.launch {
+                    val dataUrl = withContext(Dispatchers.IO) {
+                        val output = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
+                        "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+                    }
+                    selectedImageDataUrl = dataUrl
+                    status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                }
+            } else {
+                status = "تم إلغاء التقاط الصورة."
+            }
+        }
+
         val imagePicker = rememberLauncherForActivityResult(
             PickVisualMedia()
         ) { uri ->
@@ -256,51 +280,30 @@ class MainActivity : ComponentActivity() {
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
-            scope.launch {
-
+            isGenerating = true
+            generationJob = scope.launch {
                 try {
-
                     val turns = messages.takeLast(24).map { (who, body) ->
-
-                        OpenAiGateway.Turn(
-                            if (who == "صديقي") "assistant" else "user",
-                            body
-                        )
+                        OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
-
                     val answer = withContext(Dispatchers.IO) {
                         gateway.reply(turns, imageForRequest)
                     }
-
                     messages.add("صديقي" to answer)
-
                     val stamp = System.currentTimeMillis()
-
-                    memory.save(
-                        "chat:$stamp:1",
-                        "conversation",
-                        "أنت\n$effectiveQuestion"
-                    )
-
-                    memory.save(
-                        "chat:$stamp:2",
-                        "conversation",
-                        "صديقي\n$answer"
-                    )
-
+                    memory.save("chat:$stamp:1", "conversation", "أنت\\n$effectiveQuestion")
+                    memory.save("chat:$stamp:2", "conversation", "صديقي\\n$answer")
                     onReply(answer)
-
                     status = "متصل — ${BuildConfig.VERSION_NAME}"
-
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    status = "تم إيقاف توليد الرد."
+                    throw e
                 } catch (e: Exception) {
-
-                    messages.add(
-                        "صديقي" to
-                            "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}"
-                    )
-
+                    messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
                     status = "تعذر الاتصال بالخادم"
-                    // The foreground voice service manages its own retry loop.
+                } finally {
+                    isGenerating = false
+                    generationJob = null
                 }
             }
         }
@@ -537,19 +540,52 @@ class MainActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                    },
-                                    modifier = Modifier.size(42.dp)
-                                ) {
-                                    Text("+", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineMedium)
+                                Box {
+                                    IconButton(
+                                        onClick = { attachmentMenuExpanded = true },
+                                        modifier = Modifier.size(42.dp)
+                                    ) {
+                                        Text("+", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineMedium)
+                                    }
+                                    DropdownMenu(
+                                        expanded = attachmentMenuExpanded,
+                                        onDismissRequest = { attachmentMenuExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF242333))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("إرفاق صورة") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("التقاط صورة بالكاميرا") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                cameraLauncher.launch(null)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("البحث في الإنترنت") },
+                                            onClick = {
+                                                attachmentMenuExpanded = false
+                                                val query = input.trim()
+                                                if (query.isNotBlank()) {
+                                                    input = ""
+                                                    sendQuestion("ابحث في الإنترنت عن: $query")
+                                                } else {
+                                                    status = "اكتب موضوع البحث أولاً."
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                                 OutlinedTextField(
                                     value = input,
                                     onValueChange = { input = it },
                                     modifier = Modifier.weight(1f),
-                                    placeholder = { Text("راسل صديقي", color = Color(0xFF9C9AAA)) },
+                                    placeholder = { Text("اسأل صديقي أي شيء", color = Color(0xFF9C9AAA)) },
                                     singleLine = false,
                                     maxLines = 4,
                                     shape = RoundedCornerShape(22.dp),
@@ -578,32 +614,26 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     Text("🎙", color = Color.White, style = MaterialTheme.typography.titleLarge)
                                 }
-                                if (input.isNotBlank() || voiceSessionActive) {
+                                if (isGenerating) {
                                     IconButton(
                                         onClick = {
-                                            if (voiceSessionActive) {
-                                                onStopVoice()
-                                                voiceSessionActive = false
-                                                status = "تم إيقاف الاستماع"
-                                            } else {
-                                                val question = input
-                                                input = ""
-                                                sendQuestion(question)
-                                            }
+                                            gateway.cancelCurrentRequest()
+                                            generationJob?.cancel()
                                         },
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .background(Color(0xFF1687F8), RoundedCornerShape(50))
+                                        modifier = Modifier.size(38.dp).background(Color(0xFF1687F8), RoundedCornerShape(11.dp))
                                     ) {
-                                        if (voiceSessionActive) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(13.dp)
-                                                    .background(Color.White, RoundedCornerShape(3.dp))
-                                            )
-                                        } else {
-                                            Text("➤", color = Color.White, style = MaterialTheme.typography.titleLarge)
-                                        }
+                                        Box(Modifier.size(12.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                                    }
+                                } else if (input.isNotBlank() || selectedImageDataUrl != null) {
+                                    IconButton(
+                                        onClick = {
+                                            val question = input
+                                            input = ""
+                                            sendQuestion(question)
+                                        },
+                                        modifier = Modifier.size(38.dp).background(Color(0xFF1687F8), RoundedCornerShape(11.dp))
+                                    ) {
+                                        Text("↑", color = Color.White, style = MaterialTheme.typography.headlineSmall)
                                     }
                                 }
                             }
