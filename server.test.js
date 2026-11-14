@@ -117,3 +117,12 @@ test('chat rate limiter returns 429 after the configured request budget', async 
   assert.equal(nextCalls, 3);
   assert.equal(afterWindow.statusCode, 200);
 });
+
+
+test('authentication mode parser rejects unknown values instead of silently falling back to legacy auth', async () => {
+  const { normalizeAuthMode } = await import('./server.js');
+  assert.equal(normalizeAuthMode('supabase'), 'supabase');
+  assert.equal(normalizeAuthMode('DUAL'), 'dual');
+  assert.equal(normalizeAuthMode('legacy'), 'legacy');
+  assert.equal(normalizeAuthMode('unexpected'), 'invalid');
+});
