@@ -71,7 +71,6 @@ class OpenAiGateway(
 
         val payload = JSONObject()
             .put("input", input)
-            .put("enable_web_search", true)
 
         val request = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/v1/chat")
