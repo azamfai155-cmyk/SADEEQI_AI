@@ -44,7 +44,11 @@ class EncryptedMemoryInstrumentedTest {
         memory.save(id, "private-note", "newer-value")
 
         assertEquals("newer-value", memory.read(id))
-        assertEquals("newer-value", memory.recent(10).first { it.first == id }.second)
+        val recentMatches = memory.recent(10).filter { it.first == id }
+        assertEquals(1, recentMatches.size)
+        assertEquals("newer-value", recentMatches.single().second)
         memory.delete(id)
+        assertNull(memory.read(id))
+        assertTrue(memory.recent(10).none { it.first == id })
     }
 }
