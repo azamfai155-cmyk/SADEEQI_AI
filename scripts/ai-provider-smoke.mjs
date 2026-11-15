@@ -32,5 +32,5 @@ if (!response.ok) {
 const output = typeof data.output_text === 'string' ? data.output_text :
   (data.output || []).flatMap(item => item.content || [])
     .filter(part => part.type === 'output_text').map(part => part.text).join('\n');
-if (!output.trim()) throw new Error('Provider returned an empty response.');
+if (!output.includes('SADEEQI_AI_PROVIDER_OK')) throw new Error('Provider returned an unexpected response.');
 console.log(`PASS: live ${provider} Responses API call succeeded (model: ${model}).`);
