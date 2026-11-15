@@ -173,6 +173,9 @@ class MainActivity : ComponentActivity() {
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
         val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
+        var memoryEntries by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+        var memorySearchQuery by remember { mutableStateOf("") }
+        var isLoadingMemory by remember { mutableStateOf(false) }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -198,6 +201,13 @@ class MainActivity : ComponentActivity() {
         }
         LaunchedEffect(saveDataMode) {
             musicManager.setDataSaver(saveDataMode)
+        }
+        LaunchedEffect(selectedTab) {
+            if (selectedTab == "الذاكرة") {
+                isLoadingMemory = true
+                memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                isLoadingMemory = false
+            }
         }
         var status by remember {
             mutableStateOf("الإصدار 1.5.1 — المحادثة والصوت والموسيقى")
@@ -891,11 +901,53 @@ class MainActivity : ComponentActivity() {
                     }
                     "الذاكرة" -> {
                         Text("ذاكرة صديقي", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
-                        Text("المحادثات التي حفظها التطبيق على هذا الجهاز", color = Color(0xFFD2D0DC))
+                        Text("سجلات الذاكرة المشفرة المحفوظة على هذا الجهاز — أحدث 200 سجل", color = Color(0xFFD2D0DC))
+                        OutlinedTextField(
+                            value = memorySearchQuery,
+                            onValueChange = { memorySearchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            label = { Text("ابحث في الذكريات المحفوظة") }
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("عدد السجلات: ${memoryEntries.size}", color = Color(0xFFD2D0DC), modifier = Modifier.weight(1f))
+                            TextButton(
+                                enabled = !isLoadingMemory,
+                                onClick = {
+                                    scope.launch {
+                                        isLoadingMemory = true
+                                        memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                                        isLoadingMemory = false
+                                    }
+                                }
+                            ) { Text(if (isLoadingMemory) "جارٍ التحديث…" else "تحديث") }
+                        }
+                        val visibleMemories = memoryEntries.filter { (id, value) ->
+                            memorySearchQuery.isBlank() || id.contains(memorySearchQuery, true) || value.contains(memorySearchQuery, true)
+                        }
+                        if (visibleMemories.isEmpty()) {
+                            Text(
+                                if (isLoadingMemory) "جارٍ تحميل الذاكرة…" else "لا توجد ذكريات مطابقة. احفظ رداً من قائمة الرسائل ليبقى في ذاكرتك.",
+                                color = Color(0xFFD2D0DC),
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
                         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            items(messages) { (who, body) ->
-                                Card(modifier = Modifier.padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
-                                    Column(Modifier.padding(12.dp)) { Text(who, color = Color(0xFFE6C77A)); Text(body, color = Color.White) }
+                            items(visibleMemories) { (id, value) ->
+                                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
+                                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                                        Text(if (id.startsWith("chat:")) "محادثة محفوظة" else "ذاكرة محفوظة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                        Text(value, color = Color.White)
+                                        TextButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    runCatching { memory.delete(id) }
+                                                    memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                                                    status = "تم حذف السجل المحدد من الذاكرة."
+                                                }
+                                            }
+                                        ) { Text("حذف هذا السجل", color = Color(0xFFFFB4AB)) }
+                                    }
                                 }
                             }
                         }
