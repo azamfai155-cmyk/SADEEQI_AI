@@ -14,6 +14,7 @@ This document is an evidence-based implementation register. A control is not mar
 - Input shape and size validation exists for chat requests.
 - Node backend has per-instance rate limiting (not globally coordinated across instances).
 - API responses from the Worker already set `Cache-Control: no-store` and `X-Content-Type-Options: nosniff`.
+- Image URL validation now normalizes a trailing DNS root dot before checking localhost and private IPv4 literals; regression tests cover these bypass forms. This is a narrow hardening improvement, not complete SSRF protection.
 
 ## Risks requiring remediation or owner configuration
 
