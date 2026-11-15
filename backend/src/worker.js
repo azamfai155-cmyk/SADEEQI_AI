@@ -267,11 +267,6 @@ export async function handleRequest(request, env) {
     }, 200, cors);
   }
 
-  const config = providerConfig(env);
-  if (!config.apiKey || !config.model || !config.apiUrl) {
-    return json({ error: `${config.provider} server credentials are not configured.` }, 503, cors);
-  }
-
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request body too large.' }, 413, cors);
 
@@ -288,6 +283,11 @@ export async function handleRequest(request, env) {
 
   const validationError = validateInput(body?.input);
   if (validationError) return json({ error: validationError }, 400, cors);
+
+  const config = providerConfig(env);
+  if (!config.apiKey || !config.model || !config.apiUrl) {
+    return json({ error: `${config.provider} server credentials are not configured.` }, 503, cors);
+  }
 
   const payload = {
     model: config.model,
