@@ -43,6 +43,7 @@ class VoiceSettingsTest {
     fun speechRecognitionUsesSelectedLocaleAndFallsBackSafely() {
         assertEquals("ar-YE", VoiceSettings(languageTag = "ar-YE").speechRecognitionLanguageTag())
         assertEquals("ar", VoiceSettings(languageTag = "invalid locale").speechRecognitionLanguageTag())
+        assertEquals("ar", VoiceSettings(languageTag = "en-US").speechRecognitionLanguageTag())
     }
 }
 
