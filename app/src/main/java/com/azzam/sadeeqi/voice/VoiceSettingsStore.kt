@@ -29,6 +29,13 @@ fun VoiceSettings.normalized(): VoiceSettings {
     )
 }
 
+internal fun VoiceSettings.speechRecognitionLanguageTag(): String {
+    val selected = normalized().languageTag
+    // Voice Studio's selected TTS voice may be non-Arabic; keep speech input Arabic.
+    return selected.takeIf { it.equals("ar", ignoreCase = true) || it.startsWith("ar-", ignoreCase = true) }
+        ?: "ar"
+}
+
 class VoiceSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("sadeeqi_voice_settings", Context.MODE_PRIVATE)
 
