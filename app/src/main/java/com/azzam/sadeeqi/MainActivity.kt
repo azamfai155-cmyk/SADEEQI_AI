@@ -36,6 +36,7 @@ import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.memory.ConversationHistory
+import com.azzam.sadeeqi.memory.MemoryRecall
 import java.util.UUID
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
@@ -341,7 +342,7 @@ class MainActivity : ComponentActivity() {
                 try {
                     val answer = withContext(Dispatchers.IO) {
                         val recalledMemories = runCatching {
-                            memory.search("")
+                            memory.recent(200)
                         }.getOrDefault(emptyList())
                         val relevantMemories = MemoryRecall.select(
                             records = recalledMemories,
