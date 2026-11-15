@@ -55,7 +55,7 @@ This is source code only, not a built APK. The canonical Vercel backend health e
 - Vercel deployment status currently reports a build-rate limit. No new deployment or APK artifact is claimed as verified.
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
-**Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+**Security note:** the Android client now uses per-user Supabase sessions; its session store is encrypted with AES-GCM using an Android Keystore key. The backend can still accept the legacy `SADEEQI_APP_TOKEN` when `AUTH_MODE=legacy` or during `AUTH_MODE=dual` migration. Do not distribute a build configured with the shared token. For production, use `AUTH_MODE=supabase` and retire the legacy token after old clients are no longer in use.
 
 ## Supabase user authentication (migration rollout)
 
