@@ -49,7 +49,7 @@ class MemoryRecallTest {
         )
 
         val programResult = MemoryRecall.select(records, "أخبرني عن برنامج صديقي")
-        val speechResult = MemoryRecall.select(records, "أريد كلاماً واضحاً")
+        val speechResult = MemoryRecall.select(records, "أريد كلام واضح باللغة العربية")
 
         assertTrue(programResult.any { it.first == "memory:program" })
         assertTrue(speechResult.any { it.first == "memory:speech" })
