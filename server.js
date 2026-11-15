@@ -21,6 +21,12 @@ const MODEL = PROVIDER === 'groq'
   ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b')
   : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
 const API_KEY = PROVIDER === 'groq' ? GROQ_API_KEY : OPENAI_API_KEY;
+const IDENTITY_POLICY = [
+  'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
+  'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
+  'لا تخلط بين هوية المساعد ومصدر التقنية التي تشغّله. حافظ على هذه الهوية في النص والصوت وفي كل المحادثات.'
+].join('\\n');
+
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
@@ -29,7 +35,7 @@ export function buildProviderRequest({
   model = MODEL,
   apiKey = API_KEY,
   input,
-  instructions = SYSTEM_PROMPT,
+  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\\n\\n'),
   enableWebSearch = false
 }) {
   if (!['groq', 'openai'].includes(provider)) {
