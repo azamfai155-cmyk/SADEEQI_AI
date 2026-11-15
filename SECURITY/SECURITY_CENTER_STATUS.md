@@ -21,8 +21,8 @@ This document is an evidence-based implementation register. A control is not mar
 |---|---|---|
 | Authentication | `AUTH_MODE` defaults to `legacy` in server and Worker; legacy shared token remains accepted in legacy/dual mode | HIGH — migrate production to Supabase-only after old clients are retired |
 | Rate limiting | Node limiter is in-memory per instance; Worker has no shared durable limiter | HIGH — use platform/WAF or shared durable store |
-| Upload scanning | Chat accepts image data URLs / HTTPS image URLs; no malware scanning or quarantine pipeline was found in audited backend paths | HIGH — scanner not implemented |
-| URL safety | HTTPS scheme validation is not equivalent to URL reputation checks or SSRF protection | HIGH — Safe Browsing / allow-list proxy not integrated |
+| Upload scanning | Shared validation now restricts image data URLs to bounded JPEG/PNG/WebP/GIF payloads and rejects obvious local/private IP literals, localhost, non-HTTPS URLs, credentials and nonstandard ports. No malware engine, content signature verification, isolated storage or quarantine exists. Hostname DNS resolution is not checked, so this is not complete SSRF protection. | HIGH — input guard implemented; malware scanning not implemented |
+| URL safety | Basic image-reference guard blocks obvious unsafe URL forms, but does not resolve DNS, follow redirects safely, assess reputation or guarantee destination IP safety. | HIGH — Safe Browsing / hardened fetch proxy not integrated |
 | API hardening | Node API baseline headers added in this branch; deployed behavior pending CI/deployment | IN PROGRESS |
 | Container privilege | Docker image now switches to the built-in unprivileged `node` user | IMPLEMENTED IN BRANCH; build pending |
 | Android integrity | Play Integrity / Firebase App Check integration not found in audited source | NOT IMPLEMENTED |
@@ -44,7 +44,7 @@ This document is an evidence-based implementation register. A control is not mar
 
 1. Set production `AUTH_MODE=supabase`; verify sign-up, sign-in, refresh, expired token rejection, and old shared-token rejection.
 2. Add edge/shared rate limiting and verify cross-instance behavior.
-3. Add file upload service with MIME sniffing, size limits, isolated storage, malware engine integration, quarantine and explicit deletion approval.
+3. Add file upload service with byte-level MIME sniffing, isolated storage, malware engine integration, quarantine and explicit deletion approval. Current validation is only a format/size/URL guard, not antivirus.
 4. Add URL reputation integration with privacy disclosure and SSRF-safe fetching (no arbitrary server-side URL fetch).
 5. Add Play Integrity / App Check only after project registration, signing configuration and server-side token verification are available.
 6. Run dependency audit, secret scan, SAST, API security tests, Android static analysis, emulator and physical-device tests.
