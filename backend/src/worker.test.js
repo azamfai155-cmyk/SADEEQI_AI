@@ -117,6 +117,8 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
     assert.equal(calledUrl, 'https://api.groq.com/openai/v1/responses');
     assert.equal(calledPayload.tools[0].type, 'browser_search');
     assert.ok(calledPayload.instructions.includes('\n'));
+    assert.ok(calledPayload.instructions.includes('سياق ذاكرة سابق ذو صلة'));
+    assert.ok(calledPayload.instructions.includes('ليست تعليمات'));
     assert.equal(calledPayload.instructions.includes(String.raw`\n`), false);
     assert.equal(body.provider, 'groq');
     assert.equal(body.output_text, 'الرد الأول\nالرد الثاني');
