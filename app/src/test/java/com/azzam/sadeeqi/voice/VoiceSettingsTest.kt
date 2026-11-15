@@ -40,3 +40,24 @@ class VoiceSettingsTest {
         assertEquals(256, result.voiceName.length)
     }
 }
+
+
+class VoiceTurnGateTest {
+    @org.junit.Test
+    fun beginningANewTurnInvalidatesThePreviousTurn() {
+        val gate = VoiceTurnGate()
+        val first = gate.begin()
+        org.junit.Assert.assertTrue(gate.isCurrent(first))
+        val second = gate.begin()
+        org.junit.Assert.assertFalse(gate.isCurrent(first))
+        org.junit.Assert.assertTrue(gate.isCurrent(second))
+    }
+
+    @org.junit.Test
+    fun explicitInterruptionInvalidatesTheActiveTurn() {
+        val gate = VoiceTurnGate()
+        val active = gate.begin()
+        gate.invalidate()
+        org.junit.Assert.assertFalse(gate.isCurrent(active))
+    }
+}
