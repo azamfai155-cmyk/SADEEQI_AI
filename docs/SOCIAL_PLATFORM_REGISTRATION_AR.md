@@ -160,7 +160,7 @@
 
 المفاتيح التالية أمثلة أسماء إعدادات وليست قيماً. لن نضيفها قبل أن يصبح OAuth callback وقاعدة البيانات والهوية جاهزة:
 
-- Meta: `META_APP_ID`, `META_APP_SECRET`
+- Meta: `META_CLIENT_ID`, `META_CLIENT_SECRET`
 - TikTok: `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - X: `X_CLIENT_ID`, `X_CLIENT_SECRET`
@@ -171,7 +171,7 @@
 - Pinterest: `PINTEREST_APP_ID`, `PINTEREST_APP_SECRET`
 - Telegram: `TELEGRAM_BOT_TOKEN`
 
-ملاحظة: أسماء متغيرات Meta الحالية في endpoint الموجود هي META_APP_ID وMETA_APP_SECRET. يجب توحيد بقية أسماء الإعدادات مع الكود قبل إدخال أي مفاتيح.
+ملاحظة: يستخدم Worker الحالي الاسمين META_CLIENT_ID وMETA_CLIENT_SECRET لمعرّفات تطبيق Meta وسرّه. تبقى هذه القيم على الخادم فقط، ولا تعني أن OAuth أو ربط الحسابات أصبح مفعّلاً.
 
 ## 5. متطلبات أمنية قبل تشغيل OAuth
 
