@@ -1,0 +1,39 @@
+// Conservative input checks for image references. This is NOT antivirus or a complete SSRF defense.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_DATA_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+function isPrivateIpv4(host) {
+  const parts = host.split('.');
+  if (parts.length !== 4 || parts.some(part => !/^\d{1,3}$/.test(part) || Number(part) > 255)) return false;
+  const [a, b] = parts.map(Number);
+  return a === 0 || a === 10 || a === 127 ||
+    (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) ||
+    (a >= 224);
+}
+
+export function isSafeImageInput(value) {
+  if (typeof value !== 'string' || value.length > 7000 * 1024) return false;
+
+  if (value.startsWith('data:')) {
+    const match = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+    if (!match || !ALLOWED_DATA_MIME.has(match[1])) return false;
+    const encoded = match[2];
+    const estimatedBytes = Math.floor(encoded.length * 3 / 4) - (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0);
+    return estimatedBytes > 0 && estimatedBytes <= MAX_IMAGE_BYTES;
+  }
+
+  if (value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return false;
+    if (url.port && url.port !== '443') return false;
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return false;
+    if (host.includes(':')) return false; // Deny IPv6 literals; use a trusted hostname.
+    if (isPrivateIpv4(host)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
