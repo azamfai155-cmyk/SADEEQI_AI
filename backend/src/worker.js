@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { isSafeImageInput } from '../../security/input-validation.js';
 
 const DEFAULT_SYSTEM_PROMPT =
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية، واستخدم اللهجة اليمنية بصورة طبيعية عندما تلائم السياق. كن عملياً ودقيقاً وصريحاً، ولا تدّع تنفيذ إجراء لم تنفذه. اطلب موافقة عزام قبل أي إجراء حساس أو شراء أو إرسال أو حذف. احترم الخصوصية ولا تطلب كلمات المرور أو مفاتيح API. وضّح عدم اليقين واستشهد بالمصادر عند استخدام البحث.';
@@ -168,8 +169,7 @@ export function validateInput(input) {
       if (part.type === 'input_text' && (typeof part.text !== 'string' || part.text.length > MAX_TEXT_LENGTH)) {
         return 'Invalid input text.';
       }
-      if (part.type === 'input_image' && (typeof part.image_url !== 'string' ||
-          !(part.image_url.startsWith('https://') || part.image_url.startsWith('data:image/')))) {
+      if (part.type === 'input_image' && (!isSafeImageInput(part.image_url))) {
         return 'Invalid image input.';
       }
     }
