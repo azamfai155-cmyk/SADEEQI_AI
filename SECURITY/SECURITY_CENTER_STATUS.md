@@ -24,6 +24,7 @@ This document is an evidence-based implementation register. A control is not mar
 | Upload scanning | Chat accepts image data URLs / HTTPS image URLs; no malware scanning or quarantine pipeline was found in audited backend paths | HIGH — scanner not implemented |
 | URL safety | HTTPS scheme validation is not equivalent to URL reputation checks or SSRF protection | HIGH — Safe Browsing / allow-list proxy not integrated |
 | API hardening | Node API baseline headers added in this branch; deployed behavior pending CI/deployment | IN PROGRESS |
+| Container privilege | Docker image now switches to the built-in unprivileged `node` user | IMPLEMENTED IN BRANCH; build pending |
 | Android integrity | Play Integrity / Firebase App Check integration not found in audited source | NOT IMPLEMENTED |
 | Secret scanning | CI secret scanning / push protection not yet evidenced | NOT VERIFIED |
 | Dependency scanning | CI dependency vulnerability scanning not yet evidenced | NOT VERIFIED |
