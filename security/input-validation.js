@@ -54,7 +54,9 @@ export function isSafeImageInput(value) {
     const url = new URL(value);
     if (url.protocol !== 'https:' || url.username || url.password) return false;
     if (url.port && url.port !== '443') return false;
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    // DNS treats a trailing root dot as equivalent (e.g. localhost. == localhost).
+    // Normalize it before local-name and IPv4 checks to avoid simple suffix bypasses.
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
     if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return false;
     if (host.includes(':')) return false; // Deny IPv6 literals; use a trusted hostname.
     if (isPrivateIpv4(host)) return false;
