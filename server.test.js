@@ -126,3 +126,61 @@ test('authentication mode parser rejects unknown values instead of silently fall
   assert.equal(normalizeAuthMode('legacy'), 'legacy');
   assert.equal(normalizeAuthMode('unexpected'), 'invalid');
 });
+
+
+test('Groq Responses request uses supported endpoint and omits unsupported store option', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const request = buildProviderRequest({
+    provider: 'groq', model: 'openai/gpt-oss-20b', apiKey: 'test-groq-key',
+    input: [{ role: 'user', content: 'hello' }]
+  });
+  assert.equal(request.url, 'https://api.groq.com/openai/v1/responses');
+  assert.equal(request.init.headers.Authorization, 'Bearer test-groq-key');
+  const payload = JSON.parse(request.init.body);
+  assert.equal(payload.model, 'openai/gpt-oss-20b');
+  assert.equal('store' in payload, false);
+  assert.equal('tools' in payload, false);
+});
+
+test('OpenAI Responses request disables response storage by default', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const request = buildProviderRequest({
+    provider: 'openai', model: 'gpt-4.1-mini', apiKey: 'test-openai-key',
+    input: [{ role: 'user', content: 'hello' }]
+  });
+  assert.equal(request.url, 'https://api.openai.com/v1/responses');
+  assert.equal(JSON.parse(request.init.body).store, false);
+});
+
+test('web search is opt-in and uses the provider-specific tool name', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const groq = buildProviderRequest({
+    provider: 'groq', model: 'openai/gpt-oss-20b', apiKey: 'x',
+    input: [{ role: 'user', content: 'hello' }], enableWebSearch: true
+  });
+  const openai = buildProviderRequest({
+    provider: 'openai', model: 'gpt-4.1-mini', apiKey: 'x',
+    input: [{ role: 'user', content: 'hello' }], enableWebSearch: true
+  });
+  assert.deepEqual(JSON.parse(groq.init.body).tools, [{ type: 'browser_search' }]);
+  assert.deepEqual(JSON.parse(openai.init.body).tools, [{ type: 'web_search' }]);
+});
+
+test('provider response text extractor handles both Responses API output shapes', async () => {
+  const { extractProviderText } = await import('./server.js');
+  assert.equal(extractProviderText({ output_text: '  ready  ' }), 'ready');
+  assert.equal(extractProviderText({ output: [
+    { type: 'message', content: [{ type: 'output_text', text: 'مرحبا' }] }
+  ] }), 'مرحبا');
+  assert.equal(extractProviderText({ output: [] }), '');
+});
+
+test('provider request builder rejects unsupported providers and missing keys', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  assert.throws(() => buildProviderRequest({
+    provider: 'unknown', apiKey: 'x', input: [{ role: 'user', content: 'x' }]
+  }), /Unsupported AI_PROVIDER/);
+  assert.throws(() => buildProviderRequest({
+    provider: 'groq', apiKey: '', input: [{ role: 'user', content: 'x' }]
+  }), /credentials are not configured/);
+});
