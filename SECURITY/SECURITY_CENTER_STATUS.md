@@ -28,7 +28,7 @@ This document is an evidence-based implementation register. A control is not mar
 | Android integrity | Play Integrity / Firebase App Check integration not found in audited source | NOT IMPLEMENTED |
 | Secret scanning | CI secret scanning / push protection not yet evidenced | NOT VERIFIED |
 | Dependency scanning | CI dependency vulnerability scanning not yet evidenced | NOT VERIFIED |
-| SAST / DAST | Semgrep / OWASP ZAP / MobSF results not yet produced | NOT RUN |
+| SAST / DAST | Semgrep ran 113 rules across 72 tracked files and reported 20 findings; report artifact uploaded for triage. Findings have not yet been classified or remediated. OWASP ZAP / MobSF not run. | REVIEW REQUIRED — Semgrep findings pending triage |
 | Backups | encrypted export exists for local memory; restore drill and server backup coverage not evidenced | NOT VERIFIED |
 | Signing | update manager has signer fingerprint validation support, but fixed production fingerprint/official release pipeline not verified | NOT VERIFIED |
 
@@ -39,6 +39,11 @@ This document is an evidence-based implementation register. A control is not mar
 - Do not claim Google Play Protect, Play Integrity, Firebase App Check, Safe Browsing, ZAP, MobSF, or malware scanning is active until configured and tested.
 - Do not expose secrets in health endpoints, logs, CI output, APKs, or reports.
 - Keep security status values limited to: `safe_for_checks_run`, `review_required`, `threat_detected`, `scan_incomplete`.
+
+## Latest CI evidence (2026-11-15)
+
+- Security workflow run `43713538579`: backend dependency audit and backend tests passed; Semgrep completed and uploaded artifact `14161203673` with 20 findings; Android unit/build job was still running at the last check.
+- This workflow currently treats Semgrep findings as an uploaded report rather than a blocking gate. A green job means the scan ran, not that the findings are clean.
 
 ## Required release gates
 
