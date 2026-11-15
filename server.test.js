@@ -189,11 +189,12 @@ test('provider request builder rejects unsupported providers and missing keys', 
 import { isSafeImageInput } from './security/input-validation.js';
 
 test('image input guard allows bounded supported image data and rejects unsafe references', () => {
-  assert.equal(isSafeImageInput('data:image/png;base64,iVBORw0KGgo='), true);
+  assert.equal(isSafeImageInput('data:image/png;base64,iVBORw0KGgoAAAANSUhE'), true);
   assert.equal(isSafeImageInput('https://cdn.example.com/photo.jpg'), true);
   for (const value of [
     'data:text/html;base64,SGVsbG8=',
     'data:image/svg+xml;base64,PHN2Zz4=',
+    'data:image/png;base64,/9j/4AAQSkZJRgAB',
     'data:image/png;base64,',
     'http://cdn.example.com/photo.jpg',
     'https://127.0.0.1/private.png',
