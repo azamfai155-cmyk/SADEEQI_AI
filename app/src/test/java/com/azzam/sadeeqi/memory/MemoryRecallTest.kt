@@ -9,10 +9,10 @@ class MemoryRecallTest {
     @Test
     fun selectsRelevantArabicMemoryAndExcludesCurrentConversation() {
         val records = listOf(
-            "chat:old:100:1" to "أنت\\nأستخدم هاتف سامسونج وأعمل على مشروع صديقي.",
-            "chat:old:101:2" to "صديقي\\nيمكننا متابعة مشروع التطبيق لاحقاً.",
-            "chat:current:200:1" to "أنت\\nمشروع صديقي الحالي قيد التطوير.",
-            "chat:other:300:1" to "أنت\\nأحب الموسيقى والرياضة."
+            "chat:old:100:1" to "أنت\nأستخدم هاتف سامسونج وأعمل على مشروع صديقي.",
+            "chat:old:101:2" to "صديقي\nيمكننا متابعة مشروع التطبيق لاحقاً.",
+            "chat:current:200:1" to "أنت\nمشروع صديقي الحالي قيد التطوير.",
+            "chat:other:300:1" to "أنت\nأحب الموسيقى والرياضة."
         )
 
         val result = MemoryRecall.select(
@@ -29,7 +29,7 @@ class MemoryRecallTest {
     @Test
     fun ignoresQueriesWithoutUsefulTerms() {
         val result = MemoryRecall.select(
-            records = listOf("chat:old:1:1" to "أنت\\nأستخدم هاتف سامسونج"),
+            records = listOf("chat:old:1:1" to "أنت\nأستخدم هاتف سامسونج"),
             query = "هل هذا هو؟"
         )
         assertTrue(result.isEmpty())
