@@ -44,6 +44,7 @@ This document is an evidence-based implementation register. A control is not mar
 
 - Security workflow run `43713538579`: backend dependency audit and backend tests passed; Semgrep completed and uploaded artifact `14161203673` with 20 findings; Android unit/build job was still running at the last check.
 - This workflow currently treats Semgrep findings as an uploaded report rather than a blocking gate. A green job means the scan ran, not that the findings are clean.
+- Newer security workflow run `43720955346`: dependency audit, backend tests, Android unit/build, and API 34 emulator instrumentation all passed. Its Semgrep artifact `14164566872` contains 2 warnings, both from exported launcher activity declarations: one stale root-level manifest (removed in the follow-up commit) and the active `MainActivity` launcher declaration. The remaining export is required for the Android launcher and has no external deep-link intent filter; this is a reviewed expected warning, not a claim that all security risks are resolved.
 
 ## Required release gates
 
