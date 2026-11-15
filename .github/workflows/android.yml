@@ -92,10 +92,13 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
+          cores: 2
+          ram-size: 4096M
+          disk-size: 4096M
           emulator-boot-timeout: 1200
-          # Give the emulator enough RAM and disk, and always start from a clean
-          # cold boot to avoid stale snapshots / package-manager service crashes.
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-snapshot-load -wipe-data -memory 4096 -cores 2 -partition-size 4096
+          # Cold boot a clean AVD; RAM and disk are configured through the
+          # action's supported inputs rather than emulator command-line flags.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-snapshot-load -wipe-data
           # The action splits script input on newlines and runs each line in a
           # separate shell. Keep this as one folded command so status + diagnostics
           # execute in the same shell after the emulator action has booted the device.
