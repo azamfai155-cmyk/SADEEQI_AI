@@ -329,21 +329,23 @@ class MainActivity : ComponentActivity() {
             // Capture the originating conversation before the asynchronous request starts.
             // The user may switch to another conversation while the response is in flight.
             val requestConversationId = currentConversationId
+            // Freeze this conversation's context now; the user may switch chats before IO begins.
+            val requestTurns = messages.takeLast(24).map { (who, body) ->
+                OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
+            }
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             isGenerating = true
             generationJob = scope.launch {
                 try {
-                    val turns = messages.takeLast(24).map { (who, body) ->
-                        OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
-                    }
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(requestTurns, imageForRequest)
                     }
-                    messages.add("صديقي" to answer)
+                    val isStillViewingRequest = currentConversationId == requestConversationId
+                    if (isStillViewingRequest) messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
-                    if (voiceSettings.autoRead) {
+                    if (voiceSettings.autoRead && isStillViewingRequest) {
                         withContext(Dispatchers.Main) {
                             messageReader.language = Locale.forLanguageTag(voiceSettings.languageTag)
                             messageReader.setSpeechRate(voiceSettings.speechRate)
@@ -363,7 +365,9 @@ class MainActivity : ComponentActivity() {
                     status = "تم إيقاف توليد الرد."
                     throw e
                 } catch (e: Exception) {
-                    messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
+                    if (currentConversationId == requestConversationId) {
+                        messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
+                    }
                     status = "تعذر الاتصال بالخادم"
                 } finally {
                     isGenerating = false
