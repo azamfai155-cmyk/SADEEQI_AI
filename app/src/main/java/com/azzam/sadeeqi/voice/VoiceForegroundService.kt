@@ -374,3 +374,12 @@ class VoiceForegroundService : Service() {
         private const val NOTIFICATION_ID = 2407
     }
 }
+
+
+/** Tracks which voice turn is allowed to publish a response. */
+internal class VoiceTurnGate {
+    private val generation = java.util.concurrent.atomic.AtomicLong(0)
+    fun begin(): Long = generation.incrementAndGet()
+    fun invalidate(): Long = generation.incrementAndGet()
+    fun isCurrent(turnId: Long): Boolean = generation.get() == turnId
+}
