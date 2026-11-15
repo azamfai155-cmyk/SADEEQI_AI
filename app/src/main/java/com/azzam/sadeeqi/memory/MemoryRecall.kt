@@ -38,9 +38,8 @@ object MemoryRecall {
             word.startsWith("وال") || word.startsWith("فال") ||
                 word.startsWith("بال") || word.startsWith("كال") -> word.drop(3)
             word.startsWith("ال") -> word.drop(2)
-            word.startsWith("و") || word.startsWith("ف") ||
-                word.startsWith("ب") || word.startsWith("ك") ||
-                word.startsWith("ل") -> word.drop(1)
+            // Single-letter prefixes are ambiguous in Arabic (e.g. برنامج، كلام،
+            // وطن). Keep the token intact rather than corrupting its lexical root.
             else -> word
         }
         val suffixes = listOf("كما", "هما", "كم", "كن", "هم", "هن", "ها", "نا",
