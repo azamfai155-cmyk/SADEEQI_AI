@@ -82,7 +82,7 @@ jobs:
           retention-days: 7
 
       - name: Run instrumentation tests on API 34 emulator
-        timeout-minutes: 30
+        timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@v2
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
@@ -92,16 +92,15 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
-          # Avoid post-boot settings mutations that previously hit a transient
-          # Android framework service restart (Broken pipe) on the hosted runner.
-          disable-animations: false
           emulator-boot-timeout: 1200
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          # Give the emulator enough RAM and disk, and always start from a clean
+          # cold boot to avoid stale snapshots / package-manager service crashes.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-snapshot-load -wipe-data -memory 4096 -cores 2 -partition-size 4096
           # The action splits script input on newlines and runs each line in a
           # separate shell. Keep this as one folded command so status + diagnostics
           # execute in the same shell after the emulator action has booted the device.
           script: >-
-            set +e; gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"; test_status=$?; adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true; adb devices -l > android-adb-devices.txt 2>&1 || true; exit "$test_status"
+            set +e; adb wait-for-device; gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"; test_status=$?; adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true; adb devices -l > android-adb-devices.txt 2>&1 || true; exit "$test_status"
 
       - name: Upload Android instrumentation diagnostics
         if: always()
