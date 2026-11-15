@@ -42,6 +42,20 @@ class MemoryRecallTest {
     }
 
     @Test
+    fun doesNotStripLettersFromOrdinaryArabicWords() {
+        val records = listOf(
+            "memory:program" to "برنامج صديقي لإدارة المحادثات",
+            "memory:speech" to "كلام واضح باللغة العربية"
+        )
+
+        val programResult = MemoryRecall.select(records, "أخبرني عن برنامج صديقي")
+        val speechResult = MemoryRecall.select(records, "أريد كلاماً واضحاً")
+
+        assertTrue(programResult.any { it.first == "memory:program" })
+        assertTrue(speechResult.any { it.first == "memory:speech" })
+    }
+
+    @Test
     fun ignoresQueriesWithoutUsefulTerms() {
         val result = MemoryRecall.select(
             records = listOf("chat:old:1:1" to "أنت\nأستخدم هاتف سامسونج"),
