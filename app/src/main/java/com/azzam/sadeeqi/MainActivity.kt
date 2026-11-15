@@ -340,7 +340,19 @@ class MainActivity : ComponentActivity() {
             generationJob = scope.launch {
                 try {
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(requestTurns, imageForRequest)
+                        val recalledMemories = runCatching {
+                            memory.search("")
+                        }.getOrDefault(emptyList())
+                        val relevantMemories = MemoryRecall.select(
+                            records = recalledMemories,
+                            query = effectiveQuestion,
+                            excludedIdPrefix = "chat:$requestConversationId:"
+                        )
+                        val contextualTurns = MemoryRecall.attachToLatestUserTurn(
+                            requestTurns,
+                            relevantMemories
+                        )
+                        gateway.reply(contextualTurns, imageForRequest)
                     }
                     val isStillViewingRequest = currentConversationId == requestConversationId
                     if (isStillViewingRequest) messages.add("صديقي" to answer)
