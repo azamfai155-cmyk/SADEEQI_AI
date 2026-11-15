@@ -28,6 +28,7 @@ class VoiceController(
     @Volatile private var microphoneMuted = false
     @Volatile private var speaking = false
     private var lastUtteranceId: String? = null
+    private val settingsStore = VoiceSettingsStore(appContext)
 
     init { tts = TextToSpeech(appContext, this) }
 
@@ -131,19 +132,25 @@ class VoiceController(
             if (conversationActive) scheduleListening(250)
             return
         }
+        val settings = settingsStore.load()
+        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
         speaking = true
-        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
+        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale("ar"))
+            val settings = settingsStore.load()
+            val locale = Locale.forLanguageTag(settings.languageTag)
+            val result = tts?.setLanguage(locale)
             ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
                 result != TextToSpeech.LANG_NOT_SUPPORTED
-            tts?.setSpeechRate(0.96f)
-            tts?.setPitch(0.98f)
+            val selectedVoice = tts?.voices?.firstOrNull { it.name == settings.voiceName }
+            if (selectedVoice != null) tts?.voice = selectedVoice
+            tts?.setSpeechRate(settings.speechRate)
+            tts?.setPitch(settings.pitch)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) { speaking = true }
                 override fun onDone(utteranceId: String?) {
