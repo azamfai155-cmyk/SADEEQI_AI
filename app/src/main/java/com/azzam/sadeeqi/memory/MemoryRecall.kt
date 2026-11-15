@@ -26,10 +26,35 @@ object MemoryRecall {
         .replace('ى', 'ي')
         .replace('ة', 'ه')
 
+    /**
+     * A deliberately light Arabic normalizer: remove common conjunction/
+     * preposition prefixes and possessive/plural suffixes without a remote model.
+     * This helps match forms such as "هاتفي" with "هاتف" while keeping the
+     * original memory text unchanged.
+     */
+    private fun canonicalToken(token: String): String {
+        var word = token
+        word = when {
+            word.startsWith("وال") || word.startsWith("فال") ||
+                word.startsWith("بال") || word.startsWith("كال") -> word.drop(3)
+            word.startsWith("ال") -> word.drop(2)
+            word.startsWith("و") || word.startsWith("ف") ||
+                word.startsWith("ب") || word.startsWith("ك") ||
+                word.startsWith("ل") -> word.drop(1)
+            else -> word
+        }
+        val suffixes = listOf("كما", "هما", "كم", "كن", "هم", "هن", "ها", "نا",
+            "ية", "يات", "ات", "ون", "ين", "ان", "ه", "ك", "ي")
+        val suffix = suffixes.firstOrNull { word.length - it.length >= 3 && word.endsWith(it) }
+        if (suffix != null) word = word.dropLast(suffix.length)
+        return word
+    }
+
     private fun tokens(value: String): Set<String> =
         Regex("[\\p{L}\\p{N}]{3,}")
             .findAll(normalize(value))
-            .map { it.value }
+            .map { canonicalToken(it.value) }
+            .filter { it.length >= 3 }
             .filterNot { it in stopWords }
             .toSet()
 
