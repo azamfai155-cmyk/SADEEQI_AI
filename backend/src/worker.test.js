@@ -269,3 +269,15 @@ test('social provider readiness uses the same Meta and Pinterest credential name
     assert.equal(providers[id].connected, false, id + ' must not claim OAuth connection');
   }
 });
+
+
+import { isSafeImageInput } from '../../security/input-validation.js';
+
+test('shared image guard blocks private-network hosts and unsafe data image formats', () => {
+  assert.equal(isSafeImageInput('https://images.example.org/photo.webp'), true);
+  assert.equal(isSafeImageInput('data:image/jpeg;base64,/9j/2Q=='), true);
+  assert.equal(isSafeImageInput('https://192.168.0.1/photo.jpg'), false);
+  assert.equal(isSafeImageInput('https://[::1]/photo.jpg'), false);
+  assert.equal(isSafeImageInput('https://example.org:8080/photo.jpg'), false);
+  assert.equal(isSafeImageInput('data:image/svg+xml;base64,PHN2Zz4='), false);
+});
