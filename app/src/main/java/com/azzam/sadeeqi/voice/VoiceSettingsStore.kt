@@ -15,7 +15,9 @@ data class VoiceSettings(
 
 /** Sanitizes persisted/user-controlled values before they reach Android's TTS engine. */
 fun VoiceSettings.normalized(): VoiceSettings {
-    val safeLanguage = languageTag.trim().takeIf { it.isNotEmpty() }
+    val candidateLanguage = languageTag.trim()
+    val safeLanguage = candidateLanguage
+        .takeIf { it.matches(Regex("[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*")) }
         ?.let { Locale.forLanguageTag(it).toLanguageTag().takeUnless { tag -> tag == "und" } }
         ?: "ar"
     return copy(
