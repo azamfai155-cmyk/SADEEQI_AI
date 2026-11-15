@@ -20,13 +20,40 @@ export function normalizeAuthMode(value) {
 const AUTH_MODE = normalizeAuthMode(process.env.AUTH_MODE);
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
-const PROVIDER = (process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const MODEL = PROVIDER === 'groq'
-  ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b')
-  : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
-const API_KEY = PROVIDER === 'groq' ? GROQ_API_KEY : OPENAI_API_KEY;
+export function resolveAiProviderConfig(env = process.env) {
+  const provider = (env.AI_PROVIDER || 'groq').toLowerCase();
+
+  if (!['groq', 'openai'].includes(provider)) {
+    return { provider, apiKey: '', model: '', apiUrl: '' };
+  }
+
+  // Paid providers are opt-in only. The default/free configuration must never
+  // silently send requests to a billable API when the Groq key is missing.
+  if (provider === 'openai' && env.ALLOW_PAID_AI_PROVIDER !== 'true') {
+    return { provider, apiKey: '', model: '', apiUrl: '' };
+  }
+
+  if (provider === 'groq') {
+    return {
+      provider,
+      apiKey: env.GROQ_API_KEY || '',
+      model: env.GROQ_MODEL || 'openai/gpt-oss-20b',
+      apiUrl: 'https://api.groq.com/openai/v1/responses'
+    };
+  }
+
+  return {
+    provider,
+    apiKey: env.OPENAI_API_KEY || '',
+    model: env.OPENAI_MODEL || 'gpt-4.1-mini',
+    apiUrl: 'https://api.openai.com/v1/responses'
+  };
+}
+
+const ACTIVE_PROVIDER = resolveAiProviderConfig(process.env);
+const PROVIDER = ACTIVE_PROVIDER.provider;
+const MODEL = ACTIVE_PROVIDER.model;
+const API_KEY = ACTIVE_PROVIDER.apiKey;
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
   'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
