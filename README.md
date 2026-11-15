@@ -71,3 +71,8 @@ The Android client no longer embeds the shared backend bearer token. It signs us
 6. Only after the new APK is distributed and old clients are retired, change Vercel `AUTH_MODE` to `supabase` and delete the legacy `SADEEQI_APP_TOKEN` variable. This permanently rejects the shared-token scheme.
 
 Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user passwords. The project URL and anon/public key may be embedded in the APK; backend provider credentials remain server-only. These branch changes are source code and are not a production deployment.
+
+## Social Hub — developer onboarding
+- دليل التسجيل الرسمي للمنصات: [docs/SOCIAL_PLATFORM_REGISTRATION_AR.md](docs/SOCIAL_PLATFORM_REGISTRATION_AR.md).
+- نقطة Social Hub الحالية تعرض جاهزية إعداد المطور فقط؛ لا توجد تدفقات OAuth أو حسابات متصلة أو نشر فعلي حتى الآن.
+- لا تُنشئ Redirect URI قبل نشر callback الفعلي، ولا تضع Client Secrets أو Bot Tokens في التطبيق أو المستودع.
