@@ -184,3 +184,24 @@ test('provider request builder rejects unsupported providers and missing keys', 
     provider: 'groq', apiKey: '', input: [{ role: 'user', content: 'x' }]
   }), /credentials are not configured/);
 });
+
+
+import { isSafeImageInput } from './security/input-validation.js';
+
+test('image input guard allows bounded supported image data and rejects unsafe references', () => {
+  assert.equal(isSafeImageInput('data:image/png;base64,iVBORw0KGgo='), true);
+  assert.equal(isSafeImageInput('https://cdn.example.com/photo.jpg'), true);
+  for (const value of [
+    'data:text/html;base64,SGVsbG8=',
+    'data:image/svg+xml;base64,PHN2Zz4=',
+    'data:image/png;base64,',
+    'http://cdn.example.com/photo.jpg',
+    'https://127.0.0.1/private.png',
+    'https://10.0.0.5/image.png',
+    'https://192.168.1.10/image.png',
+    'https://localhost/image.png',
+    'https://service.local/image.png',
+    'https://user:pass@cdn.example.com/image.png',
+    'https://cdn.example.com:8443/image.png'
+  ]) assert.equal(isSafeImageInput(value), false, value);
+});
