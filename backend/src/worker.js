@@ -184,20 +184,27 @@ export function validateInput(input) {
   return null;
 }
 
-function providerConfig(env) {
-  const provider = (env.AI_PROVIDER || (env.GROQ_API_KEY ? 'groq' : 'openai')).toLowerCase();
+export function providerConfig(env) {
+  const provider = (env.AI_PROVIDER || 'groq').toLowerCase();
   if (!['groq', 'openai'].includes(provider)) return { provider, apiKey: '', model: '', apiUrl: '' };
+
+  // Never fall back to a billable provider implicitly. OpenAI requires an
+  // explicit owner-controlled opt-in in addition to AI_PROVIDER=openai.
+  if (provider === 'openai' && env.ALLOW_PAID_AI_PROVIDER !== 'true') {
+    return { provider, apiKey: '', model: '', apiUrl: '' };
+  }
+
   if (provider === 'groq') {
     return {
       provider,
-      apiKey: env.GROQ_API_KEY,
+      apiKey: env.GROQ_API_KEY || '',
       model: env.GROQ_MODEL || 'openai/gpt-oss-20b',
       apiUrl: 'https://api.groq.com/openai/v1/responses'
     };
   }
   return {
     provider,
-    apiKey: env.OPENAI_API_KEY,
+    apiKey: env.OPENAI_API_KEY || '',
     model: env.OPENAI_MODEL || 'gpt-4.1-mini',
     apiUrl: 'https://api.openai.com/v1/responses'
   };

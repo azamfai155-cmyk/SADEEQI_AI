@@ -206,3 +206,35 @@ test('image input guard allows bounded supported image data and rejects unsafe r
     'https://cdn.example.com:8443/image.png'
   ]) assert.equal(isSafeImageInput(value), false, value);
 });
+
+
+test('free-first provider policy defaults to Groq and never falls back to paid OpenAI', async () => {
+  const { resolveAiProviderConfig } = await import('./server.js');
+  const config = resolveAiProviderConfig({
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(config.provider, 'groq');
+  assert.equal(config.apiKey, '');
+  assert.equal(config.apiUrl, 'https://api.groq.com/openai/v1/responses');
+});
+
+test('OpenAI provider is blocked unless paid usage is explicitly enabled', async () => {
+  const { resolveAiProviderConfig } = await import('./server.js');
+  const blocked = resolveAiProviderConfig({
+    AI_PROVIDER: 'openai',
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(blocked.apiKey, '');
+  assert.equal(blocked.apiUrl, '');
+
+  const enabled = resolveAiProviderConfig({
+    AI_PROVIDER: 'openai',
+    ALLOW_PAID_AI_PROVIDER: 'true',
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(enabled.apiKey, 'paid-key');
+  assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
+});

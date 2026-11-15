@@ -281,3 +281,35 @@ test('shared image guard blocks private-network hosts and unsafe data image form
   assert.equal(isSafeImageInput('https://example.org:8080/photo.jpg'), false);
   assert.equal(isSafeImageInput('data:image/svg+xml;base64,PHN2Zz4='), false);
 });
+
+
+test('free-first provider policy defaults to Groq and blocks implicit OpenAI billing', async () => {
+  const { providerConfig } = await import('./worker.js');
+  const config = providerConfig({
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(config.provider, 'groq');
+  assert.equal(config.apiKey, '');
+  assert.equal(config.apiUrl, 'https://api.groq.com/openai/v1/responses');
+});
+
+test('Worker OpenAI provider requires explicit paid opt-in', async () => {
+  const { providerConfig } = await import('./worker.js');
+  const blocked = providerConfig({
+    AI_PROVIDER: 'openai',
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(blocked.apiKey, '');
+  assert.equal(blocked.apiUrl, '');
+
+  const enabled = providerConfig({
+    AI_PROVIDER: 'openai',
+    ALLOW_PAID_AI_PROVIDER: 'true',
+    OPENAI_API_KEY: 'paid-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(enabled.apiKey, 'paid-key');
+  assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
+});
