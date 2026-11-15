@@ -29,6 +29,8 @@ fun VoiceSettings.normalized(): VoiceSettings {
     )
 }
 
+internal fun VoiceSettings.speechRecognitionLanguageTag(): String = normalized().languageTag
+
 class VoiceSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("sadeeqi_voice_settings", Context.MODE_PRIVATE)
 
