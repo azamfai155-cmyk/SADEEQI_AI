@@ -133,6 +133,34 @@ test('input validation enforces the supported turn and content shapes', () => {
   assert.equal(validateInput([]), 'input must contain 1 to 24 turns.');
 });
 
+test('rejects oversized streamed request bodies and cancels the stream immediately', async () => {
+  let pulls = 0;
+  let canceled = false;
+  const oversizedStream = new ReadableStream({
+    pull(controller) {
+      pulls += 1;
+      controller.enqueue(new Uint8Array(pulls === 1 ? 12 * 1024 * 1024 : 1));
+    },
+    cancel() {
+      canceled = true;
+    }
+  }, { highWaterMark: 0 });
+  const oversizedRequest = new Request('https://worker.example/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: oversizedStream,
+    duplex: 'half'
+  });
+  const response = await handleRequest(oversizedRequest, {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token'
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: 'Request body too large.' });
+  assert.equal(pulls, 2, 'must stop reading after the first byte beyond the limit');
+  assert.equal(canceled, true, 'must cancel the oversized request stream');
+});
+
 test('OPTIONS respects configured origin and unknown routes return 404', async () => {
   const blocked = await handleRequest(request('/v1/chat', {
     method: 'OPTIONS',
