@@ -33,4 +33,16 @@ class EncryptedMemoryInstrumentedTest {
         assertEquals("updated-secret", memory.read("acceptance-key"))
         memory.delete("acceptance-key")
     }
+
+    @Test fun repeatedLogicalIdsReturnTheNewestEncryptedValue() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val memory = EncryptedMemory(context)
+        val id = "repeat-key-${System.currentTimeMillis()}"
+        memory.save(id, "private-note", "older-value")
+        memory.save(id, "private-note", "newer-value")
+
+        assertEquals("newer-value", memory.read(id))
+        assertEquals("newer-value", memory.recent(10).first { it.first == id }.second)
+        memory.delete(id)
+    }
 }
