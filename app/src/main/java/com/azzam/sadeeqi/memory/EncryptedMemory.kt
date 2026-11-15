@@ -26,7 +26,7 @@ import javax.crypto.spec.SecretKeySpec
 data class MemoryRow(@PrimaryKey val id: String, val category: String, val iv: String, val ciphertext: String, val updatedAt: Long)
 
 @Dao interface MemoryDao {
-    @Query("SELECT * FROM secure_memory ORDER BY updatedAt DESC") suspend fun all(): List<MemoryRow>
+    @Query("SELECT * FROM secure_memory ORDER BY rowid DESC") suspend fun all(): List<MemoryRow>
     @Query("SELECT * FROM secure_memory ORDER BY rowid DESC LIMIT :limit") suspend fun recent(limit: Int): List<MemoryRow>
     @Query("SELECT * FROM secure_memory WHERE id NOT LIKE 'v2:%'") suspend fun legacyRows(): List<MemoryRow>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(row: MemoryRow)
