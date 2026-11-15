@@ -55,7 +55,7 @@ This is source code only, not a built APK. The canonical Vercel backend health e
 - Vercel deployment status currently reports a build-rate limit. No new deployment or APK artifact is claimed as verified.
 - Full implementation and acceptance gaps: [reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md](reports/SADEEQI_ULTIMATE_AUDIT_2026-11-14.md).
 
-**Security note:** the current shared app bearer token is compiled into the Android build and can be extracted from an APK. The OpenAI API key stays on the server, but production authentication should move to per-user short-lived credentials before public release.
+**Security note:** the Android client now uses per-user Supabase sessions; its session store is encrypted with AES-GCM using an Android Keystore key. The backend can still accept the legacy `SADEEQI_APP_TOKEN` when `AUTH_MODE=legacy` or during `AUTH_MODE=dual` migration. Do not distribute a build configured with the shared token. For production, use `AUTH_MODE=supabase` and retire the legacy token after old clients are no longer in use.
 
 ## Supabase user authentication (migration rollout)
 
@@ -71,3 +71,8 @@ The Android client no longer embeds the shared backend bearer token. It signs us
 6. Only after the new APK is distributed and old clients are retired, change Vercel `AUTH_MODE` to `supabase` and delete the legacy `SADEEQI_APP_TOKEN` variable. This permanently rejects the shared-token scheme.
 
 Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user passwords. The project URL and anon/public key may be embedded in the APK; backend provider credentials remain server-only. These branch changes are source code and are not a production deployment.
+
+## Social Hub — developer onboarding
+- دليل التسجيل الرسمي للمنصات: [docs/SOCIAL_PLATFORM_REGISTRATION_AR.md](docs/SOCIAL_PLATFORM_REGISTRATION_AR.md).
+- نقطة Social Hub الحالية تعرض جاهزية إعداد المطور فقط؛ لا توجد تدفقات OAuth أو حسابات متصلة أو نشر فعلي حتى الآن.
+- لا تُنشئ Redirect URI قبل نشر callback الفعلي، ولا تضع Client Secrets أو Bot Tokens في التطبيق أو المستودع.
