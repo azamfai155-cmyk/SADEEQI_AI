@@ -27,6 +27,21 @@ class MemoryRecallTest {
     }
 
     @Test
+    fun matchesCommonArabicPossessiveAndPrefixForms() {
+        val records = listOf(
+            "chat:old:1:1" to "أنت\\nأستخدم هاتف سامسونج في مشروعي."
+        )
+
+        val result = MemoryRecall.select(
+            records = records,
+            query = "ما هاتفي؟ حدثني عن المشروع"
+        )
+
+        assertTrue(result.isNotEmpty())
+        assertTrue(result.single().second.contains("سامسونج"))
+    }
+
+    @Test
     fun ignoresQueriesWithoutUsefulTerms() {
         val result = MemoryRecall.select(
             records = listOf("chat:old:1:1" to "أنت\nأستخدم هاتف سامسونج"),
