@@ -63,6 +63,35 @@ test('Supabase-only mode fails closed when the project URL is missing', async ()
   assert.match(body.error, /Supabase authentication is not configured/);
 });
 
+test('chunked request bodies are rejected at the streaming byte limit before full buffering', async () => {
+  const oversizedChunk = new Uint8Array(12 * 1024 * 1024 + 1);
+  const bodyStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(oversizedChunk);
+      controller.close();
+    }
+  });
+  const oversizedRequest = new Request('https://worker.example/v1/chat', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer expected-token',
+      'Content-Type': 'application/json'
+    },
+    body: bodyStream,
+    duplex: 'half'
+  });
+
+  const response = await handleRequest(oversizedRequest, {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    OPENAI_API_KEY: 'server-only-test-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: 'Request body too large.' });
+});
+
 test('legacy authenticated chat rejects malformed multimodal input before provider calls', async () => {
   const response = await handleRequest(request('/v1/chat', {
     method: 'POST',
