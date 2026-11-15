@@ -4,7 +4,19 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '12mb' }));
+// Baseline response hardening for the JSON API. TLS is enforced by the deployment edge.
+app.use((_req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+    'Cache-Control': 'no-store',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+  });
+  next();
+});
+app.use(express.json({ limit: '12mb', strict: true }));
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 export function normalizeAuthMode(value) {
