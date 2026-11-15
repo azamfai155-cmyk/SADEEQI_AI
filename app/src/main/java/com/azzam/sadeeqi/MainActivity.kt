@@ -326,6 +326,10 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            // Capture the originating conversation before the asynchronous request starts.
+            // The user may switch to another conversation while the response is in flight.
+            val requestConversationId = currentConversationId
+
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             isGenerating = true
@@ -350,8 +354,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     val stamp = System.currentTimeMillis()
-                    memory.save("chat:$currentConversationId:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
-                    memory.save("chat:$currentConversationId:$stamp:2", "conversation", "صديقي\n$answer")
+                    memory.save("chat:$requestConversationId:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                    memory.save("chat:$requestConversationId:$stamp:2", "conversation", "صديقي\n$answer")
                     conversationSummaries = ConversationHistory.group(memory.search("chat:"))
                     onReply(answer)
                     status = "متصل — ${BuildConfig.VERSION_NAME}"
