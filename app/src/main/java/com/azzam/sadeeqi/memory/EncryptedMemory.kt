@@ -170,7 +170,13 @@ class EncryptedMemory(context: Context) {
     suspend fun recent(limit: Int = 200): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         require(limit in 1..500) { "حد استرجاع الذاكرة غير صالح." }
         migrateLegacyData()
-        dao.recent(limit).mapNotNull { row -> runCatching { decode(row).let { it.logicalId to it.value } }.getOrNull() }
+        // De-duplicate by logical ID after decryption. Multiple encrypted physical rows
+        // can exist after repeated save/import operations; newest rowid wins.
+        dao.all().asSequence()
+            .mapNotNull { row -> runCatching { decode(row).let { it.logicalId to it.value } }.getOrNull() }
+            .distinctBy { it.first }
+            .take(limit)
+            .toList()
     }
 
     suspend fun search(query: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
