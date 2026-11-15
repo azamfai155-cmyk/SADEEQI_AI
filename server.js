@@ -21,9 +21,6 @@ const MODEL = PROVIDER === 'groq'
   ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b')
   : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
 const API_KEY = PROVIDER === 'groq' ? GROQ_API_KEY : OPENAI_API_KEY;
-const API_URL = PROVIDER === 'groq'
-  ? 'https://api.groq.com/openai/v1/responses'
-  : 'https://api.openai.com/v1/responses';
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
@@ -76,7 +73,7 @@ export function extractProviderText(result) {
     .flatMap(item => Array.isArray(item?.content) ? item.content : [])
     .filter(part => part?.type === 'output_text' && typeof part.text === 'string')
     .map(part => part.text)
-    .join('\\n')
+    .join('\n')
     .trim();
 }
 
