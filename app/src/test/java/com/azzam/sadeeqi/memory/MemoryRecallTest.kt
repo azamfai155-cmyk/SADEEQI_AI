@@ -29,7 +29,7 @@ class MemoryRecallTest {
     @Test
     fun matchesCommonArabicPossessiveAndPrefixForms() {
         val records = listOf(
-            "chat:old:1:1" to "أنت\\nأستخدم هاتف سامسونج في مشروعي."
+            "chat:old:1:1" to "أنت\nأستخدم هاتف سامسونج في مشروعي."
         )
 
         val result = MemoryRecall.select(
