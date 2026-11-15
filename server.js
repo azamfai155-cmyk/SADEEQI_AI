@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export const app = express();
@@ -208,8 +209,7 @@ export function validateInput(input) {
         return 'Invalid input text.';
       }
       if (part.type === 'input_image' &&
-          (typeof part.image_url !== 'string' ||
-           !(part.image_url.startsWith('https://') || part.image_url.startsWith('data:image/')))) {
+          (!isSafeImageInput(part.image_url))) {
         return 'Invalid image input.';
       }
     }
