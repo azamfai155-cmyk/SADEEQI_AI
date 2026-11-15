@@ -68,3 +68,15 @@ test('social provider readiness lists platforms without claiming fake connection
   assert.equal(data.configuredCount, 0);
   assert.ok(data.providers.every(provider => provider.connected === false));
 });
+
+
+test('chat rejects local-network and non-HTTPS image references before provider calls', async () => {
+  for (const image_url of ['https://127.0.0.1/private.png', 'http://example.com/image.png', 'https://localhost/a.png']) {
+    const request = new Request('https://example.workers.dev/v1/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer test-token' },
+      body: JSON.stringify({ input: [{ role: 'user', content: [{ type: 'input_image', image_url }] }] })
+    });
+    assert.equal((await worker.fetch(request, env)).status, 400, image_url);
+  }
+});

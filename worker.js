@@ -1,3 +1,4 @@
+import { isSafeImageInput } from './security/input-validation.js';
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
   'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
@@ -116,7 +117,7 @@ function validateInput(input) {
         return 'Invalid input text.';
       }
       if (part.type === 'input_image' && (typeof part.image_url !== 'string' ||
-          !(part.image_url.startsWith('https://') || part.image_url.startsWith('data:image/')))) {
+          !isSafeImageInput(part.image_url))) {
         return 'Invalid image input.';
       }
     }
