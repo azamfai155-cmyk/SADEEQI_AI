@@ -81,20 +81,42 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
-          disable-animations: true
-          emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          # Avoid the runner's post-boot animation settings call, which can
+          # hit a transient Android system-service restart on slow cold boots.
+          disable-animations: false
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -wipe-data
           script: |
             set -euo pipefail
-            # Disable emulator-side package verification so CI can install the
-            # locally built debug APK without Play Protect verifier timeouts.
-            adb shell settings put global verifier_verify_adb_installs 0
-            adb shell settings put global package_verifier_enable 0
+            # Wait for ADB and Android framework services after cold boot.
+            adb wait-for-device
+            booted=""
+            for attempt in $(seq 1 120); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [ "$booted" = "1" ]; then break; fi
+              sleep 5
+            done
+            if [ "$booted" != "1" ]; then
+              echo "::error::Android emulator did not finish booting."
+              adb devices -l || true
+              exit 1
+            fi
+
+            # Retry transient settings-service failures on slow emulator boots.
+            for attempt in $(seq 1 12); do
+              if adb shell settings put global verifier_verify_adb_installs 0 &&
+                 adb shell settings put global package_verifier_enable 0; then
+                break
+              fi
+              sleep 5
+            done
+
             set +e
-            gradle :app:connectedDebugAndroidTest --stacktrace -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
+            gradle :app:connectedDebugAndroidTest --stacktrace --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
             test_status=$?
-            adb logcat -d -v threadtime > android-instrumentation-logcat.txt
-            adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1
+            adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true
+            adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true
+            adb devices -l > android-adb-devices.txt 2>&1 || true
             exit "$test_status"
 
       - name: Upload APK artifact
