@@ -1,6 +1,9 @@
 package com.azzam.sadeeqi.voice
 
 import android.speech.tts.TextToSpeech
+import android.os.Handler
+import android.os.Looper
+import android.os.Bundle
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,10 +39,9 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     var voiceMenu by remember { mutableStateOf(false) }
     val previewEngine = remember {
         TextToSpeech(context.applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                val voices = emptyList<android.speech.tts.Voice>()
-                // Voice enumeration is performed after engine initialization.
-                engineReady = true
+            // TTS callbacks are not guaranteed to run on the main thread.
+            Handler(Looper.getMainLooper()).post {
+                engineReady = status == TextToSpeech.SUCCESS
             }
         }
     }
@@ -98,7 +100,10 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                         previewEngine.setSpeechRate(settings.speechRate)
                         previewEngine.setPitch(settings.pitch)
                         availableVoices.firstOrNull { it.name == settings.voiceName }?.let { previewEngine.voice = it }
-                        previewEngine.speak("مرحباً، أنا صديقي. هذا اختبار للصوت والإعدادات.", TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-voice-preview")
+                        val params = Bundle().apply {
+                            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume)
+                        }
+                        previewEngine.speak("مرحباً، أنا صديقي. هذا اختبار للصوت والإعدادات.", TextToSpeech.QUEUE_FLUSH, params, "sadeeqi-voice-preview")
                     },
                     enabled = engineReady,
                     modifier = Modifier.fillMaxWidth()
