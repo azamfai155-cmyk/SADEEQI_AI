@@ -334,8 +334,16 @@ class MainActivity : ComponentActivity() {
                         gateway.reply(turns, imageForRequest)
                     }
                     messages.add("صديقي" to answer)
-                    if (VoiceSettingsStore(this@MainActivity).load().autoRead) {
-                        withContext(Dispatchers.Main) { messageReader.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-auto-read") }
+                    val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
+                    if (voiceSettings.autoRead) {
+                        withContext(Dispatchers.Main) {
+                            messageReader.language = Locale.forLanguageTag(voiceSettings.languageTag)
+                            messageReader.setSpeechRate(voiceSettings.speechRate)
+                            messageReader.setPitch(voiceSettings.pitch)
+                            messageReader.voices?.firstOrNull { it.name == voiceSettings.voiceName }?.let { messageReader.voice = it }
+                            val speechParams = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, voiceSettings.volume) }
+                            messageReader.speak(answer, TextToSpeech.QUEUE_FLUSH, speechParams, "sadeeqi-auto-read")
+                        }
                     }
                     val stamp = System.currentTimeMillis()
                     memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
