@@ -1,3 +1,4 @@
+import { isSafeImageInput } from '../../security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const IDENTITY_POLICY = [
@@ -175,7 +176,7 @@ export function validateInput(input) {
         return 'Invalid input text.';
       }
       if (part.type === 'input_image' && (typeof part.image_url !== 'string' ||
-          !(part.image_url.startsWith('https://') || part.image_url.startsWith('data:image/')))) {
+          !isSafeImageInput(part.image_url))) {
         return 'Invalid image input.';
       }
     }
