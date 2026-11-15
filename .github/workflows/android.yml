@@ -98,7 +98,7 @@ jobs:
           emulator-boot-timeout: 1200
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
-            set -euo pipefail
+            set -eu
             adb wait-for-device
             booted=""
             for attempt in $(seq 1 60); do
