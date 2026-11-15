@@ -246,7 +246,9 @@ class VoiceForegroundService : Service() {
         executor.execute {
             if (!started || !turnGate.isCurrent(requestId)) return@execute
             try {
-                val answer = gateway.reply(snapshot)
+                val answer = gateway.reply(snapshot, shouldContinue = {
+                    started && turnGate.isCurrent(requestId)
+                })
                 val accepted = synchronized(historyLock) {
                     if (started && turnGate.isCurrent(requestId)) {
                         history.add(OpenAiGateway.Turn("assistant", answer))
