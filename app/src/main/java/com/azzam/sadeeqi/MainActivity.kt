@@ -176,6 +176,8 @@ class MainActivity : ComponentActivity() {
         var memoryEntries by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
         var memorySearchQuery by remember { mutableStateOf("") }
         var isLoadingMemory by remember { mutableStateOf(false) }
+        var editingMemoryId by remember { mutableStateOf<String?>(null) }
+        var editingMemoryValue by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -938,15 +940,57 @@ class MainActivity : ComponentActivity() {
                                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                         Text(if (id.startsWith("chat:")) "محادثة محفوظة" else "ذاكرة محفوظة", color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
                                         Text(value, color = Color.White)
-                                        TextButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    runCatching { memory.delete(id) }
-                                                    memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
-                                                    status = "تم حذف السجل المحدد من الذاكرة."
-                                                }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (id.startsWith("chat:") || id.startsWith("saved-reply:")) {
+                                                TextButton(onClick = {
+                                                    editingMemoryId = id
+                                                    editingMemoryValue = value
+                                                }) { Text("تعديل") }
                                             }
-                                        ) { Text("حذف هذا السجل", color = Color(0xFFFFB4AB)) }
+                                            TextButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        runCatching { memory.delete(id) }
+                                                        memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                                                        status = "تم حذف السجل المحدد من الذاكرة."
+                                                    }
+                                                }
+                                            ) { Text("حذف هذا السجل", color = Color(0xFFFFB4AB)) }
+                                        }
+                                        if (editingMemoryId == id) {
+                                            AlertDialog(
+                                                onDismissRequest = { editingMemoryId = null },
+                                                title = { Text("تعديل الذاكرة") },
+                                                text = {
+                                                    OutlinedTextField(
+                                                        value = editingMemoryValue,
+                                                        onValueChange = { editingMemoryValue = it },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        minLines = 3,
+                                                        label = { Text("محتوى السجل") }
+                                                    )
+                                                },
+                                                confirmButton = {
+                                                    TextButton(
+                                                        enabled = editingMemoryValue.isNotBlank(),
+                                                        onClick = {
+                                                            val targetId = editingMemoryId ?: return@TextButton
+                                                            val category = if (targetId.startsWith("chat:")) "conversation" else "saved_reply"
+                                                            scope.launch {
+                                                                runCatching { memory.update(targetId, category, editingMemoryValue) }
+                                                                    .onSuccess { status = "تم تحديث الذاكرة." }
+                                                                    .onFailure { status = "تعذر تحديث الذاكرة: ${it.message}" }
+                                                                memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                                                                editingMemoryId = null
+                                                            }
+                                                        }
+                                                    ) { Text("حفظ التعديل") }
+                                                },
+                                                dismissButton = {
+                                                    TextButton(onClick = { editingMemoryId = null }) { Text("إلغاء") }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
