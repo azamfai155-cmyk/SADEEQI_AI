@@ -27,6 +27,60 @@ const API_URL = PROVIDER === 'groq'
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
+export function buildProviderRequest({
+  provider = PROVIDER,
+  model = MODEL,
+  apiKey = API_KEY,
+  input,
+  instructions = SYSTEM_PROMPT,
+  enableWebSearch = false
+}) {
+  if (!['groq', 'openai'].includes(provider)) {
+    throw new Error('Unsupported AI_PROVIDER. Use groq or openai.');
+  }
+  if (typeof apiKey !== 'string' || !apiKey.trim()) {
+    throw new Error(`${provider} server credentials are not configured.`);
+  }
+  if (typeof model !== 'string' || !model.trim()) {
+    throw new Error('AI model is not configured.');
+  }
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new Error('AI input must contain at least one turn.');
+  }
+
+  const payload = { model, instructions, input };
+  // OpenAI stores Responses by default. Groq's compatible endpoint does not
+  // implement the store parameter and defaults to non-persistent responses.
+  if (provider === 'openai') payload.store = false;
+  if (enableWebSearch) {
+    payload.tools = [{ type: provider === 'groq' ? 'browser_search' : 'web_search' }];
+  }
+  return {
+    url: provider === 'groq'
+      ? 'https://api.groq.com/openai/v1/responses'
+      : 'https://api.openai.com/v1/responses',
+    init: {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(110000)
+    }
+  };
+}
+
+export function extractProviderText(result) {
+  if (typeof result?.output_text === 'string' && result.output_text.trim()) {
+    return result.output_text.trim();
+  }
+  return (Array.isArray(result?.output) ? result.output : [])
+    .flatMap(item => Array.isArray(item?.content) ? item.content : [])
+    .filter(part => part?.type === 'output_text' && typeof part.text === 'string')
+    .map(part => part.text)
+    .join('\\n')
+    .trim();
+}
+
+
 export function extractBearerToken(value) {
   return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
 }
@@ -161,7 +215,8 @@ app.get('/health', (_req, res) => {
     provider: PROVIDER,
     model: MODEL,
     auth_mode: AUTH_MODE,
-    configured: Boolean(AUTH_MODE !== 'invalid' && API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN))
+    configured: Boolean(AUTH_MODE !== 'invalid' && API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN)),
+    provider_status: API_KEY && MODEL ? 'configured_not_live_tested' : 'missing_credentials_or_model'
   });
 });
 
@@ -217,36 +272,36 @@ app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
   const validationError = validateInput(req.body?.input);
   if (validationError) return res.status(400).json({ error: validationError });
 
-  const payload = {
-    model: MODEL,
-    instructions: SYSTEM_PROMPT,
-    input: req.body.input
-  };
-  if (process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true) {
-    payload.tools = [{ type: PROVIDER === 'groq' ? 'browser_search' : 'web_search' }];
-  }
-
   try {
-    const upstream = await fetch(API_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(110000)
+    const providerRequest = buildProviderRequest({
+      input: req.body.input,
+      enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
-    const result = await upstream.json();
+    const upstream = await fetch(providerRequest.url, providerRequest.init);
+    let result;
+    try {
+      result = await upstream.json();
+    } catch {
+      return res.status(502).json({ error: `${PROVIDER} returned an invalid response.`, provider: PROVIDER });
+    }
     if (!upstream.ok) {
-      const status = upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502;
+      // Provider failures must not be mistaken for expired user sessions.
+      const status = upstream.status === 429 ? 429 : 502;
+      if (status === 429 && upstream.headers.get('retry-after')) {
+        res.set('Retry-After', upstream.headers.get('retry-after'));
+      }
       return res.status(status).json({
         error: result?.error?.message || `${PROVIDER} request failed.`,
         code: result?.error?.code || null,
         provider: PROVIDER
       });
     }
-    const output = (result.output || []).flatMap(item => item.content || [])
-      .filter(part => part.type === 'output_text').map(part => part.text).join('\n').trim();
-    if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.' });
+    const output = extractProviderText(result);
+    if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.', provider: PROVIDER });
     return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
-  } catch {
+  } catch (error) {
+    // Do not log prompt content, credentials, or upstream response bodies.
+    console.error('[ai-provider] request failed', { provider: PROVIDER, name: error?.name || 'Error' });
     return res.status(502).json({ error: `${PROVIDER} unavailable. Check provider status and server logs.`, provider: PROVIDER });
   }
 });
