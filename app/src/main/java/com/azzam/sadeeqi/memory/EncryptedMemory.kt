@@ -27,6 +27,8 @@ data class MemoryRow(@PrimaryKey val id: String, val category: String, val iv: S
 
 @Dao interface MemoryDao {
     @Query("SELECT * FROM secure_memory ORDER BY updatedAt DESC") suspend fun all(): List<MemoryRow>
+    @Query("SELECT * FROM secure_memory ORDER BY rowid DESC LIMIT :limit") suspend fun recent(limit: Int): List<MemoryRow>
+    @Query("SELECT * FROM secure_memory WHERE id NOT LIKE 'v2:%'") suspend fun legacyRows(): List<MemoryRow>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(row: MemoryRow)
     @Query("DELETE FROM secure_memory WHERE id=:id") suspend fun delete(id: String)
     @Query("DELETE FROM secure_memory") suspend fun clear()
@@ -142,7 +144,7 @@ class EncryptedMemory(context: Context) {
     }
 
     private suspend fun migrateLegacyRows() {
-        dao.all().filter { !it.id.startsWith("v2:") }.forEach { old ->
+        dao.legacyRows().forEach { old ->
             val record = decode(old)
             val rowId = "v2:" + UUID.randomUUID().toString()
             val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
@@ -162,6 +164,13 @@ class EncryptedMemory(context: Context) {
     suspend fun read(id: String): String? = withContext(Dispatchers.IO) {
         migrateLegacyData()
         dao.all().firstNotNullOfOrNull { row -> runCatching { decode(row).takeIf { it.logicalId == id }?.value }.getOrNull() }
+    }
+
+    /** Returns a bounded set of newest encrypted records for relevance ranking. */
+    suspend fun recent(limit: Int = 200): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        require(limit in 1..500) { "حد استرجاع الذاكرة غير صالح." }
+        migrateLegacyData()
+        dao.recent(limit).mapNotNull { row -> runCatching { decode(row).let { it.logicalId to it.value } }.getOrNull() }
     }
 
     suspend fun search(query: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
