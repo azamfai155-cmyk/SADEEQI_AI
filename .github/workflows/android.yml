@@ -97,27 +97,11 @@ jobs:
           disable-animations: false
           emulator-boot-timeout: 1200
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: |
-            set -eu
-            adb wait-for-device
-            booted=""
-            for attempt in $(seq 1 60); do
-              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              if [ "$booted" = "1" ]; then break; fi
-              sleep 5
-            done
-            if [ "$booted" != "1" ]; then
-              echo "::error::Android emulator did not finish booting."
-              adb devices -l || true
-              exit 1
-            fi
-            set +e
-            gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"
-            test_status=$?
-            adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true
-            adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true
-            adb devices -l > android-adb-devices.txt 2>&1 || true
-            exit "$test_status"
+          # The action splits script input on newlines and runs each line in a
+          # separate shell. Keep this as one folded command so status + diagnostics
+          # execute in the same shell after the emulator action has booted the device.
+          script: >-
+            set +e; gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"; test_status=$?; adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true; adb devices -l > android-adb-devices.txt 2>&1 || true; exit "$test_status"
 
       - name: Upload Android instrumentation diagnostics
         if: always()
