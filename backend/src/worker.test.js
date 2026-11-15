@@ -247,3 +247,25 @@ test('unknown authentication mode fails closed and health reports not configured
   }), env);
   assert.equal(response.status, 503);
 });
+
+
+test('social provider readiness uses the same Meta and Pinterest credential names as the Express backend', async () => {
+  const response = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    META_CLIENT_ID: 'meta-id',
+    META_CLIENT_SECRET: 'meta-secret',
+    PINTEREST_APP_ID: 'pinterest-id',
+    PINTEREST_APP_SECRET: 'pinterest-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const providers = Object.fromEntries(body.providers.map(provider => [provider.id, provider]));
+  for (const id of ['facebook', 'instagram', 'messenger', 'threads', 'pinterest']) {
+    assert.equal(providers[id].configured, true, id + ' should use canonical credentials');
+    assert.equal(providers[id].connected, false, id + ' must not claim OAuth connection');
+  }
+});
