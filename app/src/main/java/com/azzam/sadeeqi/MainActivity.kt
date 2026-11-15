@@ -951,8 +951,9 @@ class MainActivity : ComponentActivity() {
                                                 onClick = {
                                                     scope.launch {
                                                         runCatching { memory.delete(id) }
+                                                            .onSuccess { status = "تم حذف السجل المحدد من الذاكرة." }
+                                                            .onFailure { status = "تعذر حذف السجل: ${it.message}" }
                                                         memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
-                                                        status = "تم حذف السجل المحدد من الذاكرة."
                                                     }
                                                 }
                                             ) { Text("حذف هذا السجل", color = Color(0xFFFFB4AB)) }
@@ -974,14 +975,16 @@ class MainActivity : ComponentActivity() {
                                                     TextButton(
                                                         enabled = editingMemoryValue.isNotBlank(),
                                                         onClick = {
-                                                            val targetId = editingMemoryId ?: return@TextButton
-                                                            val category = if (targetId.startsWith("chat:")) "conversation" else "saved_reply"
-                                                            scope.launch {
-                                                                runCatching { memory.update(targetId, category, editingMemoryValue) }
-                                                                    .onSuccess { status = "تم تحديث الذاكرة." }
-                                                                    .onFailure { status = "تعذر تحديث الذاكرة: ${it.message}" }
-                                                                memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
-                                                                editingMemoryId = null
+                                                            val targetId = editingMemoryId
+                                                            if (targetId != null) {
+                                                                val category = if (targetId.startsWith("chat:")) "conversation" else "saved_reply"
+                                                                scope.launch {
+                                                                    runCatching { memory.update(targetId, category, editingMemoryValue) }
+                                                                        .onSuccess { status = "تم تحديث الذاكرة." }
+                                                                        .onFailure { status = "تعذر تحديث الذاكرة: ${it.message}" }
+                                                                    memoryEntries = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                                                                    editingMemoryId = null
+                                                                }
                                                             }
                                                         }
                                                     ) { Text("حفظ التعديل") }
