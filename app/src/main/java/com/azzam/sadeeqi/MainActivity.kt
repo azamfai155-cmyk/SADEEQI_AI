@@ -32,6 +32,8 @@ import com.azzam.sadeeqi.auth.AuthActivity
 import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import com.azzam.sadeeqi.voice.VoiceForegroundService
+import com.azzam.sadeeqi.voice.VoiceSettingsStore
+import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
@@ -164,7 +166,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -332,6 +334,9 @@ class MainActivity : ComponentActivity() {
                         gateway.reply(turns, imageForRequest)
                     }
                     messages.add("صديقي" to answer)
+                    if (VoiceSettingsStore(this@MainActivity).load().autoRead) {
+                        withContext(Dispatchers.Main) { messageReader.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-auto-read") }
+                    }
                     val stamp = System.currentTimeMillis()
                     memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
                     memory.save("chat:$stamp:2", "conversation", "صديقي\n$answer")
@@ -1027,6 +1032,9 @@ class MainActivity : ComponentActivity() {
                             color = Color(0xFFB9B4C7),
                             style = MaterialTheme.typography.bodySmall
                         )
+                    }
+                    "استوديو الصوت" -> {
+                        VoiceStudioScreen(modifier = Modifier.weight(1f))
                     }
                     "التداول" -> {
                         TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
