@@ -42,6 +42,13 @@ class VoiceSettingsTest {
 }
 
 
+    @Test
+    fun speechRecognitionUsesSelectedLocaleAndFallsBackSafely() {
+        assertEquals("ar-YE", VoiceSettings(languageTag = "ar-YE").speechRecognitionLanguageTag())
+        assertEquals("ar", VoiceSettings(languageTag = "invalid locale").speechRecognitionLanguageTag())
+    }
+
+
 class VoiceTurnGateTest {
     @org.junit.Test
     fun beginningANewTurnInvalidatesThePreviousTurn() {
