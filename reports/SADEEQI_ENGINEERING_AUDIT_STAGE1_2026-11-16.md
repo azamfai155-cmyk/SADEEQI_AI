@@ -188,3 +188,10 @@ This is a source/repository and cloud-status audit, not a full local execution o
 - The new Vercel preview is deployed, but a live HTTP health/API probe could not be executed from this session. Deployment READY is not equivalent to a successful rate-limit integration test.
 - No Cloudflare deployment or Durable Object migration is recorded; no rate-limit secrets have been created or configured. Production Vercel environment remains unchanged.
 - **AUD-010 remains PARTIALLY RESOLVED.** Remaining acceptance gates: deploy the SQLite Durable Object Worker, set the same strong secret on Cloudflare and Vercel, run the full Node/Worker/Wrangler suite, execute live Vercel↔Worker cross-instance/concurrency/restart/failure tests, and obtain successful CI/security audit results. Do not mark RESOLVED before those checks.
+
+
+### Latest head refresh — `7750246a5cb5a26506d6f1e123d60417b54c50ce`
+
+- The preview deployment for the code-fix commit `42d2d60` was READY. A subsequent report-only commit triggered the Vercel Hobby build-rate cap again; latest head has no new deployment (status: `Deployment rate limited — retry in 24 hours`). Do not infer latest-head deployment from the prior preview.
+- Latest GitHub Actions attempt again has `runner_id: 0`, blank runner names, zero steps, and no logs for all four jobs.
+- CircleCI checks for latest head are pending; previous head had Semgrep success and dependency-audit failure.
