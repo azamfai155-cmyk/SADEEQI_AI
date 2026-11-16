@@ -176,3 +176,15 @@ This is a source/repository and cloud-status audit, not a full local execution o
 - Added `.gitignore` on `integration/unified-mainline-2026-11-16`.
 - No production environment variables, secrets, signing keys, or deployments were modified.
 - No pull request was merged and no branch was force-pushed.
+
+
+## 9. AUD-010 follow-up — 2026-11-16 04:30 UTC
+
+- Fixed a malformed Worker regression test: a previously committed test block contained literal escaped newline sequences in JavaScript source. Replaced it with valid source lines and verified the corrected isolated test snippet with `node --check`.
+- The fix is commit `42d2d60e769b32262836da69bf3e48530bc59277`.
+- Vercel canonical preview deployment for that commit is `READY` (deployment `dpl_CX15GaXiABi4MF3vfzg9oUSYVdqg`). The preview branch has no configured `RATE_LIMIT_SERVICE_URL` or `RATE_LIMIT_SERVICE_SECRET`; the new protected API routes therefore fail closed rather than becoming unmetered. No production environment variables were changed.
+- Latest GitHub Actions runs still fail before a runner is assigned: job metadata reports `runner_id: 0`, blank `runner_name`, no steps, and no downloadable logs; jobs complete in about two seconds. This is not evidence that the tests themselves failed. The malformed test is fixed, but the workflow still cannot execute in the current GitHub Actions account/runner state.
+- Latest CircleCI statuses on the current head: `semgrep-sast` SUCCESS; `backend-dependency-audit` FAILURE. CircleCI reports: `circleci run get 4fda1912-27f5-462c-8bf1-adbd4256f175 --failure-report`. No CircleCI connector or CLI session is available here, and the dashboard job page does not expose logs through the available access; root cause remains undiagnosed.
+- The new Vercel preview is deployed, but a live HTTP health/API probe could not be executed from this session. Deployment READY is not equivalent to a successful rate-limit integration test.
+- No Cloudflare deployment or Durable Object migration is recorded; no rate-limit secrets have been created or configured. Production Vercel environment remains unchanged.
+- **AUD-010 remains PARTIALLY RESOLVED.** Remaining acceptance gates: deploy the SQLite Durable Object Worker, set the same strong secret on Cloudflare and Vercel, run the full Node/Worker/Wrangler suite, execute live Vercel↔Worker cross-instance/concurrency/restart/failure tests, and obtain successful CI/security audit results. Do not mark RESOLVED before those checks.
