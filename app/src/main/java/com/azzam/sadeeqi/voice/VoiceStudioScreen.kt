@@ -119,17 +119,17 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                         DropdownMenuItem(
                             text = { Text("${profile.displayName} • ${profile.dialectLabel}") },
                             onClick = {
-                                val savedVoiceName = store.voiceNameFor(profile.id)
-                                val profileVoice = availableVoices.firstOrNull { it.name == savedVoiceName }
+                                val savedProfile = store.profileSettingsFor(profile.id)
+                                val profileVoice = availableVoices.firstOrNull { it.name == savedProfile.voiceName }
                                     ?: availableVoices.firstOrNull { it.locale.language == "ar" && !it.isNetworkConnectionRequired }
                                     ?: availableVoices.firstOrNull { it.locale.language == "ar" }
                                 if (profileVoice != null) previewEngine.voice = profileVoice
                                 update(settings.copy(
                                     dialectProfileId = profile.id,
                                     voiceName = profileVoice?.name.orEmpty(),
-                                    languageTag = profile.languageTag,
-                                    speechRate = profile.speechRate,
-                                    pitch = profile.pitch
+                                    languageTag = savedProfile.languageTag,
+                                    speechRate = savedProfile.speechRate,
+                                    pitch = savedProfile.pitch
                                 ))
                                 profileMenu = false
                                 voiceNotice = "تم اختيار ${profile.displayName}. إعداد الصوت محفوظ بشكل مستقل لهذه الشخصية."
