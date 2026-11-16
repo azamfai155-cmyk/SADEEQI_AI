@@ -779,7 +779,7 @@ class MainActivity : ComponentActivity() {
                                                 val query = input.trim()
                                                 if (query.isNotBlank()) {
                                                     input = ""
-                                                    sendQuestion("ابحث في الإنترنت عن: $query")
+                                                    sendQuestion("ابحث في الإنترنت عن: $query", enableWebSearch = true)
                                                 } else {
                                                     status = "اكتب موضوع البحث أولاً."
                                                 }
