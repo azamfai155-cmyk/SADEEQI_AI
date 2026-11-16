@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   backend-dependency-audit:
     docker:
-      - image: cimg/node:20.19
+      - image: cimg/node:26
     working_directory: ~/project
     steps:
       - checkout
