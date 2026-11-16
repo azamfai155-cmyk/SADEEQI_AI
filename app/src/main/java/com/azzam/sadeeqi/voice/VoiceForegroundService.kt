@@ -51,7 +51,9 @@ class VoiceForegroundService : Service() {
     private var started = false
     private val sessionState = VoiceSessionStateMachine()
     private val idleTimeout = Runnable {
-        if (started && sessionState.isConversationActive()) {
+        if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+            stopSession("عاد صديقي إلى وضع الاستعداد.")
+        } else if (started && sessionState.isConversationActive()) {
             setSessionState(VoiceSessionState.IDLE_TIMEOUT)
             stopSession("انتهت مهلة الخمول. عادت صديقي إلى وضع الاستعداد.")
         }
@@ -61,9 +63,9 @@ class VoiceForegroundService : Service() {
         sessionState.transition(next)
     }
 
-    private fun refreshIdleTimeout() {
+    private fun refreshIdleTimeout(timeoutMs: Long = IDLE_TIMEOUT_MS) {
         mainHandler.removeCallbacks(idleTimeout)
-        mainHandler.postDelayed(idleTimeout, IDLE_TIMEOUT_MS)
+        mainHandler.postDelayed(idleTimeout, timeoutMs)
     }
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
@@ -438,6 +440,7 @@ class VoiceForegroundService : Service() {
         if (text.isBlank()) return
         setSessionState(VoiceSessionState.SPEAKING)
         publishVoiceMessage("صديقي", text)
+        refreshIdleTimeout(SPEECH_FAILSAFE_TIMEOUT_MS)
         voice?.speak(text)
     }
 
@@ -512,5 +515,6 @@ class VoiceForegroundService : Service() {
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
         private const val IDLE_TIMEOUT_MS = 45_000L
+        private const val SPEECH_FAILSAFE_TIMEOUT_MS = 180_000L
     }
 }
