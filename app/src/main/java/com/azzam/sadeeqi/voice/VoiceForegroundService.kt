@@ -289,7 +289,7 @@ class VoiceForegroundService : Service() {
 
         cancelActiveReply()
         val requestGeneration = replyGeneration
-        history.add(OpenAiGateway.Turn("user", spoken))
+        history.add(OpenAiGateway.Turn("user", YemeniSpeechNormalizer.assistantContext(spoken)))
         updateNotification("صديقي يعالج كلامك…")
         val snapshot = history.takeLast(24).toList()
         activeReplyTask = executor.submit {
