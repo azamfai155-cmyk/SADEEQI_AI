@@ -86,6 +86,7 @@ async function runTask(taskName) {
   let outputBytes = 0;
   let overflow = false;
   let timedOut = false;
+  let completed = false;
 
   const collect = (target) => (chunk) => {
     outputBytes += chunk.length;
@@ -109,6 +110,8 @@ async function runTask(taskName) {
   }, task.timeoutMs);
 
   child.on('error', (error) => {
+    if (completed) return;
+    completed = true;
     clearTimeout(timer);
     emit({
       ok: false,
@@ -121,6 +124,8 @@ async function runTask(taskName) {
   });
 
   child.on('close', (code, signal) => {
+    if (completed) return;
+    completed = true;
     clearTimeout(timer);
     const ok = code === 0 && !timedOut && !overflow;
     emit({
