@@ -358,6 +358,7 @@ class VoiceForegroundService : Service() {
             null -> Unit
         }
         setSessionState(VoiceSessionState.PROCESSING)
+        refreshIdleTimeout(PROCESSING_TIMEOUT_MS)
         cancelActiveReply()
         val requestGeneration = replyGeneration
         history.add(OpenAiGateway.Turn("user", YemeniSpeechNormalizer.assistantContext(spoken)))
@@ -520,5 +521,6 @@ class VoiceForegroundService : Service() {
         private const val NOTIFICATION_ID = 2407
         private const val IDLE_TIMEOUT_MS = 45_000L
         private const val SPEECH_FAILSAFE_TIMEOUT_MS = 180_000L
+        private const val PROCESSING_TIMEOUT_MS = 120_000L
     }
 }
