@@ -176,10 +176,20 @@ class MainActivity : ComponentActivity() {
         var generationJob by remember { mutableStateOf<Job?>(null) }
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
         var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
-        val messageReader = remember { TextToSpeech(this@MainActivity, null) }
+        var messageReaderReady by remember { mutableStateOf(false) }
+        var pendingMessageSpeech by remember { mutableStateOf<String?>(null) }
+        val messageReader = remember {
+            TextToSpeech(this@MainActivity) { initStatus ->
+                messageReaderReady = initStatus == TextToSpeech.SUCCESS
+            }
+        }
         DisposableEffect(messageReader) {
-            messageReader.setLanguage(Locale("ar"))
-            onDispose { messageReader.stop(); messageReader.shutdown() }
+            onDispose {
+                pendingMessageSpeech = null
+                messageReaderReady = false
+                messageReader.stop()
+                messageReader.shutdown()
+            }
         }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
@@ -214,6 +224,45 @@ class MainActivity : ComponentActivity() {
         }
         var status by remember {
             mutableStateOf("الإصدار 1.5.1 — المحادثة والصوت والموسيقى")
+        }
+
+        fun speakMessage(text: String) {
+            if (text.isBlank()) return
+            if (!messageReaderReady) {
+                pendingMessageSpeech = text
+                return
+            }
+            val settings = VoiceSettingsStore(this@MainActivity).load()
+            val languageResult = messageReader.setLanguage(Locale.forLanguageTag(settings.languageTag))
+            if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+                languageResult == TextToSpeech.LANG_NOT_SUPPORTED
+            ) {
+                status = "بيانات الصوت العربي غير متوفرة. ثبّت صوتاً عربياً من إعدادات الهاتف."
+                return
+            }
+            messageReader.setSpeechRate(settings.speechRate)
+            messageReader.setPitch(settings.pitch)
+            messageReader.voices?.firstOrNull { it.name == settings.voiceName }?.let {
+                messageReader.voice = it
+            }
+            val params = Bundle().apply {
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume)
+            }
+            if (messageReader.speak(text, TextToSpeech.QUEUE_FLUSH, params, "sadeeqi-message-read") ==
+                TextToSpeech.ERROR
+            ) {
+                status = "تعذرت قراءة الرد صوتياً."
+            }
+        }
+
+        LaunchedEffect(messageReaderReady, pendingMessageSpeech) {
+            if (messageReaderReady) {
+                val pending = pendingMessageSpeech
+                if (pending != null) {
+                    pendingMessageSpeech = null
+                    speakMessage(pending)
+                }
+            }
         }
 
         var selectedImageDataUrl by remember {
@@ -357,12 +406,7 @@ class MainActivity : ComponentActivity() {
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
                     if (voiceSettings.autoRead) {
                         withContext(Dispatchers.Main) {
-                            messageReader.language = Locale.forLanguageTag(voiceSettings.languageTag)
-                            messageReader.setSpeechRate(voiceSettings.speechRate)
-                            messageReader.setPitch(voiceSettings.pitch)
-                            messageReader.voices?.firstOrNull { it.name == voiceSettings.voiceName }?.let { messageReader.voice = it }
-                            val speechParams = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, voiceSettings.volume) }
-                            messageReader.speak(answer, TextToSpeech.QUEUE_FLUSH, speechParams, "sadeeqi-auto-read")
+                            speakMessage(answer)
                         }
                     }
                     val stamp = System.currentTimeMillis()
@@ -681,7 +725,7 @@ class MainActivity : ComponentActivity() {
                                                         })
                                                         DropdownMenuItem(text = { Text("قراءة الرد صوتياً") }, onClick = {
                                                             openMessageMenuIndex = null
-                                                            messageReader.speak(body, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-reply")
+                                                            speakMessage(body)
                                                         })
                                                         DropdownMenuItem(text = { Text("إيقاف القراءة") }, onClick = {
                                                             openMessageMenuIndex = null
