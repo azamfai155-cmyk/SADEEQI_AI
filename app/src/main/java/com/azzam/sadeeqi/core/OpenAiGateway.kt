@@ -10,18 +10,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentHashMap
 
 class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
     private val accessTokenProvider: () -> String
 ) {
-    @Volatile private var activeCall: okhttp3.Call? = null
+    private val activeCalls = ConcurrentHashMap.newKeySet<okhttp3.Call>()
     private val cancellationGeneration = AtomicLong(0)
 
     fun cancelCurrentRequest() {
         // Increment first so a call being prepared concurrently cannot escape cancellation.
         cancellationGeneration.incrementAndGet()
-        activeCall?.cancel()
+        activeCalls.forEach { it.cancel() }
     }
 
     private val http = OkHttpClient.Builder()
@@ -90,7 +91,7 @@ class OpenAiGateway(
             .build()
 
         val call = http.newCall(request)
-        activeCall = call
+        activeCalls.add(call)
         // Covers cancellation that happened while credentials/payload were being prepared.
         if (requestGeneration != cancellationGeneration.get()) call.cancel()
         try {
@@ -114,7 +115,7 @@ class OpenAiGateway(
                     )
             }
         } finally {
-            if (activeCall === call) activeCall = null
+            activeCalls.remove(call)
         }
     }
 }
