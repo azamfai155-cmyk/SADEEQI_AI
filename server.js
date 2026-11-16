@@ -143,18 +143,27 @@ export async function verifySupabaseAccessToken(token) {
   return { userId: payload.sub, email: typeof payload.email === 'string' ? payload.email : null };
 }
 
+const authFailureRateLimit = createDistributedRateLimiter({ scope: 'auth-failures', windowMs: 15 * 60_000, limit: 5 });
+
+async function rejectAuthFailure(req, res, status, body) {
+  let underBudget = false;
+  await authFailureRateLimit(req, res, () => { underBudget = true; });
+  if (!underBudget) return res;
+  return res.status(status).json(body);
+}
+
 export function createAuthMiddleware() {
   return async (req, res, next) => {
     if (AUTH_MODE === 'invalid') return res.status(503).json({ error: 'Backend authentication mode is invalid.' });
     const token = extractBearerToken(req.headers.authorization);
     if (AUTH_MODE === 'supabase') {
       if (!SUPABASE_JWKS) return res.status(503).json({ error: 'Supabase authentication is not configured.' });
-      if (!token) return res.status(401).json({ error: 'Authentication required.' });
+      if (!token) return rejectAuthFailure(req, res, 401, { error: 'Authentication required.' });
       try {
         req.auth = await verifySupabaseAccessToken(token);
         return next();
       } catch {
-        return res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
+        return rejectAuthFailure(req, res, 401, { error: 'Invalid or expired session. Please sign in again.' });
       }
     }
     if (AUTH_MODE === 'dual' && SUPABASE_JWKS && token) {
@@ -169,7 +178,7 @@ export function createAuthMiddleware() {
       return res.status(503).json({ error: 'Neither Supabase nor legacy authentication is configured.' });
     }
     if (!APP_TOKEN) return res.status(503).json({ error: 'Backend auth is not configured.' });
-    if (!safeEqual(token, APP_TOKEN)) return res.status(401).json({ error: 'Unauthorized.' });
+    if (!safeEqual(token, APP_TOKEN)) return rejectAuthFailure(req, res, 401, { error: 'Unauthorized.' });
     req.auth = { userId: null, email: null };
     return next();
   };
