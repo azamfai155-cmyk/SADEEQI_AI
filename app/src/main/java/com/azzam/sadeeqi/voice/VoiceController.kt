@@ -178,7 +178,9 @@ class VoiceController(
             onError("إذن الميكروفون مرفوض. اسمح لصديقي باستخدام الميكروفون من إعدادات التطبيق.")
         } catch (e: Exception) {
             listening = false
+            resetRecognizer()
             onError("تعذر تشغيل الميكروفون: " + (e.message ?: "خطأ غير معروف"))
+            if (conversationActive && !microphoneMuted) scheduleListening(700)
         }
     }
 
