@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createDistributedRateLimiter } from './backend/src/vercel-rate-limit.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -176,47 +177,9 @@ export function createAuthMiddleware() {
 
 const requireAuth = createAuthMiddleware();
 
-export function createRateLimiter({ windowMs = 60_000, max = 20, now = Date.now } = {}) {
-  const buckets = new Map();
-
-  return (req, res, next) => {
-    const identity = req.auth?.userId || req.ip || req.socket?.remoteAddress || 'unknown';
-    const key = String(identity);
-    const current = now();
-    let bucket = buckets.get(key);
-
-    if (!bucket || current - bucket.start >= windowMs) {
-      bucket = { start: current, count: 0 };
-      buckets.set(key, bucket);
-    }
-    bucket.count += 1;
-
-    // Bound memory use on long-lived instances and discard expired entries.
-    if (buckets.size > 10_000) {
-      for (const [entryKey, entry] of buckets) {
-        if (current - entry.start >= windowMs) buckets.delete(entryKey);
-        if (buckets.size <= 9_000) break;
-      }
-      while (buckets.size > 10_000) buckets.delete(buckets.keys().next().value);
-    }
-
-    const remaining = Math.max(0, max - bucket.count);
-    const resetAt = Math.ceil((bucket.start + windowMs) / 1000);
-    res.set('RateLimit-Limit', String(max));
-    res.set('RateLimit-Remaining', String(remaining));
-    res.set('RateLimit-Reset', String(resetAt));
-
-    if (bucket.count > max) {
-      res.set('Retry-After', String(Math.max(1, Math.ceil((bucket.start + windowMs - current) / 1000))));
-      return res.status(429).json({ error: 'طلبات كثيرة خلال وقت قصير. حاول مرة أخرى بعد قليل.' });
-    }
-    return next();
-  };
-}
-
-
 // Per-instance best-effort protection; use a shared store for strict cross-instance limits.
-const chatRateLimit = createRateLimiter({ windowMs: 60_000, max: 20 });
+const chatRateLimit = createDistributedRateLimiter({ scope: 'chat', windowMs: 60_000, limit: 20 });
+const socialRateLimit = createDistributedRateLimiter({ scope: 'social-read', windowMs: 60_000, limit: 60 });
 
 export function validateInput(input) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
@@ -291,7 +254,7 @@ export function buildSocialProviders(env = process.env) {
   });
 }
 
-app.get('/v1/social/providers', requireAuth, (_req, res) => {
+app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
   // Readiness only: OAuth, account linking and social actions are not implemented.
   const providers = buildSocialProviders();
   res.set('Cache-Control', 'no-store').json({
