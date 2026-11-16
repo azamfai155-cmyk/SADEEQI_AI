@@ -79,18 +79,21 @@ class EncryptedMemory(context: Context) {
         return b64(cipher.iv) to b64(cipher.doFinal(plain))
     }
 
-    private fun decryptDevice(rowId: String, iv: String, ciphertext: String): ByteArray {
+    private fun isV2Row(row: MemoryRow): Boolean =
+        row.id.startsWith("v2:") && row.category == "__encrypted__"
+
+    private fun decryptDevice(row: MemoryRow): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, deviceKey(), GCMParameterSpec(128, un64(iv)))
+        cipher.init(Cipher.DECRYPT_MODE, deviceKey(), GCMParameterSpec(128, un64(row.iv)))
         // New rows authenticate their opaque database key as AAD. Legacy v1 rows did not.
-        if (rowId.startsWith("v2:")) cipher.updateAAD(rowId.toByteArray(StandardCharsets.UTF_8))
-        return cipher.doFinal(un64(ciphertext))
+        if (isV2Row(row)) cipher.updateAAD(row.id.toByteArray(StandardCharsets.UTF_8))
+        return cipher.doFinal(un64(row.ciphertext))
     }
 
     private data class Record(val logicalId: String, val category: String, val value: String, val updatedAt: Long)
     private fun decode(row: MemoryRow): Record {
-        val raw = String(decryptDevice(row.id, row.iv, row.ciphertext), StandardCharsets.UTF_8)
-        return if (row.id.startsWith("v2:")) {
+        val raw = String(decryptDevice(row), StandardCharsets.UTF_8)
+        return if (isV2Row(row)) {
             val j = JSONObject(raw)
             Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
         } else {
@@ -163,7 +166,7 @@ class EncryptedMemory(context: Context) {
             .distinctBy { it.logicalId }
 
     private suspend fun migrateLegacyRows() {
-        dao.all().filter { !it.id.startsWith("v2:") }.forEach { old ->
+        dao.all().filter { !isV2Row(it) }.forEach { old ->
             // Reuse the safe upsert path so an interrupted earlier migration cannot
             // leave multiple encrypted rows for the same logical ID.
             storeRecord(decode(old))
