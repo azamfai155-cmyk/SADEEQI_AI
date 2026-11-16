@@ -47,6 +47,7 @@ class OpenAiRealtimeSpeech(
             var player: AudioTrack? = null
             val finished = CountDownLatch(1)
             var failure: String? = null
+            val totalBytesWritten = AtomicLong(0)
             try {
                 require(baseUrl.startsWith("https://")) { "عنوان خادم صديقي غير آمن." }
                 val accessToken = accessTokenProvider()
@@ -154,6 +155,7 @@ class OpenAiRealtimeSpeech(
                                             val written = player?.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING) ?: -1
                                             if (written <= 0) break
                                             offset += written
+                                            totalBytesWritten.addAndGet(written.toLong())
                                         }
                                     }
                                 }
@@ -191,9 +193,20 @@ class OpenAiRealtimeSpeech(
                     socket.cancel()
                 }
                 if (requestGeneration == generation.get() && failure == null) {
-                    player.stop()
-                    onDone()
-                } else if (requestGeneration == generation.get()) {
+                    val expectedFrames = totalBytesWritten.get() / 2L
+                    val drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
+                    while (expectedFrames > 0L && player.playbackHeadPosition.toLong() < expectedFrames &&
+                        requestGeneration == generation.get() && System.nanoTime() < drainDeadline) {
+                        Thread.sleep(20)
+                    }
+                    if (expectedFrames == 0L || player.playbackHeadPosition.toLong() < expectedFrames) {
+                        failure = "لم يكتمل تشغيل الصوت المستلم."
+                    } else {
+                        player.stop()
+                        onDone()
+                    }
+                }
+                if (requestGeneration == generation.get() && failure != null) {
                     onError(failure ?: "تعذر تشغيل الصوت السحابي.")
                 }
                 socket.close(1000, "speech complete")
