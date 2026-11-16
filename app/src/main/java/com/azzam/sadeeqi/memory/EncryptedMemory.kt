@@ -198,6 +198,7 @@ class EncryptedMemory(context: Context) {
     }
 
     suspend fun update(id: String, category: String, value: String) = withContext(Dispatchers.IO) {
+        require(id.isNotBlank() && category.isNotBlank())
         migrateLegacyData()
         storeRecord(Record(id, category, value, System.currentTimeMillis()))
     }
@@ -231,7 +232,11 @@ class EncryptedMemory(context: Context) {
         val records = JSONArray(String(cipher.doFinal(un64(envelope.getString("data"))), StandardCharsets.UTF_8))
         // Authenticate and parse the complete archive before modifying the database.
         val validated = (0 until records.length()).map { i -> records.getJSONObject(i).let { j ->
-            Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            val record = Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            require(record.logicalId.isNotBlank() && record.category.isNotBlank()) {
+                "تحتوي النسخة الاحتياطية على سجل ذاكرة غير صالح."
+            }
+            record
         } }
         migrateLegacyData()
         validated.groupBy { it.logicalId }.values
