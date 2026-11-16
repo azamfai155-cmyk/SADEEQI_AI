@@ -17,6 +17,12 @@ class EncryptedMemoryInstrumentedTest {
         memory.save("acceptance-key", "private-note", marker)
         assertEquals(marker, memory.read("acceptance-key"))
         assertTrue(memory.search("PRIVATE_TEST_MARKER").isNotEmpty())
+
+        // Re-saving a logical ID must replace its value rather than create duplicates.
+        memory.save("acceptance-key", "private-note", "replacement-secret")
+        assertEquals("replacement-secret", memory.read("acceptance-key"))
+        assertEquals(1, memory.search("acceptance-key").count { it.first == "acceptance-key" })
+
         memory.update("acceptance-key", "private-note", "updated-secret")
         assertEquals("updated-secret", memory.read("acceptance-key"))
 
@@ -30,7 +36,9 @@ class EncryptedMemoryInstrumentedTest {
         memory.delete("acceptance-key")
         assertNull(memory.read("acceptance-key"))
         memory.importEncrypted(backup, "test-password-123".toCharArray())
+        memory.importEncrypted(backup, "test-password-123".toCharArray())
         assertEquals("updated-secret", memory.read("acceptance-key"))
+        assertEquals(1, memory.search("acceptance-key").count { it.first == "acceptance-key" })
         memory.delete("acceptance-key")
     }
 }
