@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { signalProcessGroup } from './process-control.mjs';
 
 const bridgePath = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 
@@ -38,4 +39,44 @@ test('runs the fixed git status task and returns structured output', () => {
   assert.equal(payload.task, 'git_status');
   assert.equal(typeof payload.stdout, 'string');
   assert.match(payload.note, /No remote ChatGPT connection/);
+});
+
+test('signals the complete POSIX process group', () => {
+  const calls = [];
+  const child = { pid: 321, kill: () => assert.fail('must signal the process group') };
+  signalProcessGroup(child, 'SIGTERM', {
+    platform: 'linux',
+    killGroup: (pid, signal) => calls.push([pid, signal])
+  });
+  assert.deepEqual(calls, [[-321, 'SIGTERM']]);
+});
+
+test('falls back to the child when process-group signaling is denied', () => {
+  const calls = [];
+  const child = { pid: 654, kill: (signal) => calls.push(signal) };
+  signalProcessGroup(child, 'SIGKILL', {
+    platform: 'linux',
+    killGroup: () => { throw Object.assign(new Error('denied'), { code: 'EPERM' }); }
+  });
+  assert.deepEqual(calls, ['SIGKILL']);
+});
+
+test('does not signal an individual child after an already-gone process group', () => {
+  const calls = [];
+  const child = { pid: 987, kill: (signal) => calls.push(signal) };
+  signalProcessGroup(child, 'SIGTERM', {
+    platform: 'linux',
+    killGroup: () => { throw Object.assign(new Error('gone'), { code: 'ESRCH' }); }
+  });
+  assert.deepEqual(calls, []);
+});
+
+test('uses direct child signaling on Windows', () => {
+  const calls = [];
+  const child = { pid: 123, kill: (signal) => calls.push(signal) };
+  signalProcessGroup(child, 'SIGTERM', {
+    platform: 'win32',
+    killGroup: () => assert.fail('must not signal a POSIX process group')
+  });
+  assert.deepEqual(calls, ['SIGTERM']);
 });
