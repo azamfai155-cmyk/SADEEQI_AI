@@ -7,7 +7,7 @@
 
 ## 1. Executive summary
 
-- GitHub repository inventory: 122 tracked paths on `main`; 128 on the integration ref (six additional paths).
+- GitHub tree inventory before this audit: 79 file blobs + 43 directory entries on `main`; 84 file blobs + 44 directory entries on the integration ref (five additional files and one additional directory). After adding this audit report and `.gitignore`, the integration ref contains 86 file blobs.
 - Integration ref is 56 commits ahead of `main`, 0 behind; the compare endpoint reports 19 changed files.
 - 13 pull requests were open at audit time. PR #35 is the unification candidate; PRs #31, #33 and #34 form a nested dependency chain and should not be merged independently without reviewing overlap.
 - Three Vercel projects are linked to the same GitHub repository: canonical `sadeeqi-ai-pdrk`, plus legacy `sadeeqi-ai` and `sadeeqi-ai-kh3l`.
