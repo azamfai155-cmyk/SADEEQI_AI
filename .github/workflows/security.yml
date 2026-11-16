@@ -39,7 +39,7 @@ jobs:
       - name: Install Semgrep
         run: python -m pip install --upgrade semgrep
       - name: Scan repository for OWASP Top 10 patterns
-        run: semgrep scan --config p/owasp-top-ten --json --output semgrep-report.json --exclude node_modules --exclude .gradle .
+        run: semgrep scan --error --config p/owasp-top-ten --json --output semgrep-report.json --exclude node_modules --exclude .gradle .
       - name: Upload Semgrep findings
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
