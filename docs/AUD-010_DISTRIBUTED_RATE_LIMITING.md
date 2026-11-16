@@ -9,7 +9,7 @@
 - Identity key: authenticated Supabase `sub`; otherwise the platform-provided client IP (`x-forwarded-for` overwritten by Vercel, or Cloudflare `cf-connecting-ip`).
 - The identity is SHA-256 hashed before use as the Durable Object name.
 - A single SQLite UPSERT performs the fixed-window counter increment atomically.
-- Scope counters are independent: `chat` = 20 requests/60 seconds; `social-read` = 60 requests/60 seconds.
+- Scope counters are independent: `auth-failures` = 5 failed authentication attempts/15 minutes per trusted IP; `chat` = 20 requests/60 seconds per authenticated user (or IP in legacy mode); `social-read` = 60 requests/60 seconds.
 - Both Vercel and Cloudflare Worker routes use the same Durable Object namespace and identity scheme.
 - Missing binding, missing internal secret, timeout, invalid response, or storage error fails closed with HTTP 503. Over-limit requests return HTTP 429 and `Retry-After`.
 - The internal Vercel-to-Worker endpoint is `POST /_internal/rate-limit` and requires a bearer secret of at least 32 characters.
