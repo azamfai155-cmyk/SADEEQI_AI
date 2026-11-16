@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -145,7 +147,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
             "sadeeqi-voice-preview"
         )
     }
-    Column(modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier.padding(12.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("SADEEQI VOICE STUDIO", color = Color(0xFFE6C77A))
         Text("اختر شخصية صوتية مستقلة. لغة التعرّف على كلامك منفصلة عن لغة النطق؛ اختيار العربية اليمنية تجريبي ويتوقف على دعم محرك التعرف.", color = Color.White)
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
