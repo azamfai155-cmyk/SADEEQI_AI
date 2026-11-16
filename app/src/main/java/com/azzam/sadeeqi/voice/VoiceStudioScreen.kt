@@ -1,6 +1,15 @@
 package com.azzam.sadeeqi.voice
 
 import android.speech.tts.TextToSpeech
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.core.content.ContextCompat
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
@@ -40,6 +49,40 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     var profileMenu by remember { mutableStateOf(false) }
     var recognitionLanguageMenu by remember { mutableStateOf(false) }
     var voiceNotice by remember { mutableStateOf("سيتم اختيار أفضل صوت عربي متاح على جهازك تلقائياً.") }
+    val sampleRecorder = remember { WakeWordSampleRecorder(context) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var sampleConsent by remember { mutableStateOf(false) }
+    var samplePhrase by remember { mutableStateOf("صديقي") }
+    var sampleRecording by remember { mutableStateOf(false) }
+    var sampleCount by remember { mutableStateOf(sampleRecorder.sampleFiles().size) }
+    var sampleNotice by remember { mutableStateOf("لا يبدأ التسجيل إلا بعد موافقتك والضغط على زر التسجيل.") }
+    var confirmDeleteSamples by remember { mutableStateOf(false) }
+    fun beginSampleCapture() {
+        if (!sampleConsent) {
+            sampleNotice = "فعّل الموافقة الصريحة أولاً بعد قراءة توضيح الخصوصية."
+            return
+        }
+        val started = sampleRecorder.start(samplePhrase) { file, error ->
+            mainHandler.post {
+                sampleRecording = false
+                sampleCount = sampleRecorder.sampleFiles().size
+                sampleNotice = if (file != null) "حُفظت العينة محلياً: ${file.name}" else (error ?: "انتهى التسجيل دون حفظ عينة.")
+            }
+        }
+        if (started) {
+            sampleRecording = true
+            sampleNotice = "الميكروفون نشط الآن — قل «${samplePhrase}» بوضوح. سيتوقف التسجيل تلقائياً بعد 2.5 ثانية."
+        }
+    }
+    val samplePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) beginSampleCapture()
+        else sampleNotice = "لم يُمنح إذن الميكروفون؛ لم يتم تسجيل أي صوت."
+    }
+    DisposableEffect(sampleRecorder) {
+        onDispose { sampleRecorder.stop() }
+    }
     val previewEngine = remember {
         TextToSpeech(context.applicationContext) { status ->
             Handler(Looper.getMainLooper()).post {
@@ -233,6 +276,68 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     color = Color(0xFFE6C77A)
                 )
             }
+        } 
+        Card(colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("تجهيز كلمة التنبيه — عينات صوتية محلية", color = Color(0xFFE6C77A))
+                Text("سجّل عينات منفصلة لعبارتي «صديقي» و«يا صديقي». مدة كل عينة 2.5 ثانية بصيغة WAV أحادية القناة 16 kHz / PCM 16-bit.", color = Color.White)
+                Text("الخصوصية: التسجيل لا يبدأ تلقائياً. بعد موافقتك، تُحفظ الملفات داخل مساحة التطبيق الخاصة على هذا الهاتف فقط. لا يوجد رفع إلى خادم أو إرسال إلى أي جهة.", color = Color.LightGray)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { samplePhrase = "صديقي" }, enabled = !sampleRecording, modifier = Modifier.weight(1f)) {
+                        Text(if (samplePhrase == "صديقي") "✓ صديقي" else "صديقي")
+                    }
+                    OutlinedButton(onClick = { samplePhrase = "يا صديقي" }, enabled = !sampleRecording, modifier = Modifier.weight(1f)) {
+                        Text(if (samplePhrase == "يا صديقي") "✓ يا صديقي" else "يا صديقي")
+                    }
+                }
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked = sampleConsent, onCheckedChange = { sampleConsent = it }, enabled = !sampleRecording)
+                    Text("أوافق على تسجيل صوتي وحفظ العينات محلياً لهذا الغرض فقط.", color = Color.White)
+                }
+                Button(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            beginSampleCapture()
+                        } else samplePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    enabled = !sampleRecording && sampleConsent,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("● تسجيل عينة «${samplePhrase}»") }
+                OutlinedButton(
+                    onClick = {
+                        sampleRecorder.stop()
+                        sampleNotice = "تم طلب إيقاف التسجيل؛ جارٍ إنهاء وحفظ الجزء الملتقط."
+                    },
+                    enabled = sampleRecording,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("إيقاف التسجيل الآن") }
+                Text("العينات المحفوظة: ${sampleCount}", color = Color.White)
+                Text("الصيغة: WAV • 16,000 Hz • Mono • PCM 16-bit", color = Color.LightGray)
+                Text(sampleNotice, color = Color(0xFFE6C77A))
+                OutlinedButton(
+                    onClick = { confirmDeleteSamples = true },
+                    enabled = sampleCount > 0 && !sampleRecording,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("حذف جميع العينات المحلية") }
+            }
+        }
+        if (confirmDeleteSamples) {
+            AlertDialog(
+                onDismissRequest = { confirmDeleteSamples = false },
+                title = { Text("حذف العينات الصوتية؟") },
+                text = { Text("سيتم حذف جميع ملفات عينات «صديقي» و«يا صديقي» من مساحة التطبيق الخاصة نهائياً.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val deleted = sampleRecorder.deleteAllSamples()
+                        sampleCount = sampleRecorder.sampleFiles().size
+                        sampleNotice = if (deleted) "تم حذف جميع العينات المحلية." else "تعذر حذف مجلد العينات."
+                        confirmDeleteSamples = false
+                    }) { Text("حذف نهائياً") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmDeleteSamples = false }) { Text("إلغاء") }
+                }
+            )
         }
     }
 }
