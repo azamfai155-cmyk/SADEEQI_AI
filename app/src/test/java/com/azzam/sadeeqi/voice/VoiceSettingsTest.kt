@@ -51,6 +51,17 @@ class VoiceSettingsTest {
         assertEquals(false, invalid.useOpenAiVoice)
     }
     @Test
+    fun voicePersonasHaveDistinctIdentityAndTuning() {
+        val profiles = VoiceDialectProfiles.all
+        assertEquals(setOf("ibbi", "hadi", "dhaki"), profiles.map { it.id }.toSet())
+        assertEquals(3, profiles.map { it.displayName }.toSet().size)
+        assertEquals(3, profiles.map { it.sampleText }.toSet().size)
+        assertEquals(3, profiles.map { it.speechRate }.toSet().size)
+        assertEquals(3, profiles.map { it.pitch }.toSet().size)
+        profiles.forEach { assertEquals("ar-YE", it.languageTag) }
+    }
+
+    @Test
     fun normalizedKeepsOnlyKnownDialectProfiles() {
         val ibbi = VoiceSettings(dialectProfileId = "ibbi").normalized()
         val hadi = VoiceSettings(dialectProfileId = "hadi").normalized()
