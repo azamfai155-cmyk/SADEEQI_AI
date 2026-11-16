@@ -380,3 +380,34 @@ test('Realtime voice endpoint returns only an ephemeral client secret and applie
     globalThis.fetch = originalFetch;
   }
 });
+
+test('chat system policy preserves the canonical SADEEQI founder identity', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerPayload;
+  globalThis.fetch = async (_url, init) => {
+    providerPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      output: [{ content: [{ type: 'output_text', text: 'أنا صديقي.' }] }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/chat', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { input: [{ role: 'user', content: 'من مؤسسك؟' }] }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      AI_PROVIDER: 'groq',
+      GROQ_API_KEY: 'server-only-test-key',
+      GROQ_MODEL: 'openai/gpt-oss-20b'
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(providerPayload.instructions, /المؤسس وصاحب فكرة مشروع SADEEQI AI هو عزام فايز/);
+    assert.match(providerPayload.instructions, /لا تدّعِ أن عزام كتب كل سطر برمجي بنفسه/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
