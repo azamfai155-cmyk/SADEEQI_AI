@@ -101,7 +101,8 @@ class WakeWordSampleRecorder(context: Context) {
                             output.write(buffer, 0, count)
                             totalBytes += count
                         } else if (count < 0) {
-                            throw IllegalStateException("AudioRecord read error: $count")
+                            if (active.get()) throw IllegalStateException("AudioRecord read error: $count")
+                            break
                         }
                     }
                 }
