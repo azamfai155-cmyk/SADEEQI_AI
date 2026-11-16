@@ -172,7 +172,7 @@ class EncryptedMemory(context: Context) {
         migrateLegacyData()
         // De-duplicate by logical ID after decryption. Multiple encrypted physical rows
         // can exist after repeated save/import operations; newest rowid wins.
-        dao.all().asSequence()
+        dao.recent(limit).asSequence()
             .mapNotNull { row -> runCatching { decode(row).let { it.logicalId to it.value } }.getOrNull() }
             .distinctBy { it.first }
             .take(limit)
