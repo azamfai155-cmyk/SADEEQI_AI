@@ -1,6 +1,8 @@
 package com.azzam.sadeeqi.voice
 
 import android.speech.tts.TextToSpeech
+import com.azzam.sadeeqi.BuildConfig
+import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
@@ -37,6 +39,12 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     var availableVoices by remember { mutableStateOf(emptyList<android.speech.tts.Voice>()) }
     var engineReady by remember { mutableStateOf(false) }
     var voiceMenu by remember { mutableStateOf(false) }
+    var cloudVoiceMenu by remember { mutableStateOf(false) }
+    val realtimeSpeech = remember {
+        OpenAiRealtimeSpeech(BuildConfig.SADEEQI_API_BASE_URL) {
+            SupabaseAuthClient(context).accessToken()
+        }
+    }
     var voiceNotice by remember { mutableStateOf("سيتم اختيار أفضل صوت عربي متاح على جهازك تلقائياً.") }
     val previewEngine = remember {
         TextToSpeech(context.applicationContext) { status ->
@@ -47,6 +55,9 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     }
     DisposableEffect(previewEngine) {
         onDispose { previewEngine.stop(); previewEngine.shutdown() }
+    }
+    DisposableEffect(realtimeSpeech) {
+        onDispose { realtimeSpeech.close() }
     }
     androidx.compose.runtime.LaunchedEffect(engineReady) {
         if (engineReady) {
@@ -138,6 +149,57 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     enabled = engineReady,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("▶ استمع إلى الصوت المعتمد") }
+                Text("أصوات OpenAI السحابية", color = Color(0xFFE6C77A))
+                Text(
+                    "عشرة أصوات من Realtime API. اختر صوتاً واستمع إلى معاينته قبل اعتماده.",
+                    color = Color.LightGray
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("استخدام صوت OpenAI في المحادثة", color = Color.White)
+                        Text("قد يستهلك رصيد API عند تشغيل الردود الصوتية", color = Color.LightGray)
+                    }
+                    Switch(
+                        checked = settings.useOpenAiVoice,
+                        onCheckedChange = { update(settings.copy(useOpenAiVoice = it)) }
+                    )
+                }
+                Button(
+                    onClick = { cloudVoiceMenu = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("الصوت السحابي: ${settings.openAiVoiceName}") }
+                DropdownMenu(expanded = cloudVoiceMenu, onDismissRequest = { cloudVoiceMenu = false }) {
+                    listOf("alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar").forEach { voiceName ->
+                        DropdownMenuItem(
+                            text = { Text(voiceName + if (voiceName == "marin" || voiceName == "cedar") " • موصى به" else "") },
+                            onClick = {
+                                update(settings.copy(openAiVoiceName = voiceName, useOpenAiVoice = true))
+                                cloudVoiceMenu = false
+                                voiceNotice = "تم اختيار صوت OpenAI: $voiceName"
+                            }
+                        )
+                    }
+                }
+                Button(
+                    onClick = {
+                        voiceNotice = "جاري إنشاء معاينة صوت OpenAI…"
+                        realtimeSpeech.speak(
+                            "هلا، أنا صديقي. كيف حالك؟ أنا معك خطوة بخطوة، قل لي إيش تحتاج.",
+                            settings.openAiVoiceName,
+                            onDone = {
+                                Handler(Looper.getMainLooper()).post {
+                                    voiceNotice = "اكتملت معاينة ${settings.openAiVoiceName}."
+                                }
+                            },
+                            onError = { message ->
+                                Handler(Looper.getMainLooper()).post {
+                                    voiceNotice = "تعذرت المعاينة: $message"
+                                }
+                            }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("▶ استمع إلى معاينة صوت OpenAI") }
                 Text("سرعة الكلام: ${"%.2f".format(Locale.US, settings.speechRate)}", color = Color.White)
                 Slider(value = settings.speechRate, onValueChange = { update(settings.copy(speechRate = it)) }, valueRange = 0.5f..2.0f)
                 Text("حدة الصوت: ${"%.2f".format(Locale.US, settings.pitch)}", color = Color.White)
@@ -152,6 +214,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     Switch(checked = settings.autoRead, onCheckedChange = { update(settings.copy(autoRead = it)) })
                 }
                 Text(voiceNotice, color = Color(0xFFE6C77A))
+                Text("الصوت المحلي يبقى متاحاً كخيار احتياطي. يلزم إعداد OPENAI_REALTIME_API_KEY و ALLOW_OPENAI_VOICE=true على الخادم لتشغيل أصوات OpenAI.", color = Color.LightGray)
                 Text(
                     if (engineReady) "المحرك جاهز — ${availableVoices.size} صوتاً مثبتاً/متاحاً" else "جاري تهيئة محرك الصوت…",
                     color = Color(0xFFE6C77A)
