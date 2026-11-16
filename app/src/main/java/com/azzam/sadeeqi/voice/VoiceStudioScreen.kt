@@ -37,9 +37,9 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     var availableVoices by remember { mutableStateOf(emptyList<android.speech.tts.Voice>()) }
     var engineReady by remember { mutableStateOf(false) }
     var voiceMenu by remember { mutableStateOf(false) }
+    var voiceNotice by remember { mutableStateOf("سيتم اختيار أفضل صوت عربي متاح على جهازك تلقائياً.") }
     val previewEngine = remember {
         TextToSpeech(context.applicationContext) { status ->
-            // TTS callbacks are not guaranteed to run on the main thread.
             Handler(Looper.getMainLooper()).post {
                 engineReady = status == TextToSpeech.SUCCESS
             }
@@ -50,42 +50,99 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     }
     androidx.compose.runtime.LaunchedEffect(engineReady) {
         if (engineReady) {
-            availableVoices = previewEngine.voices?.filter { !it.isNetworkConnectionRequired }
-                ?.sortedWith(compareBy({ it.locale.displayLanguage }, { it.name })).orEmpty()
-            val selected = availableVoices.firstOrNull { it.name == settings.voiceName }
-            if (selected != null) previewEngine.voice = selected
+            availableVoices = previewEngine.voices.orEmpty().sortedWith(
+                compareByDescending<android.speech.tts.Voice> { it.locale.language == "ar" }
+                    .thenByDescending { !it.isNetworkConnectionRequired }
+                    .thenByDescending { it.quality }
+                    .thenBy { it.latency }
+                    .thenBy { it.name }
+            )
+            val saved = availableVoices.firstOrNull { it.name == settings.voiceName }
+            val bestArabic = availableVoices.firstOrNull {
+                it.locale.language == "ar" && !it.isNetworkConnectionRequired
+            } ?: availableVoices.firstOrNull { it.locale.language == "ar" }
+            val chosen = saved ?: bestArabic
+            if (chosen != null) {
+                previewEngine.voice = chosen
+                if (saved == null) {
+                    val next = settings.copy(voiceName = chosen.name, languageTag = chosen.locale.toLanguageTag())
+                    settings = next
+                    store.save(next)
+                    voiceNotice = if (chosen.isNetworkConnectionRequired) {
+                        "تم اختيار أفضل صوت عربي متاح، لكنه يحتاج إلى الإنترنت."
+                    } else {
+                        "تم اختيار أفضل صوت عربي محلي متاح تلقائياً."
+                    }
+                }
+            } else {
+                voiceNotice = "لم يعثر محرك الهاتف على صوت عربي. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام."
+            }
         }
     }
     fun update(next: VoiceSettings) {
         settings = next
         store.save(next)
     }
+    fun preview(voice: android.speech.tts.Voice?) {
+        if (!engineReady) return
+        if (voice != null) previewEngine.voice = voice
+        previewEngine.language = Locale.forLanguageTag(settings.languageTag)
+        previewEngine.setSpeechRate(settings.speechRate)
+        previewEngine.setPitch(settings.pitch)
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume)
+        }
+        previewEngine.speak(
+            "هلا، أنا صديقي. كيف حالك؟ أنا معك خطوة بخطوة، قل لي إيش تحتاج.",
+            TextToSpeech.QUEUE_FLUSH,
+            params,
+            "sadeeqi-voice-preview"
+        )
+    }
     Column(modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("SADEEQI VOICE STUDIO", color = Color(0xFFE6C77A))
-        Text("إدارة أصوات محرك تحويل النص إلى كلام المثبت على هاتفك. الأسماء والجودة والتوفر تختلف حسب الجهاز والمحرك.", color = Color.White)
+        Text("استمع إلى الأصوات المثبتة على هاتفك، وجرّب كل صوت قبل اعتماده. قد تختلف الأصوات وجودتها حسب محرك النطق وبيانات اللغة المثبتة.", color = Color.White)
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("الصوت المثبت", color = Color(0xFFE6C77A))
-                Button(onClick = { voiceMenu = true }, modifier = Modifier.fillMaxWidth(), enabled = engineReady) {
-                    Text(availableVoices.firstOrNull { it.name == settings.voiceName }?.let { "${it.name} — ${it.locale.displayName}" } ?: "اختر صوتاً من الجهاز")
-                }
+                Text("الصوت المعتمد", color = Color(0xFFE6C77A))
+                Text(
+                    availableVoices.firstOrNull { it.name == settings.voiceName }?.let {
+                        "\${it.name} — \${it.locale.displayName}"
+                    } ?: "صوت المحرك الافتراضي",
+                    color = Color.White
+                )
+                Button(
+                    onClick = { voiceMenu = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = engineReady && availableVoices.isNotEmpty()
+                ) { Text("عرض وتجربة جميع الأصوات") }
                 DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                     availableVoices.forEach { voice ->
                         DropdownMenuItem(
-                            text = { Text("${voice.name} • ${voice.locale.displayName} • ${if (voice.isNetworkConnectionRequired) "يتطلب الإنترنت" else "محلي"}") },
+                            text = {
+                                Text(
+                                    "\${if (voice.locale.language == "ar") "عربي" else voice.locale.displayLanguage} • \${voice.name} • \${if (voice.isNetworkConnectionRequired) "يتطلب الإنترنت" else "محلي"}"
+                                )
+                            },
                             onClick = {
                                 previewEngine.voice = voice
                                 update(settings.copy(voiceName = voice.name, languageTag = voice.locale.toLanguageTag()))
                                 voiceMenu = false
+                                voiceNotice = "تم اعتماد \${voice.name}. اضغط اختبار الصوت للاستماع إليه."
                             }
                         )
                     }
                 }
-                Text("سرعة الكلام: ${"%.2f".format(Locale.US, settings.speechRate)}", color = Color.White)
+                Button(
+                    onClick = { preview(availableVoices.firstOrNull { it.name == settings.voiceName }) },
+                    enabled = engineReady,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("▶ استمع إلى الصوت المعتمد") }
+                Text("سرعة الكلام: \${"%.2f".format(Locale.US, settings.speechRate)}", color = Color.White)
                 Slider(value = settings.speechRate, onValueChange = { update(settings.copy(speechRate = it)) }, valueRange = 0.5f..2.0f)
-                Text("حدة الصوت: ${"%.2f".format(Locale.US, settings.pitch)}", color = Color.White)
+                Text("حدة الصوت: \${"%.2f".format(Locale.US, settings.pitch)}", color = Color.White)
                 Slider(value = settings.pitch, onValueChange = { update(settings.copy(pitch = it)) }, valueRange = 0.5f..2.0f)
-                Text("مستوى صوت النطق: ${(settings.volume * 100).toInt()}%", color = Color.White)
+                Text("مستوى صوت النطق: \${(settings.volume * 100).toInt()}%", color = Color.White)
                 Slider(value = settings.volume, onValueChange = { update(settings.copy(volume = it)) }, valueRange = 0f..1f)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
@@ -94,21 +151,11 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     }
                     Switch(checked = settings.autoRead, onCheckedChange = { update(settings.copy(autoRead = it)) })
                 }
-                Button(
-                    onClick = {
-                        previewEngine.language = Locale.forLanguageTag(settings.languageTag)
-                        previewEngine.setSpeechRate(settings.speechRate)
-                        previewEngine.setPitch(settings.pitch)
-                        availableVoices.firstOrNull { it.name == settings.voiceName }?.let { previewEngine.voice = it }
-                        val params = Bundle().apply {
-                            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume)
-                        }
-                        previewEngine.speak("مرحباً، أنا صديقي. هذا اختبار للصوت والإعدادات.", TextToSpeech.QUEUE_FLUSH, params, "sadeeqi-voice-preview")
-                    },
-                    enabled = engineReady,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("▶ اختبار الصوت") }
-                Text(if (engineReady) "محرك الجهاز جاهز — ${availableVoices.size} صوتاً محلياً متاحاً" else "جاري تهيئة محرك الصوت…", color = Color(0xFFE6C77A))
+                Text(voiceNotice, color = Color(0xFFE6C77A))
+                Text(
+                    if (engineReady) "المحرك جاهز — \${availableVoices.size} صوتاً مثبتاً/متاحاً" else "جاري تهيئة محرك الصوت…",
+                    color = Color(0xFFE6C77A)
+                )
             }
         }
     }
