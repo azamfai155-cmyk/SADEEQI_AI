@@ -50,4 +50,17 @@ class VoiceSettingsTest {
         assertEquals("marin", invalid.openAiVoiceName)
         assertEquals(true, invalid.useOpenAiVoice)
     }
+    @Test
+    fun normalizedKeepsOnlyKnownDialectProfiles() {
+        val ibbi = VoiceSettings(dialectProfileId = "ibbi").normalized()
+        val hadi = VoiceSettings(dialectProfileId = "hadi").normalized()
+        val dhaki = VoiceSettings(dialectProfileId = "dhaki").normalized()
+        val invalid = VoiceSettings(dialectProfileId = "unknown").normalized()
+
+        assertEquals("ibbi", ibbi.dialectProfileId)
+        assertEquals("hadi", hadi.dialectProfileId)
+        assertEquals("dhaki", dhaki.dialectProfileId)
+        assertEquals("ibbi", invalid.dialectProfileId)
+    }
+
 }
