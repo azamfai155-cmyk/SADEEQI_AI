@@ -145,8 +145,7 @@ class WakeWordSampleRecorder(context: Context) {
     }
 
     private fun writeWav(raw: File, wav: File, dataSize: Long, sampleRate: Int) {
-        FileOutputStream(wav).use { fileOutput ->
-            BufferedOutputStream(fileOutput).use { output ->
+        BufferedOutputStream(FileOutputStream(wav)).use { output ->
                 val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
                 val byteRate = sampleRate * CHANNELS * BITS_PER_SAMPLE / 8
                 header.put("RIFF".toByteArray(Charsets.US_ASCII))
@@ -154,7 +153,7 @@ class WakeWordSampleRecorder(context: Context) {
                 header.put("WAVE".toByteArray(Charsets.US_ASCII))
                 header.put("fmt ".toByteArray(Charsets.US_ASCII))
                 header.putInt(16)
-                header.putShort(1)
+                header.putShort(1.toShort())
                 header.putShort(CHANNELS.toShort())
                 header.putInt(sampleRate)
                 header.putInt(byteRate)
