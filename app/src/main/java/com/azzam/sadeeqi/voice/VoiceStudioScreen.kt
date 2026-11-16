@@ -107,7 +107,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                 Text("الصوت المعتمد", color = Color(0xFFE6C77A))
                 Text(
                     availableVoices.firstOrNull { it.name == settings.voiceName }?.let {
-                        "\${it.name} — \${it.locale.displayName}"
+                        "${it.name} — ${it.locale.displayName}"
                     } ?: "صوت المحرك الافتراضي",
                     color = Color.White
                 )
@@ -121,14 +121,14 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "\${if (voice.locale.language == "ar") "عربي" else voice.locale.displayLanguage} • \${voice.name} • \${if (voice.isNetworkConnectionRequired) "يتطلب الإنترنت" else "محلي"}"
+                                    "${if (voice.locale.language == "ar") "عربي" else voice.locale.displayLanguage} • ${voice.name} • ${if (voice.isNetworkConnectionRequired) "يتطلب الإنترنت" else "محلي"}"
                                 )
                             },
                             onClick = {
                                 previewEngine.voice = voice
                                 update(settings.copy(voiceName = voice.name, languageTag = voice.locale.toLanguageTag()))
                                 voiceMenu = false
-                                voiceNotice = "تم اعتماد \${voice.name}. اضغط اختبار الصوت للاستماع إليه."
+                                voiceNotice = "تم اعتماد ${voice.name}. اضغط اختبار الصوت للاستماع إليه."
                             }
                         )
                     }
@@ -138,11 +138,11 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     enabled = engineReady,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("▶ استمع إلى الصوت المعتمد") }
-                Text("سرعة الكلام: \${"%.2f".format(Locale.US, settings.speechRate)}", color = Color.White)
+                Text("سرعة الكلام: ${"%.2f".format(Locale.US, settings.speechRate)}", color = Color.White)
                 Slider(value = settings.speechRate, onValueChange = { update(settings.copy(speechRate = it)) }, valueRange = 0.5f..2.0f)
-                Text("حدة الصوت: \${"%.2f".format(Locale.US, settings.pitch)}", color = Color.White)
+                Text("حدة الصوت: ${"%.2f".format(Locale.US, settings.pitch)}", color = Color.White)
                 Slider(value = settings.pitch, onValueChange = { update(settings.copy(pitch = it)) }, valueRange = 0.5f..2.0f)
-                Text("مستوى صوت النطق: \${(settings.volume * 100).toInt()}%", color = Color.White)
+                Text("مستوى صوت النطق: ${(settings.volume * 100).toInt()}%", color = Color.White)
                 Slider(value = settings.volume, onValueChange = { update(settings.copy(volume = it)) }, valueRange = 0f..1f)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
@@ -153,7 +153,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                 }
                 Text(voiceNotice, color = Color(0xFFE6C77A))
                 Text(
-                    if (engineReady) "المحرك جاهز — \${availableVoices.size} صوتاً مثبتاً/متاحاً" else "جاري تهيئة محرك الصوت…",
+                    if (engineReady) "المحرك جاهز — ${availableVoices.size} صوتاً مثبتاً/متاحاً" else "جاري تهيئة محرك الصوت…",
                     color = Color(0xFFE6C77A)
                 )
             }
