@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { signalProcessGroup } from './process-control.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = await realpath(path.resolve(SCRIPT_DIR, '..'));
@@ -92,14 +93,7 @@ async function runTask(taskName) {
 
   // Always escalate to SIGKILL if SIGTERM does not stop the child.
   // This is shared by timeout and output-limit termination paths.
-  const sendSignal = (signal) => {
-    try {
-      if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
-      else child.kill(signal);
-    } catch (error) {
-      if (error.code !== 'ESRCH') child.kill(signal);
-    }
-  };
+  const sendSignal = (signal) => signalProcessGroup(child, signal);
 
   const terminateChild = () => {
     if (completed || child.exitCode !== null || child.signalCode !== null) return;
