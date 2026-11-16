@@ -47,6 +47,7 @@ class VoiceController(
                     runCatching { tts?.stop() }
                     speaking = false
                     abandonSpeechAudioFocus()
+                    onSpeechFinished()
                     if (conversationActive && !microphoneMuted) scheduleListening(350)
                 }
             }
@@ -258,6 +259,7 @@ class VoiceController(
         ) {
             speaking = false
             abandonSpeechAudioFocus()
+            onSpeechFinished()
             onError("الصوت المحدد غير متوفر. اختر محركاً أو صوتاً عربياً من إعدادات الصوت.")
             if (conversationActive && !microphoneMuted) scheduleListening(700)
             return
@@ -274,6 +276,7 @@ class VoiceController(
             // callback. Release the speaking gate so the microphone can recover.
             speaking = false
             abandonSpeechAudioFocus()
+            onSpeechFinished()
             onError("تعذر بدء النطق. تحقق من محرك تحويل النص إلى كلام والصوت المختار.")
             if (conversationActive && !microphoneMuted) scheduleListening(700)
         }
@@ -322,6 +325,7 @@ class VoiceController(
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
                         abandonSpeechAudioFocus()
+                        onSpeechFinished()
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
@@ -340,6 +344,7 @@ class VoiceController(
                 pendingSpeech = null
                 speaking = false
                 abandonSpeechAudioFocus()
+                onSpeechFinished()
                 onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
                 if (conversationActive && !microphoneMuted) scheduleListening(700)
             }
@@ -347,6 +352,7 @@ class VoiceController(
             pendingSpeech = null
             speaking = false
             abandonSpeechAudioFocus()
+            onSpeechFinished()
             onError("تعذر تشغيل خدمة النطق في الهاتف.")
             if (conversationActive && !microphoneMuted) scheduleListening(700)
         }
