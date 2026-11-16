@@ -407,6 +407,30 @@ class VoiceController(
         listening = false
         val wasDictation = dictationActive
         dictationActive = false
+
+        if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED ||
+            error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE
+        ) {
+            val currentSettings = settingsStore.load()
+            if (currentSettings.recognitionLanguageTag != "ar") {
+                settingsStore.save(currentSettings.copy(recognitionLanguageTag = "ar"))
+                resetRecognizer()
+                onError("محرك التعرف لا يدعم العربية اليمنية على هذا الجهاز؛ رجعت تلقائياً إلى العربية العامة.")
+                if (!wasDictation && conversationActive && !microphoneMuted) scheduleListening(350)
+                return
+            }
+            conversationActive = false
+            onError("خدمة التعرف على العربية غير متاحة على هذا الجهاز. تحقق من تثبيت محرك التعرف والبيانات الصوتية.")
+            return
+        }
+
+        if (error == SpeechRecognizer.ERROR_CLIENT ||
+            error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
+            error == SpeechRecognizer.ERROR_AUDIO
+        ) {
+            resetRecognizer()
+        }
+
         val message = when (error) {
             SpeechRecognizer.ERROR_AUDIO -> "حدث خطأ في تسجيل الصوت."
             SpeechRecognizer.ERROR_CLIENT -> "تعذر تشغيل خدمة التعرف على الكلام."
