@@ -206,6 +206,8 @@ class VoiceForegroundService : Service() {
         }
 
         started = true
+        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+        mainHandler.removeCallbacks(idleTimeout)
         history.clear()
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
@@ -222,7 +224,9 @@ class VoiceForegroundService : Service() {
             realtimeSpeech,
             {
                 mainHandler.post {
-                    if (started) {
+                    if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+                        stopSession("عاد صديقي إلى وضع الاستعداد.")
+                    } else if (started) {
                         setSessionState(VoiceSessionState.ACTIVE_LISTENING)
                         refreshIdleTimeout()
                     }
