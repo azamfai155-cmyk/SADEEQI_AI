@@ -486,16 +486,16 @@ class MainActivity : ComponentActivity() {
             val saved = memory.search("chat:")
 
             if (saved.isNotEmpty()) {
-
-                messages.clear()
-
-                saved.sortedBy { it.first }.forEach { entry ->
-
+                // Preserve live voice events that may arrive while encrypted history loads.
+                val liveMessages = messages.drop(1).toList()
+                val restoredMessages = saved.sortedBy { it.first }.mapNotNull { entry ->
                     val parts = entry.second.split("\n", limit = 2)
-
-                    if (parts.size == 2) {
-                        messages.add(parts[0] to parts[1])
-                    }
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }
+                messages.clear()
+                messages.addAll(restoredMessages)
+                liveMessages.forEach { live ->
+                    if (messages.lastOrNull() != live) messages.add(live)
                 }
             }
         }
