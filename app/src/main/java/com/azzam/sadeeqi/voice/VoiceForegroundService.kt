@@ -74,7 +74,15 @@ class VoiceForegroundService : Service() {
     }
 
     private fun startDictationSession() {
-        if (started) stopSession()
+        // Switch modes in-place. stopSession() calls stopSelf(), which can tear down
+        // this same service start request before the dictation session is established.
+        if (started) {
+            cancelActiveReply()
+            pendingPhoneCommand = null
+            voice?.stopConversation()
+            voice?.close()
+            voice = null
+        }
         createNotificationChannel()
         val notification = buildNotification("استمع صديقي إلى رسالتك الصوتية")
         try {
