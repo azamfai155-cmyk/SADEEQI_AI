@@ -237,13 +237,13 @@ class VoiceForegroundService : Service() {
                     "تعذر تنفيذ الأمر: ${error.message ?: "تحقق من إعدادات الهاتف."}"
                 }
                 updateNotification(reply)
-                voice?.speak(reply)
+                speakVoiceReply(reply)
             } else if (confirmation in setOf("لا", "الغاء", "الغاء الامر", "تراجع", "مش موافق")) {
                 pendingPhoneCommand = null
                 updateNotification("تم إلغاء أمر الهاتف.")
-                voice?.speak("تم إلغاء أمر الهاتف.")
+                speakVoiceReply("تم إلغاء أمر الهاتف.")
             } else {
-                voice?.speak("لم أفهم التأكيد. قل نعم للتنفيذ أو لا للإلغاء.")
+                speakVoiceReply("لم أفهم التأكيد. قل نعم للتنفيذ أو لا للإلغاء.")
             }
             return
         }
@@ -253,17 +253,17 @@ class VoiceForegroundService : Service() {
             pendingPhoneCommand = phoneCommand
             val prompt = DeviceCommandParser.confirmationText(phoneCommand) + " قل نعم للتأكيد أو لا للإلغاء."
             updateNotification(prompt)
-            voice?.speak(prompt)
+            speakVoiceReply(prompt)
             return
         }
 
         when (val command = MusicCommandParser.parse(spoken)) {
-            MusicCommand.Pause -> { musicManager?.pause(); voice?.speak("تم إيقاف الموسيقى مؤقتاً"); return }
-            MusicCommand.Resume -> { musicManager?.resume(); voice?.speak("تم استئناف الموسيقى"); return }
-            MusicCommand.Next -> { musicManager?.next(); voice?.speak("انتقلت إلى المقطع التالي"); return }
-            MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
-            MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
-            MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
+            MusicCommand.Pause -> { musicManager?.pause(); speakVoiceReply("تم إيقاف الموسيقى مؤقتاً"); return }
+            MusicCommand.Resume -> { musicManager?.resume(); speakVoiceReply("تم استئناف الموسيقى"); return }
+            MusicCommand.Next -> { musicManager?.next(); speakVoiceReply("انتقلت إلى المقطع التالي"); return }
+            MusicCommand.Previous -> { musicManager?.previous(); speakVoiceReply("عدت إلى المقطع السابق"); return }
+            MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); speakVoiceReply("تم رفع الصوت"); return }
+            MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); speakVoiceReply("تم خفض الصوت"); return }
             is MusicCommand.Search -> {
                 updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
                 executor.execute {
@@ -272,18 +272,18 @@ class VoiceForegroundService : Service() {
                         mainHandler.post {
                             if (!started) return@post
                             if (tracks.isEmpty()) {
-                                voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
+                                speakVoiceReply("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
                             } else {
                                 musicManager?.playRemoteQueue(tracks, 0)
                                 updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
-                                voice?.speak("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
+                                speakVoiceReply("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
                             }
                         }
                     } catch (error: Exception) {
                         mainHandler.post {
                             if (started) {
                                 updateNotification("تعذر البحث عن الموسيقى")
-                                voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
+                                speakVoiceReply("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
                             }
                         }
                     }
@@ -295,7 +295,7 @@ class VoiceForegroundService : Service() {
         val normalized = spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "")
         if (normalized in setOf("ياصديقي", "صديقي")) {
             val greeting = "نعم يا عزام، أنا معك"
-            voice?.speak(greeting)
+            speakVoiceReply(greeting)
             return
         }
 
@@ -311,9 +311,8 @@ class VoiceForegroundService : Service() {
                     if (started && requestGeneration == replyGeneration) {
                         activeReplyTask = null
                         history.add(OpenAiGateway.Turn("assistant", answer))
-                        publishVoiceMessage("صديقي", answer)
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
-                        voice?.speak(answer)
+                        speakVoiceReply(answer)
                     }
                 }
             } catch (error: Exception) {
@@ -378,6 +377,12 @@ class VoiceForegroundService : Service() {
                 .putExtra(EXTRA_STATUS_ACTIVE, active)
                 .putExtra(EXTRA_STATUS_MESSAGE, message)
         )
+    }
+
+    private fun speakVoiceReply(text: String) {
+        if (text.isBlank()) return
+        publishVoiceMessage("صديقي", text)
+        voice?.speak(text)
     }
 
     private fun publishVoiceMessage(role: String, message: String) {
