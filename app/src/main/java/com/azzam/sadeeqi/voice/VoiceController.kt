@@ -76,6 +76,7 @@ class VoiceController(
 
     fun startConversation() {
         if (closed) return
+        cancelScheduledListening()
         lastUtteranceId = null
         pendingSpeech = null
         microphoneMuted = false
@@ -107,6 +108,7 @@ class VoiceController(
 
     fun interruptAndListen() {
         if (closed) return
+        cancelScheduledListening()
         conversationActive = true
         dictationActive = false
         microphoneMuted = false
@@ -124,6 +126,7 @@ class VoiceController(
 
     fun listen() {
         if (closed) return
+        cancelScheduledListening()
         microphoneMuted = false
         conversationActive = false
         dictationActive = true
@@ -450,6 +453,7 @@ class VoiceController(
 
     fun close() {
         if (closed) return
+        cancelScheduledListening()
         closed = true
         conversationActive = false
         dictationActive = false
