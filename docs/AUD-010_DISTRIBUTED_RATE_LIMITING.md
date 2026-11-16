@@ -66,6 +66,7 @@ Vercel WAF rate limiting was not enabled: although Hobby includes 1,000,000 allo
 
 ## Current blockers
 
+- Supabase sign-in/sign-up requests go directly to Supabase Auth, not through the Express/Worker routes. The backend's 5-failures/15-minutes scope protects failed bearer authentication against these APIs, but it does not set the Supabase Auth endpoint limits. Supabase currently documents a customizable combined sign-up/sign-in IP limit (default 30 requests/5 minutes), plus separate email/OTP/verification limits. Review and set the Auth dashboard limits after connecting the Supabase project; this cannot be verified from the current Vercel environment inventory alone.
 - Cloudflare deployment and the Durable Object migration have not been executed from this session.
 - Cloudflare secret `RATE_LIMIT_SERVICE_SECRET` has not been set.
 - Vercel `RATE_LIMIT_SERVICE_URL` and `RATE_LIMIT_SERVICE_SECRET` have not been set.
