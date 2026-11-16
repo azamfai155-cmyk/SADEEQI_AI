@@ -16,7 +16,8 @@ import java.util.Locale
 class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val remoteSpeech: OpenAiRealtimeSpeech? = null
 ) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -40,6 +41,7 @@ class VoiceController(
         microphoneMuted = false
         dictationActive = false
         conversationActive = true
+        remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
         startListeningInternal()
@@ -53,6 +55,7 @@ class VoiceController(
         mainHandler.removeCallbacksAndMessages(null)
         resetRecognizer()
         listening = false
+        remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
     }
@@ -63,6 +66,7 @@ class VoiceController(
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
+        remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
         resetRecognizer()
@@ -125,25 +129,58 @@ class VoiceController(
     }
 
     fun speak(text: String) {
-        if (!ttsReady) {
-            onError("محرك النطق لم يجهز بعد. تحقق من تثبيت صوت عربي في إعدادات الهاتف.")
-            if (conversationActive) scheduleListening(900)
-            return
-        }
         val cleanText = text
-            .replace(Regex("https?://\\S+"), "رابط")
-            .replace(Regex("[*_#>\\[\\]{}]"), " ")
-            .replace(Regex("[\\t\\r\\n]+"), " ")
-            .replace(Regex("\\s{2,}"), " ")
+            .replace(Regex("https?://\\\\S+"), "رابط")
+            .replace(Regex("[*_#>\\\\[\\\\]{}]"), " ")
+            .replace(Regex("[\\\\t\\\\r\\\\n]+"), " ")
+            .replace(Regex("\\\\s{2,}"), " ")
             .trim()
         if (cleanText.isBlank()) {
             if (conversationActive) scheduleListening(250)
             return
         }
         val settings = settingsStore.load()
-        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
+        if (settings.useOpenAiVoice && remoteSpeech != null) {
+            speaking = true
+            remoteSpeech.speak(
+                cleanText,
+                settings.openAiVoiceName,
+                onDone = {
+                    mainHandler.post {
+                        if (utteranceId == lastUtteranceId) {
+                            speaking = false
+                            if (conversationActive && !microphoneMuted) scheduleListening(250)
+                        }
+                    }
+                },
+                onError = {
+                    mainHandler.post {
+                        if (utteranceId == lastUtteranceId) {
+                            speaking = false
+                            speakLocal(cleanText, settings, utteranceId)
+                        }
+                    }
+                }
+            )
+            return
+        }
+        speakLocal(cleanText, settings, utteranceId)
+    }
+
+    private fun speakLocal(cleanText: String, settings: VoiceSettings, utteranceId: String) {
+        if (!ttsReady) {
+            onError("محرك النطق لم يجهز بعد. تحقق من تثبيت صوت عربي في إعدادات الهاتف.")
+            if (conversationActive) scheduleListening(900)
+            return
+        }
+        val locale = Locale.forLanguageTag(settings.languageTag)
+        tts?.setLanguage(locale)
+        tts?.voices?.firstOrNull { it.name == settings.voiceName }?.let { tts?.voice = it }
+        tts?.setSpeechRate(settings.speechRate)
+        tts?.setPitch(settings.pitch)
+        val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
         speaking = true
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
@@ -276,6 +313,7 @@ class VoiceController(
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
         resetRecognizer()
+        remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
         tts?.shutdown()
