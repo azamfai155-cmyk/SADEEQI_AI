@@ -28,7 +28,7 @@ fun VoiceSettings.normalized(): VoiceSettings {
         speechRate = (if (speechRate.isFinite()) speechRate else 0.96f).coerceIn(0.5f, 2.0f),
         pitch = (if (pitch.isFinite()) pitch else 0.98f).coerceIn(0.5f, 2.0f),
         volume = (if (volume.isFinite()) volume else 1.0f).coerceIn(0.0f, 1.0f),
-        openAiVoiceName = openAiVoiceName.takeIf { it in OPENAI_VOICES } ?: "marin"
+        openAiVoiceName = openAiVoiceName.takeIf { it in VoiceSettingsStore.OPENAI_VOICES } ?: "marin"
     )
 }
 
