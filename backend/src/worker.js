@@ -245,12 +245,12 @@ export async function handleRequest(request, env) {
     return json({ name: 'SADEEQI AI', status: 'running', version: env.SADEEQI_VERSION || '1.5.1' }, 200, cors);
   }
 
-  if (url.pathname !== '/v1/chat' && url.pathname !== '/v1/social/providers') {
+  const isSocial = url.pathname === '/v1/social/providers';
+  const isVoiceSession = url.pathname === '/v1/voice/session';
+  if (url.pathname !== '/v1/chat' && !isSocial && !isVoiceSession) {
     return json({ error: 'Not found.' }, 404, cors);
   }
-
-  const isSocial = url.pathname === '/v1/social/providers';
-  if ((isSocial && request.method !== 'GET') || (!isSocial && request.method !== 'POST')) {
+  if ((isSocial && request.method !== 'GET') || ((!isSocial) && request.method !== 'POST')) {
     return json({ error: 'Method not allowed.' }, 405, { ...cors, allow: isSocial ? 'GET, OPTIONS' : 'POST, OPTIONS' });
   }
 
@@ -265,6 +265,53 @@ export async function handleRequest(request, env) {
       providers: socialProviders(env),
       notice: 'No social account is connected. OAuth and API actions remain disabled until provider credentials, encrypted token storage and user authentication are configured.'
     }, 200, cors);
+  }
+
+  if (isVoiceSession) {
+    if (env.ALLOW_OPENAI_VOICE !== 'true') {
+      return json({ error: 'OpenAI voice is disabled by the server owner.' }, 503, cors);
+    }
+    if (!env.OPENAI_REALTIME_API_KEY) {
+      return json({ error: 'OpenAI Realtime voice credentials are not configured on the server.' }, 503, cors);
+    }
+    const declaredLength = Number(request.headers.get('Content-Length') || 0);
+    if (declaredLength > 4096) return json({ error: 'Request body too large.' }, 413, cors);
+    let body;
+    try { body = await request.json(); }
+    catch { return json({ error: 'Invalid JSON.' }, 400, cors); }
+    const allowedVoices = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
+    const voice = typeof body?.voice === 'string' ? body.voice : 'marin';
+    if (!allowedVoices.has(voice)) return json({ error: 'Unsupported voice.' }, 400, cors);
+    try {
+      const upstream = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_REALTIME_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expires_after: { anchor: 'created_at', seconds: 600 },
+          session: {
+            type: 'realtime',
+            model: 'gpt-realtime-2.1-mini',
+            audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice } },
+            instructions: 'Speak the supplied Arabic text clearly and naturally. Preserve Yemeni Arabic wording when present. Do not add or omit words.'
+          }
+        }),
+        signal: AbortSignal.timeout(20000)
+      });
+      let result;
+      try { result = await upstream.json(); }
+      catch { return json({ error: 'Invalid response from OpenAI Realtime.' }, 502, cors); }
+      if (!upstream.ok) {
+        return json({ error: result?.error?.message || 'OpenAI Realtime session creation failed.' }, 502, cors);
+      }
+      const secret = result?.client_secret?.value;
+      if (typeof secret !== 'string' || !secret) return json({ error: 'OpenAI did not return a client secret.' }, 502, cors);
+      return json({ client_secret: secret, expires_at: result.client_secret.expires_at || null, voice }, 200, cors);
+    } catch {
+      return json({ error: 'OpenAI Realtime is temporarily unavailable.' }, 502, cors);
+    }
   }
 
   const config = providerConfig(env);
