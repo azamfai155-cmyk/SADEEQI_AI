@@ -3,5 +3,21 @@
   "name": "sadeeqi-ai",
   "main": "backend/src/worker.js",
   "compatibility_date": "2026-11-11",
-  "workers_dev": true
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "RateLimitDurableObject"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RateLimitDurableObject"
+      ]
+    }
+  ]
 }
