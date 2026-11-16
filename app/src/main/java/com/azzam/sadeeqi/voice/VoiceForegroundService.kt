@@ -24,6 +24,7 @@ import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * User-started, visible microphone session. The persistent notification provides
@@ -32,6 +33,8 @@ import java.util.concurrent.Executors
 class VoiceForegroundService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
+    private var activeReplyTask: Future<*>? = null
+    @Volatile private var replyGeneration = 0L
     private val gateway by lazy { OpenAiGateway { SupabaseAuthClient(this@VoiceForegroundService).accessToken() } }
     private val history = mutableListOf<OpenAiGateway.Turn>()
     private var voice: VoiceController? = null
@@ -49,6 +52,7 @@ class VoiceForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_INTERRUPT -> {
+                cancelActiveReply()
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
@@ -85,6 +89,7 @@ class VoiceForegroundService : Service() {
 
     private fun startSession() {
         if (started) {
+            cancelActiveReply()
             voice?.interruptAndListen()
             return
         }
@@ -218,22 +223,26 @@ class VoiceForegroundService : Service() {
             return
         }
 
+        cancelActiveReply()
+        val requestGeneration = replyGeneration
         history.add(OpenAiGateway.Turn("user", spoken))
         updateNotification("صديقي يعالج كلامك…")
         val snapshot = history.takeLast(24).toList()
-        executor.execute {
+        activeReplyTask = executor.submit {
             try {
                 val answer = gateway.reply(snapshot)
-                history.add(OpenAiGateway.Turn("assistant", answer))
                 mainHandler.post {
-                    if (started) {
+                    if (started && requestGeneration == replyGeneration) {
+                        activeReplyTask = null
+                        history.add(OpenAiGateway.Turn("assistant", answer))
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
                         voice?.speak(answer)
                     }
                 }
             } catch (error: Exception) {
                 mainHandler.post {
-                    if (started) {
+                    if (started && requestGeneration == replyGeneration) {
+                        activeReplyTask = null
                         updateNotification("تعذر الرد: ${error.message ?: "خطأ اتصال"}")
                         voice?.resumeAfterTurnFailure()
                     }
@@ -285,7 +294,17 @@ class VoiceForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
+    private fun cancelActiveReply() {
+        // Invalidate callbacks before cancelling the worker/network call so a late
+        // response can never be spoken or appended to the next conversation turn.
+        replyGeneration += 1
+        activeReplyTask?.cancel(true)
+        activeReplyTask = null
+        gateway.cancelCurrentRequest()
+    }
+
     private fun stopSession() {
+        cancelActiveReply()
         started = false
         pendingPhoneCommand = null
         voice?.stopConversation()
@@ -300,6 +319,7 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        cancelActiveReply()
         started = false
         pendingPhoneCommand = null
         voice?.close()
