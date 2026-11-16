@@ -215,11 +215,13 @@ class MainActivity : ComponentActivity() {
                 messages.add(role to text)
                 val stamp = maxOf(System.currentTimeMillis(), lastVoiceMessageStamp + 1L)
                 lastVoiceMessageStamp = stamp
-                memory.save(
-                    "chat:$stamp:${if (role == "أنت") 1 else 2}",
-                    "conversation",
-                    "$role\n$text"
-                )
+                scope.launch {
+                    memory.save(
+                        "chat:$stamp:${if (role == "أنت") 1 else 2}",
+                        "conversation",
+                        "$role\n$text"
+                    )
+                }
             }
         }
 
