@@ -250,7 +250,6 @@ class VoiceController(
             return
         }
         listening = false
-        val wasDictation = dictationActive
         dictationActive = false
         val recognized = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
         if (recognized.isNotBlank()) {
@@ -272,6 +271,7 @@ class VoiceController(
 
     fun close() {
         conversationActive = false
+        dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
