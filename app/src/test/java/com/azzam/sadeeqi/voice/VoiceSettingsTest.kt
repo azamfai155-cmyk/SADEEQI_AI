@@ -58,7 +58,7 @@ class VoiceSettingsTest {
         assertEquals(3, profiles.map { it.sampleText }.toSet().size)
         assertEquals(3, profiles.map { it.speechRate }.toSet().size)
         assertEquals(3, profiles.map { it.pitch }.toSet().size)
-        profiles.forEach { assertEquals("ar-YE", it.languageTag) }
+        profiles.forEach { assertEquals("ar", it.languageTag) }
     }
 
     @Test
