@@ -34,6 +34,7 @@ import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.AuthActivity
 import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
+import com.azzam.sadeeqi.identity.FounderIdentity
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
@@ -126,6 +127,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FounderIdentity.persist(this)
 
         if (EncryptedSessionStore.accessToken(this).isNullOrBlank()) {
             startActivity(Intent(this, AuthActivity::class.java))
@@ -450,6 +452,21 @@ class MainActivity : ComponentActivity() {
                     effectiveQuestion
                 }
             )
+
+            if (imageForRequest == null) {
+                val fixedAnswer = FounderIdentity.answerFor(effectiveQuestion)
+                if (fixedAnswer != null) {
+                    messages.add("صديقي" to fixedAnswer)
+                    val stamp = System.currentTimeMillis()
+                    scope.launch {
+                        memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                        memory.save("chat:$stamp:2", "conversation", "صديقي\n$fixedAnswer")
+                    }
+                    onReply(fixedAnswer)
+                    status = "تمت الإجابة من هوية صديقي الثابتة."
+                    return
+                }
+            }
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
