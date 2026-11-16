@@ -127,7 +127,14 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) },
+            { message ->
+                updateNotification(message)
+                if (message.contains("إذن الميكروفون") ||
+                    message.contains("غير متاحة على هذا الجهاز")
+                ) {
+                    publishVoiceStatus(false, message)
+                }
+            },
             realtimeSpeech
         )
         voice?.listen()
