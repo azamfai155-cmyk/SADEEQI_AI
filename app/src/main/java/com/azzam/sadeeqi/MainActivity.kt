@@ -342,8 +342,10 @@ class MainActivity : ComponentActivity() {
 
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
+            if (isGenerating) return
             isGenerating = true
-            generationJob = scope.launch {
+            val job = scope.launch {
+                val currentJob = coroutineContext[Job]
                 try {
                     val turns = messages.takeLast(24).map { (who, body) ->
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
@@ -375,10 +377,14 @@ class MainActivity : ComponentActivity() {
                     messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
                     status = "تعذر الاتصال بالخادم"
                 } finally {
-                    isGenerating = false
-                    generationJob = null
+                    // An older request must not clear the state/reference of a newer one.
+                    if (generationJob === currentJob) {
+                        isGenerating = false
+                        generationJob = null
+                    }
                 }
             }
+            generationJob = job
         }
 
         LaunchedEffect(Unit) {
