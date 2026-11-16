@@ -209,8 +209,18 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        var lastVoiceMessageStamp by remember { mutableLongStateOf(0L) }
         onVoiceMessage = { role, text ->
-            if (messages.lastOrNull() != (role to text)) messages.add(role to text)
+            if (role.isNotBlank() && text.isNotBlank()) {
+                messages.add(role to text)
+                val stamp = maxOf(System.currentTimeMillis(), lastVoiceMessageStamp + 1L)
+                lastVoiceMessageStamp = stamp
+                memory.save(
+                    "chat:$stamp:${if (role == "أنت") 1 else 2}",
+                    "conversation",
+                    "$role\n$text"
+                )
+            }
         }
 
         var input by remember {
