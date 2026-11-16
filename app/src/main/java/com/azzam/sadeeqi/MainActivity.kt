@@ -115,6 +115,13 @@ class MainActivity : ComponentActivity() {
                     startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP))
                     onVoiceSession?.invoke(false)
                 },
+                onMuteVoice = { muted ->
+                    startService(
+                        Intent(this, VoiceForegroundService::class.java)
+                            .setAction(VoiceForegroundService.ACTION_MUTE)
+                            .putExtra(VoiceForegroundService.EXTRA_MUTED, muted)
+                    )
+                },
                 onInterruptVoice = {
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_INTERRUPT))
@@ -133,6 +140,7 @@ class MainActivity : ComponentActivity() {
         onStartDictation: () -> Unit,
         onStartVoice: () -> Unit,
         onStopVoice: () -> Unit,
+        onMuteVoice: (Boolean) -> Unit,
         onInterruptVoice: () -> Unit,
         onReply: (String) -> Unit,
         onStopListening: () -> Unit,
@@ -807,6 +815,7 @@ class MainActivity : ComponentActivity() {
                                         if (voiceSessionActive) {
                                             onStopVoice()
                                             voiceSessionActive = false
+                                            microphoneMuted = false
                                             status = "تم إيقاف المحادثة الصوتية"
                                         } else {
                                             onStartVoice()
@@ -816,6 +825,22 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.size(40.dp)
                                 ) {
                                     Text("〰", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
+                                }
+                                if (voiceSessionActive) {
+                                    IconButton(
+                                        onClick = {
+                                            microphoneMuted = !microphoneMuted
+                                            onMuteVoice(microphoneMuted)
+                                            status = if (microphoneMuted) "الميكروفون مكتوم" else "الميكروفون نشط"
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Text(
+                                            if (microphoneMuted) "🔇" else "🎤",
+                                            color = if (microphoneMuted) Color(0xFFE6C77A) else Color.White,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
                                 }
                                 if (isGenerating) {
                                     IconButton(
