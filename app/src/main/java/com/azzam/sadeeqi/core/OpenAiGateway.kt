@@ -32,7 +32,7 @@ class OpenAiGateway(
 
     data class Turn(val role: String, val content: String)
 
-    fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
+    fun reply(history: List<Turn>, imageDataUrl: String? = null, enableWebSearch: Boolean = false): String {
         val requestGeneration = cancellationGeneration.get()
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
@@ -76,6 +76,7 @@ class OpenAiGateway(
 
         val payload = JSONObject()
             .put("input", input)
+            .put("enable_web_search", enableWebSearch)
 
         val request = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/v1/chat")

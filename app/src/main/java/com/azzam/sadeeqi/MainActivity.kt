@@ -4,6 +4,7 @@ package com.azzam.sadeeqi
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.content.Intent
 import android.provider.OpenableColumns
 import android.util.Base64
@@ -76,6 +77,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val requestNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* Permission is optional; foreground service remains user-controlled. */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -83,6 +87,12 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, AuthActivity::class.java))
             finish()
             return
+        }
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
@@ -303,7 +313,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        fun sendQuestion(question: String) {
+        fun sendQuestion(question: String, enableWebSearch: Boolean = false) {
 
             if (question.isBlank() && selectedImageDataUrl == null) return
 
@@ -339,7 +349,7 @@ class MainActivity : ComponentActivity() {
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(turns, imageForRequest, enableWebSearch)
                     }
                     messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
