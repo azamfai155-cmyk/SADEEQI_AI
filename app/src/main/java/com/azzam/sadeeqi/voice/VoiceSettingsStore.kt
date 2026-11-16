@@ -64,9 +64,19 @@ class VoiceSettingsStore(context: Context) {
     ).normalized()
     }
 
-    fun voiceNameFor(profileId: String): String {
+    fun profileSettingsFor(profileId: String): VoiceProfileSettings {
         val safeId = profileId.takeIf { id -> VoiceDialectProfiles.all.any { it.id == id } } ?: "ibbi"
-        return prefs.getString(profileVoiceKey(safeId), "").orEmpty()
+        val defaults = VoiceDialectProfiles.find(safeId)
+        return VoiceProfileSettings(
+            voiceName = prefs.getString(profileVoiceKey(safeId), "").orEmpty(),
+            languageTag = prefs.getString(profileLanguageKey(safeId), defaults.languageTag).orEmpty(),
+            speechRate = prefs.getFloat(profileRateKey(safeId), defaults.speechRate).let {
+                if (it.isFinite()) it.coerceIn(0.5f, 2.0f) else defaults.speechRate
+            },
+            pitch = prefs.getFloat(profilePitchKey(safeId), defaults.pitch).let {
+                if (it.isFinite()) it.coerceIn(0.5f, 2.0f) else defaults.pitch
+            }
+        )
     }
 
     private fun profileVoiceKey(profileId: String) = "voice_name_profile_$profileId"
