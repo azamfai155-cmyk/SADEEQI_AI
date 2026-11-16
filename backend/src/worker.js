@@ -306,9 +306,9 @@ export async function handleRequest(request, env) {
       if (!upstream.ok) {
         return json({ error: result?.error?.message || 'OpenAI Realtime session creation failed.' }, 502, cors);
       }
-      const secret = result?.client_secret?.value;
+      const secret = result?.value;
       if (typeof secret !== 'string' || !secret) return json({ error: 'OpenAI did not return a client secret.' }, 502, cors);
-      return json({ client_secret: secret, expires_at: result.client_secret.expires_at || null, voice }, 200, cors);
+      return json({ client_secret: secret, expires_at: result.expires_at || null, voice }, 200, cors);
     } catch {
       return json({ error: 'OpenAI Realtime is temporarily unavailable.' }, 502, cors);
     }
