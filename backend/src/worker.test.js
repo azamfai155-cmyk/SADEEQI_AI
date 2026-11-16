@@ -375,7 +375,7 @@ test('Realtime voice endpoint returns only an ephemeral client secret and applie
     assert.equal(calledPayload.session.audio.output.voice, 'cedar');
     assert.equal(body.client_secret, 'ek_short_lived_test_secret');
     assert.equal(body.voice, 'cedar');
-    assert.equal('server-only-test-key' in JSON.stringify(body), false);
+    assert.equal(JSON.stringify(body).includes('server-only-test-key'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
