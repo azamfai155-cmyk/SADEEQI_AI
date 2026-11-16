@@ -34,6 +34,7 @@ class OpenAiRealtimeSpeech(
     private val worker = Executors.newSingleThreadExecutor()
     private val generation = AtomicLong(0)
     @Volatile private var activeSocket: WebSocket? = null
+    @Volatile private var activeTokenCall: okhttp3.Call? = null
     @Volatile private var activeTrack: AudioTrack? = null
 
     fun speak(
@@ -58,17 +59,26 @@ class OpenAiRealtimeSpeech(
                     .header("Content-Type", "application/json")
                     .post(JSONObject().put("voice", voice).toString().toRequestBody("application/json".toMediaType()))
                     .build()
-                val clientSecret = http.newCall(tokenRequest).execute().use { response ->
-                    val body = response.body?.string().orEmpty()
-                    if (!response.isSuccessful) {
-                        throw IllegalStateException(
-                            runCatching { JSONObject(body).optString("error") }
-                                .getOrDefault("تعذر تهيئة الصوت السحابي.")
-                        )
+                val tokenCall = http.newCall(tokenRequest)
+                activeTokenCall = tokenCall
+                // A stop/mute action can race with token acquisition. Cancel the HTTP
+                // request as well as invalidating its generation so the worker is released.
+                if (requestGeneration != generation.get()) tokenCall.cancel()
+                val clientSecret = try {
+                    tokenCall.execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            throw IllegalStateException(
+                                runCatching { JSONObject(body).optString("error") }
+                                    .getOrDefault("تعذر تهيئة الصوت السحابي.")
+                            )
+                        }
+                        JSONObject(body).optString("client_secret")
+                            .takeIf { it.isNotBlank() }
+                            ?: throw IllegalStateException("لم يصل رمز جلسة الصوت من الخادم.")
                     }
-                    JSONObject(body).optString("client_secret")
-                        .takeIf { it.isNotBlank() }
-                        ?: throw IllegalStateException("لم يصل رمز جلسة الصوت من الخادم.")
+                } finally {
+                    if (activeTokenCall === tokenCall) activeTokenCall = null
                 }
                 if (requestGeneration != generation.get()) return@execute
 
@@ -222,6 +232,8 @@ class OpenAiRealtimeSpeech(
 
     fun cancel() {
         generation.incrementAndGet()
+        activeTokenCall?.cancel()
+        activeTokenCall = null
         activeSocket?.cancel()
         activeSocket = null
         activeTrack?.let { track ->
