@@ -313,3 +313,70 @@ test('Worker OpenAI provider requires explicit paid opt-in', async () => {
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
 });
+
+
+test('Realtime voice session endpoint stays disabled unless explicitly enabled', async () => {
+  const response = await handleRequest(request('/v1/voice/session', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { voice: 'marin' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /disabled/);
+});
+
+test('Realtime voice session endpoint validates voice names before contacting OpenAI', async () => {
+  const response = await handleRequest(request('/v1/voice/session', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { voice: 'not-a-supported-voice' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    ALLOW_OPENAI_VOICE: 'true',
+    OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'Unsupported voice.');
+});
+
+test('Realtime voice endpoint returns only an ephemeral client secret and applies the selected voice', async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = '';
+  let calledPayload;
+  globalThis.fetch = async (url, init) => {
+    calledUrl = String(url);
+    calledPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      value: 'ek_short_lived_test_secret',
+      expires_at: 1900000000
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/voice/session', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { voice: 'cedar' }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      ALLOW_OPENAI_VOICE: 'true',
+      OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(calledUrl, 'https://api.openai.com/v1/realtime/client_secrets');
+    assert.equal(calledPayload.session.model, 'gpt-realtime-2.1-mini');
+    assert.equal(calledPayload.session.audio.output.voice, 'cedar');
+    assert.equal(body.client_secret, 'ek_short_lived_test_secret');
+    assert.equal(body.voice, 'cedar');
+    assert.equal('server-only-test-key' in JSON.stringify(body), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
