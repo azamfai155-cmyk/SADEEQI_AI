@@ -101,7 +101,6 @@ class OpenAiRealtimeSpeech(
                 val socketRequest = Request.Builder()
                     .url("wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1-mini")
                     .header("Authorization", "Bearer $clientSecret")
-                    .header("OpenAI-Beta", "realtime=v1")
                     .build()
                 val listener = object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
