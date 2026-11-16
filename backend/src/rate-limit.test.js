@@ -38,12 +38,12 @@ test('Durable Object atomic counter rejects concurrent requests beyond the exact
   const objectA = new RateLimitDurableObject({ storage: { sql } });
   const objectB = new RateLimitDurableObject({ storage: { sql } });
   const results = await Promise.all(Array.from({ length: 100 }, (_, index) => check(index % 2 ? objectA : objectB)));
-  const allowed = results.filter(response => response.status === 200);
+  const successfulServiceResponses = results.filter(response => response.status === 200);
   const bodies = await Promise.all(results.map(response => response.json()));
   assert.equal(bodies.filter(result => result.allowed).length, 20);
   assert.equal(bodies.filter(result => !result.allowed).length, 80);
   assert.equal(sql.buckets.get('chat').request_count, 100);
-  assert.equal(allowed.length, 100);
+  assert.equal(successfulServiceResponses.length, 100);
 });
 
 test('counter survives creation of a new Worker-side Durable Object instance', async () => {
