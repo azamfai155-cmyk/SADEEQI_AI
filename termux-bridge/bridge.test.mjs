@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { signalProcessGroup } from './process-control.mjs';
+import { approvalPhrase, isApprovalGranted } from './approval.mjs';
 
 const bridgePath = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
 
@@ -79,4 +80,17 @@ test('uses direct child signaling on Windows', () => {
     killGroup: () => assert.fail('must not signal a POSIX process group')
   });
   assert.deepEqual(calls, ['SIGTERM']);
+});
+
+test('approval phrase is exact and scoped to one task', () => {
+  const phrase = approvalPhrase('backend_tests');
+  assert.equal(isApprovalGranted('backend_tests', phrase), true);
+  assert.equal(isApprovalGranted('git_status', phrase), false);
+  assert.equal(isApprovalGranted('backend_tests', phrase + ' extra'), false);
+  assert.equal(isApprovalGranted('backend_tests', null), false);
+});
+
+test('approval phrase rejects malformed task names', () => {
+  assert.throws(() => approvalPhrase('npm test'), TypeError);
+  assert.throws(() => approvalPhrase('../delete'), TypeError);
 });
