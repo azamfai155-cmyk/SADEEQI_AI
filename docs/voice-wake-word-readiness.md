@@ -23,10 +23,16 @@ Reference paper: https://arxiv.org/abs/2303.16621
 6. Only after model validation, add a dedicated opt-in microphone foreground mode. It must show a persistent notification, expose an immediate stop action, survive screen lock only while Android permits it, and never restart itself after process death or reboot without a fresh user action.
 7. On detection, transition through WAKE_DETECTED -> GREETING -> ACTIVE_LISTENING and keep the existing conversation session open until explicit end command or idle timeout.
 
+## Optional local sample collection (now available in Voice Studio)
+
+Voice Studio provides an explicit, user-initiated sample recorder for the two target phrases. The user must tick a consent checkbox, grant Android microphone permission, choose one phrase, and press Record. Each capture stops after 2.5 seconds or can be stopped manually. Files are written as mono 16 kHz, 16-bit PCM WAV under the app-private `filesDir/wake_word_samples` directory. The UI lists the number of saved samples and offers deletion of all samples behind a confirmation dialog.
+
+The recorder does not send samples to the backend, cloud storage, analytics, or any connector. Consent is not preselected and is not persisted as a blanket future permission. Leaving Voice Studio stops an active capture. Samples remain on the device until the user deletes them or uninstalls the app. This feature only collects candidate training data; it does not train, fine-tune, or activate a wake-word model. A single user's recordings are insufficient to establish robust multi-speaker detection.
+
 ## Privacy and safety gates
 
 - No microphone capture in standby unless the user explicitly enables the feature.
-- No audio upload or retention for wake detection; inference should be on-device.
+- Wake detection inference should be on-device. Optional training samples are retained only in app-private storage with explicit consent; never upload them without a separate, explicit consent flow.
 - If permission is revoked, the service cannot start, the model is missing, or Android blocks microphone foreground startup, report standby wake detection as unavailable. Never silently fall back to cloud ASR or claim that wake listening is active.
 - Keep ordinary conversation content separate from the immutable founder identity.
 - Keep the existing manually started voice session available while the dedicated wake model is being prepared.
