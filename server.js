@@ -11,7 +11,7 @@ app.use((_req, res, next) => {
   res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()', 'Cache-Control': 'no-store', 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' });
   next();
 });
-app.use(express.json({ limit: '12mb', strict: true }));
+// Parse JSON only after authentication and the shared limiter have accepted the request.
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 export function normalizeAuthMode(value) {
@@ -267,7 +267,7 @@ app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
   });
 });
 
-app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
+app.post('/v1/chat', requireAuth, chatRateLimit, express.json({ limit: '12mb', strict: true }), async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
   const validationError = validateInput(req.body?.input);
