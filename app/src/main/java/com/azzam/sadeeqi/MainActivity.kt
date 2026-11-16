@@ -103,7 +103,6 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(requestedVoiceAction))
-                onVoiceSession?.invoke(true)
             } else {
                 onVoiceSession?.invoke(false)
                 onVoiceError?.invoke("تم رفض إذن الميكروفون. اسمح به من إعدادات التطبيق.")
@@ -137,8 +136,7 @@ class MainActivity : ComponentActivity() {
                     requestedVoiceAction = VoiceForegroundService.ACTION_DICTATE
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_DICTATE))
-                        onVoiceSession?.invoke(true)
-                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                            } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 onStartVoice = {
                     requestedVoiceAction = VoiceForegroundService.ACTION_START
@@ -149,8 +147,7 @@ class MainActivity : ComponentActivity() {
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
-                        onVoiceSession?.invoke(true)
-                    } else {
+                            } else {
                         requestMic.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
@@ -168,8 +165,7 @@ class MainActivity : ComponentActivity() {
                 onInterruptVoice = {
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_INTERRUPT))
-                        onVoiceSession?.invoke(true)
-                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                            } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 onReply = { },
                 onStopListening = { startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP)) },
