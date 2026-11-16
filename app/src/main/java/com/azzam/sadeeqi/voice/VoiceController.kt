@@ -20,7 +20,8 @@ class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
     private val onError: (String) -> Unit,
-    private val remoteSpeech: OpenAiRealtimeSpeech? = null
+    private val remoteSpeech: OpenAiRealtimeSpeech? = null,
+    private val onSpeechFinished: () -> Unit = {}
 ) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -216,6 +217,7 @@ class VoiceController(
                             if (utteranceId == lastUtteranceId) {
                                 speaking = false
                                 abandonSpeechAudioFocus()
+                                onSpeechFinished()
                                 if (conversationActive && !microphoneMuted) scheduleListening(250)
                             }
                         }
@@ -303,6 +305,7 @@ class VoiceController(
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
                         abandonSpeechAudioFocus()
+                        onSpeechFinished()
                         if (conversationActive && !microphoneMuted) scheduleListening(250)
                     }
                 }
@@ -311,6 +314,7 @@ class VoiceController(
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
                         abandonSpeechAudioFocus()
+                        onSpeechFinished()
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
