@@ -14,7 +14,7 @@ data class VoiceProfileSettings(
 /** Non-sensitive voice preferences; secrets and conversation content are never stored here. */
 data class VoiceSettings(
     val voiceName: String = "",
-    val languageTag: String = "ar-YE",
+    val languageTag: String = "ar",
     val speechRate: Float = 0.96f,
     val pitch: Float = 0.98f,
     val volume: Float = 1.0f,
