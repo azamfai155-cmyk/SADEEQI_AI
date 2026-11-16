@@ -17,9 +17,10 @@ class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
     private val onError: (String) -> Unit
-) : RecognitionListener, TextToSpeech.OnInitListener {
+) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var recognizerGeneration = 0L
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
@@ -47,7 +48,7 @@ class VoiceController(
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
-        runCatching { recognizer?.cancel() }
+        resetRecognizer()
         listening = false
         runCatching { tts?.stop() }
         speaking = false
@@ -60,7 +61,7 @@ class VoiceController(
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { tts?.stop() }
         speaking = false
-        runCatching { recognizer?.cancel() }
+        resetRecognizer()
         listening = false
         startListeningInternal()
     }
@@ -74,9 +75,10 @@ class VoiceController(
     fun setMicrophoneMuted(muted: Boolean) {
         microphoneMuted = muted
         if (muted) {
-            runCatching { recognizer?.cancel() }
+            resetRecognizer()
             listening = false
         } else if (conversationActive && !speaking) {
+            resetRecognizer()
             startListeningInternal()
         }
     }
@@ -95,7 +97,8 @@ class VoiceController(
         try {
             if (recognizer == null) {
                 recognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
-                recognizer?.setRecognitionListener(this)
+                val generation = ++recognizerGeneration
+                recognizer?.setRecognitionListener(createRecognitionListener(generation))
             }
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -167,8 +170,10 @@ class VoiceController(
                     }
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    speaking = false
-                    if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    }
                 }
             })
             if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
@@ -188,14 +193,22 @@ class VoiceController(
         }, delayMs)
     }
 
-    override fun onReadyForSpeech(params: Bundle?) { listening = true }
-    override fun onBeginningOfSpeech() {}
-    override fun onRmsChanged(rmsdB: Float) {}
-    override fun onBufferReceived(buffer: ByteArray?) {}
-    override fun onEndOfSpeech() { listening = false }
-    override fun onEvent(eventType: Int, params: Bundle?) {}
+    private fun createRecognitionListener(generation: Long): RecognitionListener = object : RecognitionListener {
+        private fun deliver(action: () -> Unit) {
+            if (generation == recognizerGeneration) action()
+        }
+        override fun onReadyForSpeech(params: Bundle?) = deliver { listening = true }
+        override fun onBeginningOfSpeech() = deliver { }
+        override fun onRmsChanged(rmsdB: Float) = deliver { }
+        override fun onBufferReceived(buffer: ByteArray?) = deliver { }
+        override fun onEndOfSpeech() = deliver { listening = false }
+        override fun onEvent(eventType: Int, params: Bundle?) = deliver { }
+        override fun onError(error: Int) = deliver { handleRecognitionError(error) }
+        override fun onResults(results: Bundle?) = deliver { handleRecognitionResults(results) }
+        override fun onPartialResults(partialResults: Bundle?) = deliver { }
+    }
 
-    override fun onError(error: Int) {
+    private fun handleRecognitionError(error: Int) {
         // Cancellation can race with callbacks from the platform recognizer.
         // Never surface errors or schedule a retry while the microphone is muted.
         if (microphoneMuted || !conversationActive) {
@@ -221,7 +234,7 @@ class VoiceController(
         }
     }
 
-    override fun onResults(results: Bundle?) {
+    private fun handleRecognitionResults(results: Bundle?) {
         // A final result may arrive after SpeechRecognizer.cancel() during mute/stop.
         if (microphoneMuted || !conversationActive) {
             listening = false
@@ -238,16 +251,20 @@ class VoiceController(
         }
     }
 
-    override fun onPartialResults(partialResults: Bundle?) {}
+    private fun resetRecognizer() {
+        recognizerGeneration += 1
+        val oldRecognizer = recognizer
+        recognizer = null
+        runCatching { oldRecognizer?.cancel() }
+        runCatching { oldRecognizer?.destroy() }
+    }
 
     fun close() {
         conversationActive = false
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
-        runCatching { recognizer?.cancel() }
-        recognizer?.destroy()
-        recognizer = null
+        resetRecognizer()
         runCatching { tts?.stop() }
         speaking = false
         tts?.shutdown()
