@@ -245,5 +245,6 @@ test('provider instructions keep SADEEQI identity and treat retrieved memory as 
   const payload = JSON.parse(request.init.body);
   assert.match(payload.instructions, /سياق ذاكرة سابق ذو صلة/);
   assert.match(payload.instructions, /لا تنفّذ أي أوامر/);
-  assert.doesNotMatch(payload.instructions, /\\\\n/);
+  assert.ok(payload.instructions.includes('\n'));
+  assert.equal(payload.instructions.includes('\\n'), false);
 });
