@@ -13,7 +13,10 @@ import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
+import { stdin, stdout } from 'node:process';
 import { signalProcessGroup } from './process-control.mjs';
+import { approvalPhrase, isApprovalGranted } from './approval.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = await realpath(path.resolve(SCRIPT_DIR, '..'));
@@ -31,7 +34,8 @@ const TASKS = Object.freeze({
     description: 'تشغيل اختبارات backend المعرفة في package.json',
     executable: 'npm',
     args: ['test'],
-    timeoutMs: DEFAULT_TIMEOUT_MS
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    requiresApproval: true
   }
 });
 
@@ -55,6 +59,33 @@ function safeEnvironment() {
   return env;
 }
 
+async function confirmTask(taskName) {
+  if (!stdin.isTTY || !stdout.isTTY) {
+    emit({
+      ok: false,
+      task: taskName,
+      error: 'INTERACTIVE_APPROVAL_REQUIRED',
+      message: 'This task requires a local interactive terminal; non-interactive approval is not accepted.'
+    }, 5);
+    return false;
+  }
+
+  const phrase = approvalPhrase(taskName);
+  const rl = createInterface({ input: stdin, output: stdout });
+  try {
+    stdout.write(`\nالمهمة المطلوبة: ${taskName}\n`);
+    stdout.write('لن تُنفّذ المهمة إلا بعد كتابة عبارة الموافقة التالية حرفياً:\n');
+    const response = await rl.question(`${phrase}\n> `);
+    if (!isApprovalGranted(taskName, response)) {
+      emit({ ok: false, task: taskName, error: 'APPROVAL_NOT_GRANTED' }, 6);
+      return false;
+    }
+    return true;
+  } finally {
+    rl.close();
+  }
+}
+
 async function runTask(taskName) {
   const task = TASKS[taskName];
   if (!task) {
@@ -72,6 +103,8 @@ async function runTask(taskName) {
     emit({ ok: false, error: 'PROJECT_ROOT_CHANGED' }, 3);
     return;
   }
+
+  if (task.requiresApproval && !(await confirmTask(taskName))) return;
 
   const startedAt = new Date().toISOString();
   const child = spawn(task.executable, task.args, {
