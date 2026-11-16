@@ -157,7 +157,9 @@ class VoiceForegroundService : Service() {
             realtimeSpeech,
             {
                 mainHandler.post {
-                    if (started) {
+                    if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+                        stopSession("عاد صديقي إلى وضع الاستعداد.")
+                    } else if (started) {
                         setSessionState(VoiceSessionState.ACTIVE_LISTENING)
                         refreshIdleTimeout()
                     }
@@ -229,6 +231,7 @@ class VoiceForegroundService : Service() {
         // must remain the final status rather than being overwritten as active.
         publishVoiceStatus(true, "بدأت خدمة الصوت؛ جارٍ تهيئة الاستماع.")
         voice?.startConversation()
+        refreshIdleTimeout()
     }
 
     private fun normalizeVoiceConfirmation(value: String): String = value.trim().lowercase()
@@ -263,10 +266,9 @@ class VoiceForegroundService : Service() {
         publishVoiceMessage("أنت", spoken)
 
         val normalized = normalizeVoiceConfirmation(spoken).replace(" ", "")
-        if (normalized in setOf("خلاصياصديقي", "ارجعلوضعالاستعداد", "انهالمحادثة", "انهيالمحادثة", "اقفلالمحادثة")) {
+        if (normalized in setOf("خلاصياصديقي", "ارجعلوضعالاستعداد", "انهالمحادثة", "انهيالمحادثة", "انهاءالمحادثة", "اقفلالمحادثة")) {
             setSessionState(VoiceSessionState.STANDBY_RESUME)
             speakVoiceReply("حاضر عزام. أوقفت المحادثة الصوتية وعدت إلى وضع الاستعداد.")
-            mainHandler.postDelayed({ if (started) stopSession("عاد صديقي إلى وضع الاستعداد.") }, 900)
             return
         }
 
