@@ -104,38 +104,28 @@ class OpenAiRealtimeSpeech(
                     .build()
                 val listener = object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
-                        val event = JSONObject()
-                            .put("type", "response.create")
+                        // Realtime WebSocket expects user text as a conversation item,
+                        // followed by a separate response.create event. "input" is not
+                        // part of the response.create payload.
+                        val userMessage = JSONObject()
+                            .put("type", "conversation.item.create")
                             .put(
-                                "response",
+                                "item",
                                 JSONObject()
-                                    .put("conversation", "none")
-                                    .put("output_modalities", org.json.JSONArray().put("audio"))
+                                    .put("type", "message")
+                                    .put("role", "user")
                                     .put(
-                                        "audio",
-                                        JSONObject().put(
-                                            "output",
-                                            JSONObject()
-                                                .put("format", JSONObject().put("type", "audio/pcm").put("rate", SAMPLE_RATE))
-                                                .put("voice", voice)
-                                        )
-                                    )
-                                    .put(
-                                        "input",
+                                        "content",
                                         org.json.JSONArray().put(
-                                            JSONObject()
-                                                .put("type", "message")
-                                                .put("role", "user")
-                                                .put(
-                                                    "content",
-                                                    org.json.JSONArray().put(
-                                                        JSONObject().put("type", "input_text").put("text", text)
-                                                    )
-                                                )
+                                            JSONObject().put("type", "input_text").put("text", text)
                                         )
                                     )
                             )
-                        if (requestGeneration != generation.get() || !webSocket.send(event.toString())) {
+                        val responseRequest = JSONObject().put("type", "response.create")
+                        if (requestGeneration != generation.get() ||
+                            !webSocket.send(userMessage.toString()) ||
+                            !webSocket.send(responseRequest.toString())
+                        ) {
                             failure = "تم إلغاء طلب الصوت."
                             finished.countDown()
                         }
