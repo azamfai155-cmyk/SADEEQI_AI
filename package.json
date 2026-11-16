@@ -9,7 +9,7 @@
     "smoke:ai": "node scripts/ai-provider-smoke.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "dependencies": {
     "express": "^5.1.0",
