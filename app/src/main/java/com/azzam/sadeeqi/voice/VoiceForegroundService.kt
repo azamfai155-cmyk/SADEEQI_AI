@@ -224,6 +224,7 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        publishVoiceMessage("أنت", spoken)
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -310,6 +311,7 @@ class VoiceForegroundService : Service() {
                     if (started && requestGeneration == replyGeneration) {
                         activeReplyTask = null
                         history.add(OpenAiGateway.Turn("assistant", answer))
+                        publishVoiceMessage("صديقي", answer)
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
                         voice?.speak(answer)
                     }
@@ -378,6 +380,16 @@ class VoiceForegroundService : Service() {
         )
     }
 
+    private fun publishVoiceMessage(role: String, message: String) {
+        if (message.isBlank()) return
+        sendBroadcast(
+            Intent(ACTION_MESSAGE)
+                .setPackage(packageName)
+                .putExtra(EXTRA_MESSAGE_ROLE, role)
+                .putExtra(EXTRA_MESSAGE_TEXT, message)
+        )
+    }
+
     private fun cancelActiveReply() {
         // Invalidate callbacks before cancelling the worker/network call so a late
         // response can never be spoken or appended to the next conversation turn.
@@ -429,6 +441,9 @@ class VoiceForegroundService : Service() {
         const val ACTION_STATUS = "com.azzam.sadeeqi.voice.STATUS"
         const val EXTRA_STATUS_ACTIVE = "voice_status_active"
         const val EXTRA_STATUS_MESSAGE = "voice_status_message"
+        const val ACTION_MESSAGE = "com.azzam.sadeeqi.voice.MESSAGE"
+        const val EXTRA_MESSAGE_ROLE = "voice_message_role"
+        const val EXTRA_MESSAGE_TEXT = "voice_message_text"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
     }
