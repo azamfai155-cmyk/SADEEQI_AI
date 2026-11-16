@@ -67,14 +67,23 @@ class MainActivity : ComponentActivity() {
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
+    private var onVoiceMessage: ((String, String) -> Unit)? = null
     private var voiceStatusReceiverRegistered = false
     private val voiceStatusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
-            if (intent?.action != VoiceForegroundService.ACTION_STATUS) return
-            val active = intent.getBooleanExtra(VoiceForegroundService.EXTRA_STATUS_ACTIVE, false)
-            val message = intent.getStringExtra(VoiceForegroundService.EXTRA_STATUS_MESSAGE).orEmpty()
-            onVoiceSession?.invoke(active)
-            if (message.isNotBlank()) onVoiceError?.invoke(message)
+            when (intent?.action) {
+                VoiceForegroundService.ACTION_STATUS -> {
+                    val active = intent.getBooleanExtra(VoiceForegroundService.EXTRA_STATUS_ACTIVE, false)
+                    val message = intent.getStringExtra(VoiceForegroundService.EXTRA_STATUS_MESSAGE).orEmpty()
+                    onVoiceSession?.invoke(active)
+                    if (message.isNotBlank()) onVoiceError?.invoke(message)
+                }
+                VoiceForegroundService.ACTION_MESSAGE -> {
+                    val role = intent.getStringExtra(VoiceForegroundService.EXTRA_MESSAGE_ROLE).orEmpty()
+                    val message = intent.getStringExtra(VoiceForegroundService.EXTRA_MESSAGE_TEXT).orEmpty()
+                    if (role.isNotBlank() && message.isNotBlank()) onVoiceMessage?.invoke(role, message)
+                }
+            }
         }
     }
 
@@ -84,7 +93,10 @@ class MainActivity : ComponentActivity() {
             ContextCompat.registerReceiver(
                 this,
                 voiceStatusReceiver,
-                IntentFilter(VoiceForegroundService.ACTION_STATUS),
+                IntentFilter().apply {
+                    addAction(VoiceForegroundService.ACTION_STATUS)
+                    addAction(VoiceForegroundService.ACTION_MESSAGE)
+                },
                 ContextCompat.RECEIVER_NOT_EXPORTED
             )
             voiceStatusReceiverRegistered = true
@@ -195,6 +207,10 @@ class MainActivity : ComponentActivity() {
             mutableStateListOf(
                 "صديقي" to "أهلاً عزام! أنا صديقي. اكتب رسالتك أو اضغط الميكروفون."
             )
+        }
+
+        onVoiceMessage = { role, text ->
+            if (messages.lastOrNull() != (role to text)) messages.add(role to text)
         }
 
         var input by remember {
