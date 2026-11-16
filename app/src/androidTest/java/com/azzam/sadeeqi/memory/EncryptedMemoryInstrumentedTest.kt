@@ -18,6 +18,19 @@ class EncryptedMemoryInstrumentedTest {
         assertEquals(marker, memory.read("acceptance-key"))
         assertTrue(memory.search("PRIVATE_TEST_MARKER").isNotEmpty())
 
+        // Check the live SQLite database and WAL sidecar before replacing the marker.
+        // Room commonly keeps recent writes in WAL rather than the main database file.
+        val db = context.getDatabasePath("sadeeqi_secure.db")
+        val sqliteFiles = listOf(
+            db,
+            File(db.absolutePath + "-wal"),
+            File(db.absolutePath + "-shm")
+        )
+        val rawSqlite = sqliteFiles
+            .filter { it.exists() }
+            .joinToString("") { it.readBytes().toString(Charsets.ISO_8859_1) }
+        assertFalse("Plaintext marker found in SQLite files", rawSqlite.contains(marker))
+
         // Re-saving a logical ID must replace its value rather than create duplicates.
         memory.save("acceptance-key", "private-note", "replacement-secret")
         assertEquals("replacement-secret", memory.read("acceptance-key"))
@@ -25,10 +38,6 @@ class EncryptedMemoryInstrumentedTest {
 
         memory.update("acceptance-key", "private-note", "updated-secret")
         assertEquals("updated-secret", memory.read("acceptance-key"))
-
-        val db = context.getDatabasePath("sadeeqi_secure.db")
-        val raw = File(db.absolutePath).takeIf { it.exists() }?.readBytes()?.toString(Charsets.ISO_8859_1).orEmpty()
-        assertFalse("Plaintext marker found in SQLite main file", raw.contains(marker))
 
         val password = "test-password-123".toCharArray()
         val backup = memory.exportEncrypted(password)
