@@ -25,6 +25,7 @@ class VoiceController(
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     @Volatile private var conversationActive = false
+    @Volatile private var dictationActive = false
     @Volatile private var listening = false
     @Volatile private var microphoneMuted = false
     @Volatile private var speaking = false
@@ -37,6 +38,7 @@ class VoiceController(
 
     fun startConversation() {
         microphoneMuted = false
+        dictationActive = false
         conversationActive = true
         runCatching { tts?.stop() }
         speaking = false
@@ -45,6 +47,7 @@ class VoiceController(
 
     fun stopConversation() {
         conversationActive = false
+        dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
@@ -56,6 +59,7 @@ class VoiceController(
 
     fun interruptAndListen() {
         conversationActive = true
+        dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
         mainHandler.removeCallbacksAndMessages(null)
@@ -69,6 +73,7 @@ class VoiceController(
     fun listen() {
         microphoneMuted = false
         conversationActive = false
+        dictationActive = true
         startListeningInternal()
     }
 
@@ -77,7 +82,7 @@ class VoiceController(
         if (muted) {
             resetRecognizer()
             listening = false
-        } else if (conversationActive && !speaking) {
+        } else if ((conversationActive || dictationActive) && !speaking) {
             resetRecognizer()
             startListeningInternal()
         }
@@ -155,7 +160,9 @@ class VoiceController(
             tts?.setSpeechRate(settings.speechRate)
             tts?.setPitch(settings.pitch)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) { speaking = true }
+                override fun onStart(utteranceId: String?) {
+                    if (utteranceId == lastUtteranceId) speaking = true
+                }
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
@@ -211,11 +218,13 @@ class VoiceController(
     private fun handleRecognitionError(error: Int) {
         // Cancellation can race with callbacks from the platform recognizer.
         // Never surface errors or schedule a retry while the microphone is muted.
-        if (microphoneMuted || !conversationActive) {
+        if (microphoneMuted || (!conversationActive && !dictationActive)) {
             listening = false
             return
         }
         listening = false
+        val wasDictation = dictationActive
+        dictationActive = false
         val message = when (error) {
             SpeechRecognizer.ERROR_AUDIO -> "حدث خطأ في تسجيل الصوت."
             SpeechRecognizer.ERROR_CLIENT -> "تعذر تشغيل خدمة التعرف على الكلام."
@@ -228,7 +237,7 @@ class VoiceController(
             else -> "حدث خطأ أثناء الاستماع."
         }
         onError(message)
-        if (conversationActive && !microphoneMuted && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+        if (!wasDictation && conversationActive && !microphoneMuted && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             scheduleListening(if (error == SpeechRecognizer.ERROR_NETWORK ||
                 error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) 1400 else 500)
         }
@@ -236,11 +245,13 @@ class VoiceController(
 
     private fun handleRecognitionResults(results: Bundle?) {
         // A final result may arrive after SpeechRecognizer.cancel() during mute/stop.
-        if (microphoneMuted || !conversationActive) {
+        if (microphoneMuted || (!conversationActive && !dictationActive)) {
             listening = false
             return
         }
         listening = false
+        val wasDictation = dictationActive
+        dictationActive = false
         val recognized = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
         if (recognized.isNotBlank()) {
             onText(recognized)
