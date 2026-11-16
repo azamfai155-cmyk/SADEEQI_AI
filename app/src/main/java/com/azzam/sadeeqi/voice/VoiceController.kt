@@ -24,6 +24,7 @@ class VoiceController(
 ) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var scheduledListening: Runnable? = null
     private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     @Volatile private var hasAudioFocus = false
     private val speechAudioFocusRequest = AudioFocusRequest.Builder(
@@ -94,6 +95,7 @@ class VoiceController(
         microphoneMuted = false
         lastUtteranceId = null
         pendingSpeech = null
+        cancelScheduledListening()
         mainHandler.removeCallbacksAndMessages(null)
         resetRecognizer()
         listening = false
@@ -356,15 +358,25 @@ class VoiceController(
         runCatching { audioManager.abandonAudioFocusRequest(speechAudioFocusRequest) }
     }
 
+    private fun cancelScheduledListening() {
+        scheduledListening?.let(mainHandler::removeCallbacks)
+        scheduledListening = null
+    }
+
     private fun scheduleListening(delayMs: Long) {
         if (closed || !conversationActive || microphoneMuted) return
-        mainHandler.removeCallbacksAndMessages(null)
-        mainHandler.postDelayed({
+        // Replace only the pending recognition retry. Clearing the entire Handler
+        // queue here could discard TTS or audio-focus callbacks posted to it.
+        cancelScheduledListening()
+        val retry = Runnable {
+            scheduledListening = null
             if (conversationActive && !microphoneMuted && !speaking) {
                 listening = false
                 startListeningInternal()
             }
-        }, delayMs)
+        }
+        scheduledListening = retry
+        mainHandler.postDelayed(retry, delayMs)
     }
 
     private fun createRecognitionListener(generation: Long): RecognitionListener = object : RecognitionListener {
