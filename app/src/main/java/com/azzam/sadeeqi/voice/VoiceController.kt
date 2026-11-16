@@ -196,6 +196,12 @@ class VoiceController(
     override fun onEvent(eventType: Int, params: Bundle?) {}
 
     override fun onError(error: Int) {
+        // Cancellation can race with callbacks from the platform recognizer.
+        // Never surface errors or schedule a retry while the microphone is muted.
+        if (microphoneMuted || !conversationActive) {
+            listening = false
+            return
+        }
         listening = false
         val message = when (error) {
             SpeechRecognizer.ERROR_AUDIO -> "حدث خطأ في تسجيل الصوت."
@@ -216,6 +222,11 @@ class VoiceController(
     }
 
     override fun onResults(results: Bundle?) {
+        // A final result may arrive after SpeechRecognizer.cancel() during mute/stop.
+        if (microphoneMuted || !conversationActive) {
+            listening = false
+            return
+        }
         listening = false
         val recognized = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
         if (recognized.isNotBlank()) {
