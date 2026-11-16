@@ -27,7 +27,7 @@ class VoiceController(
     @Volatile private var listening = false
     @Volatile private var microphoneMuted = false
     @Volatile private var speaking = false
-    private var lastUtteranceId: String? = null
+    @Volatile private var lastUtteranceId: String? = null
     private val settingsStore = VoiceSettingsStore(appContext)
 
     init { tts = TextToSpeech(appContext, this) }
@@ -97,10 +97,11 @@ class VoiceController(
                 recognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
                 recognizer?.setRecognitionListener(this)
             }
+            val recognitionLanguageTag = settingsStore.load().speechRecognitionLanguageTag()
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguageTag)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguageTag)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
@@ -152,7 +153,9 @@ class VoiceController(
             tts?.setSpeechRate(settings.speechRate)
             tts?.setPitch(settings.pitch)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) { speaking = true }
+                override fun onStart(utteranceId: String?) {
+                    if (utteranceId == lastUtteranceId) speaking = true
+                }
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
@@ -167,8 +170,10 @@ class VoiceController(
                     }
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    speaking = false
-                    if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    }
                 }
             })
             if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")

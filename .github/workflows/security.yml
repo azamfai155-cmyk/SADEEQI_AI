@@ -14,11 +14,15 @@ jobs:
   backend-dependency-audit:
     name: Backend dependency vulnerability audit
     runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_CACHE: /tmp/sadeeqi-npm-cache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: 20
+          node-version: 26
+      - name: Prepare isolated npm cache
+        run: mkdir -p "$NPM_CONFIG_CACHE"
       - name: Generate a lockfile for this repository (none is committed yet)
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install locked dependencies
@@ -39,7 +43,7 @@ jobs:
       - name: Install Semgrep
         run: python -m pip install --upgrade semgrep
       - name: Scan repository for OWASP Top 10 patterns
-        run: semgrep scan --config p/owasp-top-ten --json --output semgrep-report.json --exclude node_modules --exclude .gradle .
+        run: semgrep scan --error --config p/owasp-top-ten --json --output semgrep-report.json --exclude node_modules --exclude .gradle .
       - name: Upload Semgrep findings
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -71,3 +71,7 @@ The Android client no longer embeds the shared backend bearer token. It signs us
 6. Only after the new APK is distributed and old clients are retired, change Vercel `AUTH_MODE` to `supabase` and delete the legacy `SADEEQI_APP_TOKEN` variable. This permanently rejects the shared-token scheme.
 
 Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user passwords. The project URL and anon/public key may be embedded in the APK; backend provider credentials remain server-only. These branch changes are source code and are not a production deployment.
+
+## اختبار التطبيق على الهاتف
+
+راجع قائمة القبول العربية قبل اعتماد أي APK أو إعلان اكتمال ميزة: [قائمة اختبار الهاتف](docs/PHONE_ACCEPTANCE_CHECKLIST_AR.md). لا يُعد وجود الكود في المستودع إثباتًا لنجاح البناء أو عمل الميزة على جهاز فعلي.

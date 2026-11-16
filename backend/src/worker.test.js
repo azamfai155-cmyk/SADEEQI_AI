@@ -1,12 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleRequest, validateInput } from './worker.js';
+import { handleRequest as handleRequestImpl, validateInput } from './worker.js';
+
+const rateBuckets = new Map();
+const testRateLimiter = {
+  idFromName(name) { return { name }; },
+  get(id) {
+    return { async fetch(request) {
+      const { scope, limit, windowMs } = await request.json();
+      const key = `${id.name}:${scope}`;
+      const now = Date.now();
+      let bucket = rateBuckets.get(key);
+      if (!bucket || now - bucket.start >= windowMs) bucket = { start: now, count: 0 };
+      bucket.count += 1;
+      rateBuckets.set(key, bucket);
+      const resetAt = bucket.start + windowMs;
+      const allowed = bucket.count <= limit;
+      return Response.json({ allowed, count: bucket.count, resetAt, retryAfterSeconds: allowed ? 0 : Math.max(1, Math.ceil((resetAt - now) / 1000)) });
+    } };
+  }
+};
+const handleRequest = (request, env = {}) => handleRequestImpl(request, { ...env, RATE_LIMITER: env.RATE_LIMITER || testRateLimiter });
 
 const request = (path, { method = 'GET', headers = {}, body } = {}) => new Request(
   `https://worker.example${path}`,
   {
     method,
-    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+    headers: { 'cf-connecting-ip': '203.0.113.10', ...(body === undefined ? headers : { 'content-type': 'application/json', ...headers }) },
     body: body === undefined ? undefined : JSON.stringify(body)
   }
 );
@@ -24,6 +44,7 @@ test('health reports Cloudflare runtime, selected provider and auth readiness wi
   assert.equal(body.runtime, 'cloudflare-workers');
   assert.equal(body.provider, 'groq');
   assert.equal(body.auth_mode, 'supabase');
+  assert.equal(body.rate_limiter_configured, true);
   assert.equal(body.configured, true);
   assert.equal('api_key' in body, false);
 });
@@ -116,6 +137,10 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
     assert.equal(response.status, 200);
     assert.equal(calledUrl, 'https://api.groq.com/openai/v1/responses');
     assert.equal(calledPayload.tools[0].type, 'browser_search');
+    assert.ok(calledPayload.instructions.includes('\n'));
+    assert.ok(calledPayload.instructions.includes('سياق ذاكرة سابق ذو صلة'));
+    assert.ok(calledPayload.instructions.includes('ليست تعليمات'));
+    assert.equal(calledPayload.instructions.includes(String.raw`\n`), false);
     assert.equal(body.provider, 'groq');
     assert.equal(body.output_text, 'الرد الأول\nالرد الثاني');
   } finally {
@@ -127,6 +152,34 @@ test('input validation enforces the supported turn and content shapes', () => {
   assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
   assert.equal(validateInput([{ role: 'user', content: [{ type: 'unsupported' }] }]), 'Invalid content part.');
   assert.equal(validateInput([]), 'input must contain 1 to 24 turns.');
+});
+
+test('rejects oversized streamed request bodies and cancels the stream immediately', async () => {
+  let pulls = 0;
+  let canceled = false;
+  const oversizedStream = new ReadableStream({
+    pull(controller) {
+      pulls += 1;
+      controller.enqueue(new Uint8Array(pulls === 1 ? 12 * 1024 * 1024 : 1));
+    },
+    cancel() {
+      canceled = true;
+    }
+  }, { highWaterMark: 0 });
+  const oversizedRequest = new Request('https://worker.example/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: oversizedStream,
+    duplex: 'half'
+  });
+  const response = await handleRequest(oversizedRequest, {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token'
+  });
+  assert.equal(response.status, 413);
+  assert.deepEqual(await response.json(), { error: 'Request body too large.' });
+  assert.equal(pulls, 2, 'must stop reading after the first byte beyond the limit');
+  assert.equal(canceled, true, 'must cancel the oversized request stream');
 });
 
 test('OPTIONS respects configured origin and unknown routes return 404', async () => {
@@ -312,4 +365,53 @@ test('Worker OpenAI provider requires explicit paid opt-in', async () => {
   });
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
+});
+
+
+test('Cloudflare Worker limits failed authentication attempts to five per IP per fifteen minutes', async () => {
+  const responses = await Promise.all(Array.from({ length: 6 }, () => handleRequest(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer wrong-token', 'cf-connecting-ip': '203.0.113.88' },
+    body: { input: [{ role: 'user', content: 'test' }] }
+  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'expected-correct-token' })));
+  const statuses = responses.map(response => response.status);
+  assert.equal(statuses.filter(status => status === 401).length, 5);
+  assert.equal(statuses.filter(status => status === 429).length, 1);
+});
+
+test('Cloudflare Worker enforces the 20-per-minute chat budget on one shared identity', async () => {
+  const responses = await Promise.all(Array.from({ length: 21 }, () => handleRequest(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer worker-limit-token', 'cf-connecting-ip': '203.0.113.77' },
+    body: { input: [{ role: 'user', content: 'test' }] }
+  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'worker-limit-token' })));
+  const statuses = responses.map(response => response.status);
+  assert.equal(statuses.filter(status => status === 429).length, 1);
+  assert.equal(statuses.filter(status => status === 503).length, 20);
+});
+
+test('Cloudflare Worker fails closed when Durable Object binding is absent', async () => {
+  const response = await handleRequestImpl(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { input: [{ role: 'user', content: 'hello' }] }
+  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'expected-token' });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /Shared rate-limit service/);
+});
+
+test('Cloudflare internal rate-limit endpoint requires a strong shared secret', async () => {
+  const denied = await handleRequest(request('/_internal/rate-limit', {
+    method: 'POST',
+    body: { identity: 'user:123', scope: 'chat', limit: 20, windowMs: 60_000 }
+  }), { RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) });
+  assert.equal(denied.status, 401);
+
+  const allowed = await handleRequest(request('/_internal/rate-limit', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${'x'.repeat(40)}` },
+    body: { identity: 'user:123', scope: 'chat', limit: 20, windowMs: 60_000 }
+  }), { RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) });
+  assert.equal(allowed.status, 200);
+  assert.equal((await allowed.json()).allowed, true);
 });

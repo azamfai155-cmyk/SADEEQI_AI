@@ -1,0 +1,37 @@
+version: 2.1
+
+jobs:
+  backend-dependency-audit:
+    docker:
+      - image: cimg/node:26
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Install backend dependencies
+          command: npm install --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Audit production dependencies
+          command: npm audit --omit=dev --audit-level=high
+      - run:
+          name: Run backend tests
+          command: npm test
+
+  semgrep-sast:
+    docker:
+      - image: cimg/python:3.12
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Install Semgrep
+          command: python -m pip install --disable-pip-version-check semgrep
+      - run:
+          name: Scan repository and fail on findings
+          command: semgrep scan --error --config p/owasp-top-ten --exclude node_modules --exclude .gradle .
+
+workflows:
+  sadeeqi-validation:
+    jobs:
+      - backend-dependency-audit
+      - semgrep-sast
