@@ -379,7 +379,18 @@ test('Cloudflare Worker limits failed authentication attempts to five per IP per
   assert.equal(statuses.filter(status => status === 429).length, 1);
 });
 
-test('Cloudflare Worker enforces the 20-per-minute chat budget on one shared identity', async () => {\n  const responses = await Promise.all(Array.from({ length: 21 }, () => handleRequest(request('/v1/chat', {\n    method: 'POST',\n    headers: { Authorization: 'Bearer worker-limit-token', 'cf-connecting-ip': '203.0.113.77' },\n    body: { input: [{ role: 'user', content: 'test' }] }\n  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'worker-limit-token' })));\n  const statuses = responses.map(response => response.status);\n  assert.equal(statuses.filter(status => status === 429).length, 1);\n  assert.equal(statuses.filter(status => status === 503).length, 20);\n});\n\ntest('Cloudflare Worker fails closed when Durable Object binding is absent', async () => {
+test('Cloudflare Worker enforces the 20-per-minute chat budget on one shared identity', async () => {
+  const responses = await Promise.all(Array.from({ length: 21 }, () => handleRequest(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer worker-limit-token', 'cf-connecting-ip': '203.0.113.77' },
+    body: { input: [{ role: 'user', content: 'test' }] }
+  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'worker-limit-token' })));
+  const statuses = responses.map(response => response.status);
+  assert.equal(statuses.filter(status => status === 429).length, 1);
+  assert.equal(statuses.filter(status => status === 503).length, 20);
+});
+
+test('Cloudflare Worker fails closed when Durable Object binding is absent', async () => {
   const response = await handleRequestImpl(request('/v1/chat', {
     method: 'POST',
     headers: { Authorization: 'Bearer expected-token' },
