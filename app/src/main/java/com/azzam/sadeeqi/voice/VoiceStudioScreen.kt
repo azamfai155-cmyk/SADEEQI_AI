@@ -85,8 +85,8 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     }
     fun preview(voice: android.speech.tts.Voice?) {
         if (!engineReady) return
-        if (voice != null) previewEngine.voice = voice
         previewEngine.language = Locale.forLanguageTag(settings.languageTag)
+        if (voice != null) previewEngine.voice = voice
         previewEngine.setSpeechRate(settings.speechRate)
         previewEngine.setPitch(settings.pitch)
         val params = Bundle().apply {
