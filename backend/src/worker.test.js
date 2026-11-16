@@ -44,6 +44,7 @@ test('health reports Cloudflare runtime, selected provider and auth readiness wi
   assert.equal(body.runtime, 'cloudflare-workers');
   assert.equal(body.provider, 'groq');
   assert.equal(body.auth_mode, 'supabase');
+  assert.equal(body.rate_limiter_configured, true);
   assert.equal(body.configured, true);
   assert.equal('api_key' in body, false);
 });
