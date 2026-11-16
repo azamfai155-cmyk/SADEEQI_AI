@@ -40,6 +40,9 @@ class VoiceController(
                     // A call or another app took audio focus. Stop this utterance cleanly
                     // instead of talking over the higher-priority audio session.
                     lastUtteranceId = null
+        pendingSpeech = null
+        pendingSpeech = null
+        pendingSpeech = null
                     remoteSpeech?.cancel()
                     runCatching { tts?.stop() }
                     speaking = false
@@ -60,6 +63,12 @@ class VoiceController(
     @Volatile private var speaking = false
     private var lastUtteranceId: String? = null
     private val settingsStore = VoiceSettingsStore(appContext)
+    private data class PendingSpeech(
+        val text: String,
+        val settings: VoiceSettings,
+        val utteranceId: String
+    )
+    private var pendingSpeech: PendingSpeech? = null
 
     init { tts = TextToSpeech(appContext, this) }
 
@@ -178,6 +187,7 @@ class VoiceController(
         val settings = settingsStore.load()
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
+        pendingSpeech = null
         if (settings.useOpenAiVoice && remoteSpeech != null) {
             speaking = true
             try {
@@ -215,9 +225,10 @@ class VoiceController(
 
     private fun speakLocal(cleanText: String, settings: VoiceSettings, utteranceId: String) {
         if (!ttsReady) {
-            abandonSpeechAudioFocus()
-            onError("محرك النطق لم يجهز بعد. تحقق من تثبيت صوت عربي في إعدادات الهاتف.")
-            if (conversationActive) scheduleListening(900)
+            // TTS initialization is asynchronous. Keep the latest response instead
+            // of dropping it when the first answer arrives before the engine is ready.
+            pendingSpeech = PendingSpeech(cleanText, settings, utteranceId)
+            speaking = true
             return
         }
         val locale = Locale.forLanguageTag(settings.languageTag)
@@ -277,9 +288,29 @@ class VoiceController(
                     }
                 }
             })
-            if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
+            if (ttsReady) {
+                val pending = pendingSpeech
+                pendingSpeech = null
+                if (pending != null) {
+                    mainHandler.post {
+                        if (pending.utteranceId == lastUtteranceId) {
+                            speakLocal(pending.text, pending.settings, pending.utteranceId)
+                        }
+                    }
+                }
+            } else {
+                pendingSpeech = null
+                speaking = false
+                abandonSpeechAudioFocus()
+                onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
+                if (conversationActive && !microphoneMuted) scheduleListening(700)
+            }
         } else {
+            pendingSpeech = null
+            speaking = false
+            abandonSpeechAudioFocus()
             onError("تعذر تشغيل خدمة النطق في الهاتف.")
+            if (conversationActive && !microphoneMuted) scheduleListening(700)
         }
     }
 
