@@ -77,7 +77,7 @@ class OpenAiRealtimeSpeech(
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT
                 ).coerceAtLeast(SAMPLE_RATE / 2)
-                player = AudioTrack.Builder()
+                val audioTrack = AudioTrack.Builder()
                     .setAudioAttributes(
                         AudioAttributes.Builder()
                             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -94,8 +94,9 @@ class OpenAiRealtimeSpeech(
                     .setBufferSizeInBytes(minimumBuffer)
                     .setTransferMode(AudioTrack.MODE_STREAM)
                     .build()
-                activeTrack = player
-                player.play()
+                player = audioTrack
+                activeTrack = audioTrack
+                audioTrack.play()
 
                 val socketRequest = Request.Builder()
                     .url("wss://api.openai.com/v1/realtime?model=gpt-realtime-2.1-mini")
@@ -152,7 +153,7 @@ class OpenAiRealtimeSpeech(
                                         val pcm = Base64.decode(encoded, Base64.DEFAULT)
                                         var offset = 0
                                         while (offset < pcm.size && requestGeneration == generation.get()) {
-                                            val written = player?.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING) ?: -1
+                                            val written = audioTrack.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
                                             if (written <= 0) break
                                             offset += written
                                             totalBytesWritten.addAndGet(written.toLong())
@@ -195,14 +196,14 @@ class OpenAiRealtimeSpeech(
                 if (requestGeneration == generation.get() && failure == null) {
                     val expectedFrames = totalBytesWritten.get() / 2L
                     val drainDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
-                    while (expectedFrames > 0L && player.playbackHeadPosition.toLong() < expectedFrames &&
+                    while (expectedFrames > 0L && audioTrack.playbackHeadPosition.toLong() < expectedFrames &&
                         requestGeneration == generation.get() && System.nanoTime() < drainDeadline) {
                         Thread.sleep(20)
                     }
                     if (expectedFrames == 0L || player.playbackHeadPosition.toLong() < expectedFrames) {
                         failure = "لم يكتمل تشغيل الصوت المستلم."
                     } else {
-                        player.stop()
+                        audioTrack.stop()
                         onDone()
                     }
                 }
