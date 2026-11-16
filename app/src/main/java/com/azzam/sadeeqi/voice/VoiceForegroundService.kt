@@ -154,7 +154,15 @@ class VoiceForegroundService : Service() {
                     stopSession(message)
                 }
             },
-            realtimeSpeech
+            realtimeSpeech,
+            {
+                mainHandler.post {
+                    if (started) {
+                        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                        refreshIdleTimeout()
+                    }
+                }
+            }
         )
         // Publish the service state before starting recognition so a synchronous
         // recognizer failure cannot be overwritten by a later "active" broadcast.
@@ -207,7 +215,15 @@ class VoiceForegroundService : Service() {
                     publishVoiceStatus(false, message)
                 }
             },
-            realtimeSpeech
+            realtimeSpeech,
+            {
+                mainHandler.post {
+                    if (started) {
+                        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                        refreshIdleTimeout()
+                    }
+                }
+            }
         )
         // Set the initial service state first; a synchronous recognition error
         // must remain the final status rather than being overwritten as active.
@@ -421,7 +437,6 @@ class VoiceForegroundService : Service() {
         setSessionState(VoiceSessionState.SPEAKING)
         publishVoiceMessage("صديقي", text)
         voice?.speak(text)
-        refreshIdleTimeout()
     }
 
     private fun publishVoiceMessage(role: String, message: String) {
