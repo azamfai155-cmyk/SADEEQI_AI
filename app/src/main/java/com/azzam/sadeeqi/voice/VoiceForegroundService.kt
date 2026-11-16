@@ -94,6 +94,7 @@ class VoiceForegroundService : Service() {
     private fun startDictationSession() {
         if (!hasMicrophonePermission()) {
             started = false
+            publishVoiceStatus(false, "إذن الميكروفون غير متاح. اسمح لصديقي باستخدام الميكروفون من إعدادات الهاتف.")
             stopSelf()
             return
         }
@@ -115,6 +116,8 @@ class VoiceForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (error: Exception) {
+            started = false
+            publishVoiceStatus(false, "تعذر بدء خدمة الميكروفون: ${error.message ?: "تحقق من أذونات التطبيق وإعدادات النظام."}")
             stopSelf()
             return
         }
@@ -128,11 +131,13 @@ class VoiceForegroundService : Service() {
             realtimeSpeech
         )
         voice?.listen()
+        publishVoiceStatus(true, "بدأ الإملاء الصوتي.")
     }
 
     private fun startSession() {
         if (!hasMicrophonePermission()) {
             started = false
+            publishVoiceStatus(false, "إذن الميكروفون غير متاح. اسمح لصديقي باستخدام الميكروفون من إعدادات الهاتف.")
             stopSelf()
             return
         }
@@ -154,6 +159,8 @@ class VoiceForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (error: Exception) {
+            started = false
+            publishVoiceStatus(false, "تعذر بدء خدمة الميكروفون: ${error.message ?: "تحقق من أذونات التطبيق وإعدادات النظام."}")
             stopSelf()
             return
         }
@@ -168,6 +175,7 @@ class VoiceForegroundService : Service() {
             realtimeSpeech
         )
         voice?.startConversation()
+        publishVoiceStatus(true, "بدأت جلسة الاستماع الصوتية.")
     }
 
     private fun normalizeVoiceConfirmation(value: String): String = value.trim().lowercase()
@@ -343,6 +351,15 @@ class VoiceForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
+    private fun publishVoiceStatus(active: Boolean, message: String) {
+        sendBroadcast(
+            Intent(ACTION_STATUS)
+                .setPackage(packageName)
+                .putExtra(EXTRA_STATUS_ACTIVE, active)
+                .putExtra(EXTRA_STATUS_MESSAGE, message)
+        )
+    }
+
     private fun cancelActiveReply() {
         // Invalidate callbacks before cancelling the worker/network call so a late
         // response can never be spoken or appended to the next conversation turn.
@@ -354,7 +371,9 @@ class VoiceForegroundService : Service() {
 
     private fun stopSession() {
         cancelActiveReply()
+        val wasStarted = started
         started = false
+        if (wasStarted) publishVoiceStatus(false, "تم إيقاف الاستماع الصوتي.")
         pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
@@ -387,6 +406,9 @@ class VoiceForegroundService : Service() {
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
         const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"
         const val EXTRA_MUTED = "microphone_muted"
+        const val ACTION_STATUS = "com.azzam.sadeeqi.voice.STATUS"
+        const val EXTRA_STATUS_ACTIVE = "voice_status_active"
+        const val EXTRA_STATUS_MESSAGE = "voice_status_message"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
     }

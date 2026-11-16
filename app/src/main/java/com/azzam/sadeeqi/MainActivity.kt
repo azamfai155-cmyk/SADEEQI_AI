@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Build
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.ComponentActivity
@@ -65,6 +67,37 @@ class MainActivity : ComponentActivity() {
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
+    private var voiceStatusReceiverRegistered = false
+    private val voiceStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action != VoiceForegroundService.ACTION_STATUS) return
+            val active = intent.getBooleanExtra(VoiceForegroundService.EXTRA_STATUS_ACTIVE, false)
+            val message = intent.getStringExtra(VoiceForegroundService.EXTRA_STATUS_MESSAGE).orEmpty()
+            onVoiceSession?.invoke(active)
+            if (message.isNotBlank()) onVoiceError?.invoke(message)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!voiceStatusReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                voiceStatusReceiver,
+                IntentFilter(VoiceForegroundService.ACTION_STATUS),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            voiceStatusReceiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        if (voiceStatusReceiverRegistered) {
+            unregisterReceiver(voiceStatusReceiver)
+            voiceStatusReceiverRegistered = false
+        }
+        super.onStop()
+    }
 
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
