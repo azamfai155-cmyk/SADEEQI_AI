@@ -41,8 +41,6 @@ class VoiceController(
                     // instead of talking over the higher-priority audio session.
                     lastUtteranceId = null
         pendingSpeech = null
-        pendingSpeech = null
-        pendingSpeech = null
                     remoteSpeech?.cancel()
                     runCatching { tts?.stop() }
                     speaking = false
@@ -75,6 +73,8 @@ class VoiceController(
     fun isConversationActive(): Boolean = conversationActive
 
     fun startConversation() {
+        lastUtteranceId = null
+        pendingSpeech = null
         microphoneMuted = false
         dictationActive = false
         conversationActive = true
@@ -90,6 +90,7 @@ class VoiceController(
         dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
+        pendingSpeech = null
         mainHandler.removeCallbacksAndMessages(null)
         resetRecognizer()
         listening = false
@@ -104,6 +105,7 @@ class VoiceController(
         dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
+        pendingSpeech = null
         mainHandler.removeCallbacksAndMessages(null)
         remoteSpeech?.cancel()
         runCatching { tts?.stop() }
@@ -414,6 +416,7 @@ class VoiceController(
         dictationActive = false
         microphoneMuted = false
         lastUtteranceId = null
+        pendingSpeech = null
         mainHandler.removeCallbacksAndMessages(null)
         resetRecognizer()
         remoteSpeech?.cancel()
