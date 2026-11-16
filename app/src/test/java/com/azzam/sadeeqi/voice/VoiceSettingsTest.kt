@@ -62,6 +62,20 @@ class VoiceSettingsTest {
     }
 
     @Test
+    fun normalizedKeepsSupportedRecognitionLanguages() {
+        assertEquals("ar", VoiceSettings(recognitionLanguageTag = "ar").normalized().recognitionLanguageTag)
+        assertEquals("ar-YE", VoiceSettings(recognitionLanguageTag = "ar-YE").normalized().recognitionLanguageTag)
+    }
+
+    @Test
+    fun normalizedFallsBackForUnsupportedRecognitionLanguage() {
+        assertEquals(
+            "ar",
+            VoiceSettings(recognitionLanguageTag = "en-US").normalized().recognitionLanguageTag
+        )
+    }
+
+    @Test
     fun normalizedKeepsOnlyKnownDialectProfiles() {
         val ibbi = VoiceSettings(dialectProfileId = "ibbi").normalized()
         val hadi = VoiceSettings(dialectProfileId = "hadi").normalized()
