@@ -42,7 +42,7 @@ export function createDistributedRateLimiter({
       });
       if (!response.ok) throw new Error('Rate-limit service rejected the request.');
       const result = await response.json();
-      if (typeof result.allowed !== 'boolean' || !Number.isFinite(result.resetAt)) {
+      if (typeof result.allowed !== 'boolean' || !Number.isInteger(result.count) || result.count < 1 || !Number.isFinite(result.resetAt)) {
         throw new Error('Invalid rate-limit service response.');
       }
       const resetAt = Math.ceil(result.resetAt / 1000);
