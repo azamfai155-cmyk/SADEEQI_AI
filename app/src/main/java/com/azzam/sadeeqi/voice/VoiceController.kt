@@ -272,6 +272,7 @@ class VoiceController(
                 override fun onError(utteranceId: String?, errorCode: Int) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        abandonSpeechAudioFocus()
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
