@@ -84,38 +84,52 @@ test('OAuth providers are not marked ready without server-side token encryption'
     .every(provider => provider.configured === false && provider.status === 'setup_required'));
 });
 
-test('chat rate limiter returns 429 after the configured request budget', async () => {
-  const { createRateLimiter } = await import('./server.js');
-  let current = 1_000;
-  const limit = createRateLimiter({ windowMs: 60_000, max: 2, now: () => current });
+test('distributed rate limiter allows requests under budget and rejects excess requests', async () => {
+  const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
+  const replies = [
+    { allowed: true, count: 1, resetAt: 61_000, retryAfterSeconds: 0 },
+    { allowed: false, count: 3, resetAt: 61_000, retryAfterSeconds: 60 }
+  ];
+  let sent;
+  const limiter = createDistributedRateLimiter({
+    scope: 'chat', limit: 2, windowMs: 60_000,
+    env: { RATE_LIMIT_SERVICE_URL: 'https://ratelimit.example/_internal/rate-limit', RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) },
+    fetchImpl: async (_url, init) => { sent = JSON.parse(init.body); return Response.json(replies.shift()); }
+  });
   const makeResponse = () => {
     const headers = {};
-    return {
-      headers,
-      statusCode: 200,
-      body: null,
-      set(name, value) { headers[name] = value; return this; },
-      status(code) { this.statusCode = code; return this; },
-      json(value) { this.body = value; return this; }
-    };
+    return { headers, statusCode: 200, body: null, set(name, value) { headers[name] = value; return this; },
+      status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
   };
-  const req = { auth: { userId: 'user-a' } };
-  const first = makeResponse();
+  const req = { auth: { userId: 'user-a' }, headers: { 'x-forwarded-for': '203.0.113.10' } };
+  const first = makeResponse(); let nextCalls = 0;
+  await limiter(req, first, () => { nextCalls += 1; });
   const second = makeResponse();
-  const third = makeResponse();
-  let nextCalls = 0;
-  limit(req, first, () => { nextCalls += 1; });
-  limit(req, second, () => { nextCalls += 1; });
-  limit(req, third, () => { nextCalls += 1; });
-  assert.equal(nextCalls, 2);
-  assert.equal(third.statusCode, 429);
-  assert.equal(third.headers['Retry-After'], '60');
+  await limiter(req, second, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 1);
+  assert.equal(second.statusCode, 429);
+  assert.equal(second.headers['Retry-After'], '60');
+  assert.equal(sent.identity, 'user:user-a');
+  assert.equal(sent.scope, 'chat');
+});
 
-  current += 60_001;
-  const afterWindow = makeResponse();
-  limit(req, afterWindow, () => { nextCalls += 1; });
-  assert.equal(nextCalls, 3);
-  assert.equal(afterWindow.statusCode, 200);
+test('distributed rate limiter fails closed when shared service configuration is missing', async () => {
+  const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
+  const limiter = createDistributedRateLimiter({ env: {}, fetchImpl: async () => { throw new Error('must not call'); } });
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+  await limiter({ auth: { userId: 'user-a' }, headers: {} }, res, () => { throw new Error('must fail closed'); });
+  assert.equal(res.statusCode, 503);
+});
+
+test('distributed rate limiter rejects untrusted or malformed IP identity in legacy mode', async () => {
+  const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
+  const limiter = createDistributedRateLimiter({
+    env: { RATE_LIMIT_SERVICE_URL: 'https://ratelimit.example/check', RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) },
+    fetchImpl: async () => { throw new Error('must not call'); }
+  });
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+  await limiter({ auth: { userId: null }, headers: { 'x-forwarded-for': 'not-an-ip' } }, res, () => { throw new Error('must fail closed'); });
+  assert.equal(res.statusCode, 503);
 });
 
 
