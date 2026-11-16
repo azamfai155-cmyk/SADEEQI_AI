@@ -38,22 +38,34 @@ fun VoiceSettings.normalized(): VoiceSettings {
 class VoiceSettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("sadeeqi_voice_settings", Context.MODE_PRIVATE)
 
-    fun load(): VoiceSettings = VoiceSettings(
-        voiceName = prefs.getString(KEY_VOICE, "").orEmpty(),
-        languageTag = prefs.getString(KEY_LANGUAGE, "ar").orEmpty(),
+    fun load(): VoiceSettings {
+        val profileId = prefs.getString(KEY_DIALECT_PROFILE, "ibbi").orEmpty()
+        val safeProfileId = profileId.takeIf { id -> VoiceDialectProfiles.all.any { it.id == id } } ?: "ibbi"
+        return VoiceSettings(
+        voiceName = prefs.getString(profileVoiceKey(safeProfileId), prefs.getString(KEY_VOICE, "")).orEmpty(),
+        languageTag = prefs.getString(KEY_LANGUAGE, "ar-YE").orEmpty(),
         speechRate = prefs.getFloat(KEY_RATE, 0.96f),
         pitch = prefs.getFloat(KEY_PITCH, 0.98f),
         volume = prefs.getFloat(KEY_VOLUME, 1.0f),
         autoRead = prefs.getBoolean(KEY_AUTO_READ, false),
         useOpenAiVoice = prefs.getBoolean(KEY_USE_OPENAI_VOICE, false),
         openAiVoiceName = prefs.getString(KEY_OPENAI_VOICE, "marin").orEmpty(),
-        dialectProfileId = prefs.getString(KEY_DIALECT_PROFILE, "ibbi").orEmpty()
+        dialectProfileId = safeProfileId
     ).normalized()
+    }
+
+    fun voiceNameFor(profileId: String): String {
+        val safeId = profileId.takeIf { id -> VoiceDialectProfiles.all.any { it.id == id } } ?: "ibbi"
+        return prefs.getString(profileVoiceKey(safeId), "").orEmpty()
+    }
+
+    private fun profileVoiceKey(profileId: String) = "voice_name_profile_$profileId"
 
     fun save(settings: VoiceSettings) {
         val safe = settings.normalized()
         prefs.edit()
             .putString(KEY_VOICE, safe.voiceName)
+            .putString(profileVoiceKey(safe.dialectProfileId), safe.voiceName)
             .putString(KEY_LANGUAGE, safe.languageTag)
             .putFloat(KEY_RATE, safe.speechRate)
             .putFloat(KEY_PITCH, safe.pitch)
