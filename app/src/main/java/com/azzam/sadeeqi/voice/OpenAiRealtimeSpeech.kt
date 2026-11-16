@@ -96,6 +96,7 @@ class OpenAiRealtimeSpeech(
                     .build()
                 player = audioTrack
                 activeTrack = audioTrack
+                if (requestGeneration != generation.get()) return@execute
                 audioTrack.play()
 
                 val socketRequest = Request.Builder()
@@ -178,6 +179,11 @@ class OpenAiRealtimeSpeech(
                 }
                 val socket = http.newWebSocket(socketRequest, listener)
                 activeSocket = socket
+                // Cancellation may occur while the WebSocket handshake is in flight.
+                if (requestGeneration != generation.get()) {
+                    socket.cancel()
+                    return@execute
+                }
                 if (!finished.await(75, TimeUnit.SECONDS)) {
                     failure = "انتهت مهلة توليد الصوت."
                     socket.cancel()
