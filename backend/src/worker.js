@@ -276,8 +276,14 @@ export async function handleRequest(request, env) {
     }
     const declaredLength = Number(request.headers.get('Content-Length') || 0);
     if (declaredLength > 4096) return json({ error: 'Request body too large.' }, 413, cors);
+    let rawVoiceBody;
+    try { rawVoiceBody = await request.text(); }
+    catch { return json({ error: 'Unable to read request body.' }, 400, cors); }
+    if (new TextEncoder().encode(rawVoiceBody).length > 4096) {
+      return json({ error: 'Request body too large.' }, 413, cors);
+    }
     let body;
-    try { body = await request.json(); }
+    try { body = JSON.parse(rawVoiceBody); }
     catch { return json({ error: 'Invalid JSON.' }, 400, cors); }
     const allowedVoices = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
     const voice = typeof body?.voice === 'string' ? body.voice : 'marin';
@@ -294,6 +300,7 @@ export async function handleRequest(request, env) {
           session: {
             type: 'realtime',
             model: 'gpt-realtime-2.1-mini',
+            output_modalities: ['audio'],
             audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice } },
             instructions: 'Speak the supplied Arabic text clearly and naturally. Preserve Yemeni Arabic wording when present. Do not add or omit words.'
           }
