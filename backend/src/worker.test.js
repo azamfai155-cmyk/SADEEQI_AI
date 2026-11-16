@@ -1,12 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handleRequest, validateInput } from './worker.js';
+import { handleRequest as handleRequestImpl, validateInput } from './worker.js';
+
+const rateBuckets = new Map();
+const testRateLimiter = {
+  idFromName(name) { return { name }; },
+  get(id) {
+    return { async fetch(request) {
+      const { scope, limit, windowMs } = await request.json();
+      const key = `${id.name}:${scope}`;
+      const now = Date.now();
+      let bucket = rateBuckets.get(key);
+      if (!bucket || now - bucket.start >= windowMs) bucket = { start: now, count: 0 };
+      bucket.count += 1;
+      rateBuckets.set(key, bucket);
+      const resetAt = bucket.start + windowMs;
+      const allowed = bucket.count <= limit;
+      return Response.json({ allowed, count: bucket.count, resetAt, retryAfterSeconds: allowed ? 0 : Math.max(1, Math.ceil((resetAt - now) / 1000)) });
+    } };
+  }
+};
+const handleRequest = (request, env = {}) => handleRequestImpl(request, { ...env, RATE_LIMITER: env.RATE_LIMITER || testRateLimiter });
 
 const request = (path, { method = 'GET', headers = {}, body } = {}) => new Request(
   `https://worker.example${path}`,
   {
     method,
-    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+    headers: { 'cf-connecting-ip': '203.0.113.10', ...(body === undefined ? headers : { 'content-type': 'application/json', ...headers }) },
     body: body === undefined ? undefined : JSON.stringify(body)
   }
 );
@@ -344,4 +364,31 @@ test('Worker OpenAI provider requires explicit paid opt-in', async () => {
   });
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
+});
+
+
+test('Cloudflare Worker fails closed when Durable Object binding is absent', async () => {
+  const response = await handleRequestImpl(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { input: [{ role: 'user', content: 'hello' }] }
+  }), { AUTH_MODE: 'legacy', SADEEQI_APP_TOKEN: 'expected-token' });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /Shared rate-limit service/);
+});
+
+test('Cloudflare internal rate-limit endpoint requires a strong shared secret', async () => {
+  const denied = await handleRequest(request('/_internal/rate-limit', {
+    method: 'POST',
+    body: { identity: 'user:123', scope: 'chat', limit: 20, windowMs: 60_000 }
+  }), { RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) });
+  assert.equal(denied.status, 401);
+
+  const allowed = await handleRequest(request('/_internal/rate-limit', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${'x'.repeat(40)}` },
+    body: { identity: 'user:123', scope: 'chat', limit: 20, windowMs: 60_000 }
+  }), { RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) });
+  assert.equal(allowed.status, 200);
+  assert.equal((await allowed.json()).allowed, true);
 });
