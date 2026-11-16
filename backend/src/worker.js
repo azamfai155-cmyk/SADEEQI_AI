@@ -40,7 +40,7 @@ async function readLimitedBody(request, maxBytes) {
       if (done) break;
       totalBytes += value.byteLength;
       if (totalBytes > maxBytes) {
-        await reader.cancel();
+        await reader.cancel().catch(() => {});
         return { body: null, tooLarge: true };
       }
       chunks.push(value);
@@ -55,7 +55,7 @@ async function readLimitedBody(request, maxBytes) {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return { body: new TextDecoder().decode(bytes), tooLarge: false };
+  return { body: new TextDecoder('utf-8', { fatal: true }).decode(bytes), tooLarge: false };
 }
 
 function safeEqual(a, b) {
