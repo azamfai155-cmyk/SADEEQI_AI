@@ -130,10 +130,10 @@ class VoiceController(
 
     fun speak(text: String) {
         val cleanText = text
-            .replace(Regex("https?://\\\\S+"), "رابط")
-            .replace(Regex("[*_#>\\\\[\\\\]{}]"), " ")
-            .replace(Regex("[\\\\t\\\\r\\\\n]+"), " ")
-            .replace(Regex("\\\\s{2,}"), " ")
+            .replace(Regex("https?://\\S+"), "رابط")
+            .replace(Regex("[*_#>\\[\\]{}]"), " ")
+            .replace(Regex("[\\t\\r\\n]+"), " ")
+            .replace(Regex("\\s{2,}"), " ")
             .trim()
         if (cleanText.isBlank()) {
             if (conversationActive) scheduleListening(250)
