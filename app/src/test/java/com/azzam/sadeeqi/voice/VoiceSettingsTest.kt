@@ -39,4 +39,15 @@ class VoiceSettingsTest {
         val result = VoiceSettings(voiceName = "v".repeat(400)).normalized()
         assertEquals(256, result.voiceName.length)
     }
+
+    @Test
+    fun normalizedKeepsOnlySupportedOpenAiRealtimeVoices() {
+        val supported = VoiceSettings(openAiVoiceName = "cedar", useOpenAiVoice = true).normalized()
+        val invalid = VoiceSettings(openAiVoiceName = "unknown-voice", useOpenAiVoice = true).normalized()
+
+        assertEquals("cedar", supported.openAiVoiceName)
+        assertEquals(true, supported.useOpenAiVoice)
+        assertEquals("marin", invalid.openAiVoiceName)
+        assertEquals(true, invalid.useOpenAiVoice)
+    }
 }
