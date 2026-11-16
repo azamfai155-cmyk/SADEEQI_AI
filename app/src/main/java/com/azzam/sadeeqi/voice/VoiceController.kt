@@ -144,26 +144,33 @@ class VoiceController(
         lastUtteranceId = utteranceId
         if (settings.useOpenAiVoice && remoteSpeech != null) {
             speaking = true
-            remoteSpeech.speak(
-                cleanText,
-                settings.openAiVoiceName,
-                onDone = {
-                    mainHandler.post {
-                        if (utteranceId == lastUtteranceId) {
-                            speaking = false
-                            if (conversationActive && !microphoneMuted) scheduleListening(250)
+            try {
+                remoteSpeech.speak(
+                    cleanText,
+                    settings.openAiVoiceName,
+                    onDone = {
+                        mainHandler.post {
+                            if (utteranceId == lastUtteranceId) {
+                                speaking = false
+                                if (conversationActive && !microphoneMuted) scheduleListening(250)
+                            }
+                        }
+                    },
+                    onError = {
+                        mainHandler.post {
+                            if (utteranceId == lastUtteranceId) {
+                                speaking = false
+                                speakLocal(cleanText, settings, utteranceId)
+                            }
                         }
                     }
-                },
-                onError = {
-                    mainHandler.post {
-                        if (utteranceId == lastUtteranceId) {
-                            speaking = false
-                            speakLocal(cleanText, settings, utteranceId)
-                        }
-                    }
-                }
-            )
+                )
+            } catch (_: Exception) {
+                // A closed/rejected realtime worker must not leave the listen/speak
+                // state machine stuck; fall back to the already initialized local TTS.
+                speaking = false
+                speakLocal(cleanText, settings, utteranceId)
+            }
             return
         }
         speakLocal(cleanText, settings, utteranceId)
