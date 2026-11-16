@@ -182,7 +182,15 @@ class VoiceController(
         tts?.setPitch(settings.pitch)
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
         speaking = true
-        tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+        val result = tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+            ?: TextToSpeech.ERROR
+        if (result == TextToSpeech.ERROR) {
+            // Some TTS engines fail synchronously and never deliver an utterance
+            // callback. Release the speaking gate so the microphone can recover.
+            speaking = false
+            onError("تعذر بدء النطق. تحقق من محرك تحويل النص إلى كلام والصوت المختار.")
+            if (conversationActive && !microphoneMuted) scheduleListening(700)
+        }
     }
 
     override fun onInit(status: Int) {
