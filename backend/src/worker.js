@@ -304,7 +304,19 @@ export async function handleRequest(request, env) {
   }
 
   const auth = await authenticate(request, env);
-  if (!auth.ok) return json(auth.body, auth.status, cors);
+  if (!auth.ok) {
+    if (auth.status === 401) {
+      const sourceIp = request.headers.get('cf-connecting-ip');
+      if (!sourceIp) return json({ error: 'A trusted client identity is unavailable.' }, 503, cors);
+      try {
+        const failedAuth = await consumeRateLimit(env, `ip:${sourceIp}`, 'auth-failures', 5, 15 * 60_000);
+        if (!failedAuth.allowed) return json({ error: 'Too many failed authentication attempts.' }, 429, { ...cors, 'retry-after': String(failedAuth.retryAfterSeconds || 1) });
+      } catch {
+        return json({ error: 'Shared rate-limit service is temporarily unavailable.' }, 503, cors);
+      }
+    }
+    return json(auth.body, auth.status, cors);
+  }
 
   const clientIdentity = auth.userId
     ? `user:${auth.userId}`
