@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -68,17 +70,33 @@ class VoiceForegroundService : Service() {
                 }
             }
             ACTION_MUTE -> {
-                val muted = intent.getBooleanExtra(EXTRA_MUTED, true)
-                voice?.setMicrophoneMuted(muted)
-                updateNotification(if (muted) "الميكروفون مكتوم — اضغط لإلغاء الكتم" else "الميكروفون نشط — صديقي يستمع")
+                if (started) {
+                    val muted = intent.getBooleanExtra(EXTRA_MUTED, true)
+                    voice?.setMicrophoneMuted(muted)
+                    updateNotification(if (muted) "الميكروفون مكتوم — اضغط لإلغاء الكتم" else "الميكروفون نشط — صديقي يستمع")
+                } else {
+                    stopSelf(startId)
+                }
             }
             ACTION_DICTATE -> startDictationSession()
-            ACTION_START, null -> startSession()
+            ACTION_START -> startSession()
+            null -> {
+                // A null restart intent must never open the microphone by itself.
+                stopSelf(startId)
+            }
         }
         return START_NOT_STICKY
     }
 
+    private fun hasMicrophonePermission(): Boolean =
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     private fun startDictationSession() {
+        if (!hasMicrophonePermission()) {
+            started = false
+            stopSelf()
+            return
+        }
         // Switch modes in-place. stopSession() calls stopSelf(), which can tear down
         // this same service start request before the dictation session is established.
         if (started) {
@@ -113,6 +131,11 @@ class VoiceForegroundService : Service() {
     }
 
     private fun startSession() {
+        if (!hasMicrophonePermission()) {
+            started = false
+            stopSelf()
+            return
+        }
         if (started) {
             cancelActiveReply()
             voice?.interruptAndListen()
