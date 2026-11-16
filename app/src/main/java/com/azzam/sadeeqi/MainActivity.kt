@@ -177,10 +177,12 @@ class MainActivity : ComponentActivity() {
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
         var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
         var messageReaderReady by remember { mutableStateOf(false) }
+        var messageReaderInitFailed by remember { mutableStateOf(false) }
         var pendingMessageSpeech by remember { mutableStateOf<String?>(null) }
         val messageReader = remember {
             TextToSpeech(this@MainActivity) { initStatus ->
                 messageReaderReady = initStatus == TextToSpeech.SUCCESS
+                messageReaderInitFailed = initStatus != TextToSpeech.SUCCESS
             }
         }
         DisposableEffect(messageReader) {
@@ -255,13 +257,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        LaunchedEffect(messageReaderReady, pendingMessageSpeech) {
+        LaunchedEffect(messageReaderReady, messageReaderInitFailed, pendingMessageSpeech) {
             if (messageReaderReady) {
                 val pending = pendingMessageSpeech
                 if (pending != null) {
                     pendingMessageSpeech = null
                     speakMessage(pending)
                 }
+            } else if (messageReaderInitFailed) {
+                pendingMessageSpeech = null
+                status = "تعذر تشغيل محرك النطق في الهاتف. تحقق من خدمة تحويل النص إلى كلام."
             }
         }
 

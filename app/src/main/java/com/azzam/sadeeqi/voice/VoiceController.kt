@@ -88,6 +88,7 @@ class VoiceController(
     }
 
     fun stopConversation() {
+        if (closed) return
         conversationActive = false
         dictationActive = false
         microphoneMuted = false
@@ -103,6 +104,7 @@ class VoiceController(
     }
 
     fun interruptAndListen() {
+        if (closed) return
         conversationActive = true
         dictationActive = false
         microphoneMuted = false
@@ -127,6 +129,7 @@ class VoiceController(
     }
 
     fun setMicrophoneMuted(muted: Boolean) {
+        if (closed) return
         microphoneMuted = muted
         if (muted) {
             resetRecognizer()
@@ -138,7 +141,7 @@ class VoiceController(
     }
 
     fun resumeAfterTurnFailure() {
-        if (conversationActive && !microphoneMuted) scheduleListening(400)
+        if (!closed && conversationActive && !microphoneMuted) scheduleListening(400)
     }
 
     private fun startListeningInternal() {
@@ -276,7 +279,9 @@ class VoiceController(
             val settings = settingsStore.load()
             val locale = Locale.forLanguageTag(settings.languageTag)
             val result = tts?.setLanguage(locale)
-            ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
+            ttsReady = result != null &&
+                result != TextToSpeech.ERROR &&
+                result != TextToSpeech.LANG_MISSING_DATA &&
                 result != TextToSpeech.LANG_NOT_SUPPORTED
             val selectedVoice = tts?.voices?.firstOrNull { it.name == settings.voiceName }
             if (selectedVoice != null) tts?.voice = selectedVoice
