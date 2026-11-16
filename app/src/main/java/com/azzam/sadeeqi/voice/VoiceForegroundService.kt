@@ -274,6 +274,13 @@ class VoiceForegroundService : Service() {
             return
         }
 
+        if (normalized in setOf("ياصديقي", "صديقي")) {
+            setSessionState(VoiceSessionState.WAKE_DETECTED)
+            setSessionState(VoiceSessionState.GREETING)
+            speakVoiceReply(FounderIdentity.GREETING)
+            return
+        }
+
         FounderIdentity.answerFor(spoken)?.let { answer ->
             setSessionState(VoiceSessionState.PROCESSING)
             speakVoiceReply(answer)
@@ -346,13 +353,6 @@ class VoiceForegroundService : Service() {
             }
             null -> Unit
         }
-        if (normalized in setOf("ياصديقي", "صديقي")) {
-            setSessionState(VoiceSessionState.WAKE_DETECTED)
-            setSessionState(VoiceSessionState.GREETING)
-            speakVoiceReply(FounderIdentity.GREETING)
-            return
-        }
-
         setSessionState(VoiceSessionState.PROCESSING)
         cancelActiveReply()
         val requestGeneration = replyGeneration
