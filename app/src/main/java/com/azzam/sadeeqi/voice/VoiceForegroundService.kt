@@ -137,8 +137,10 @@ class VoiceForegroundService : Service() {
             },
             realtimeSpeech
         )
+        // Publish the service state before starting recognition so a synchronous
+        // recognizer failure cannot be overwritten by a later "active" broadcast.
+        publishVoiceStatus(true, "بدأت خدمة الإملاء؛ جارٍ تهيئة الاستماع.")
         voice?.listen()
-        publishVoiceStatus(true, "بدأ الإملاء الصوتي.")
     }
 
     private fun startSession() {
@@ -178,11 +180,20 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) },
+            { message ->
+                updateNotification(message)
+                if (message.contains("إذن الميكروفون") ||
+                    message.contains("غير متاحة على هذا الجهاز")
+                ) {
+                    publishVoiceStatus(false, message)
+                }
+            },
             realtimeSpeech
         )
+        // Set the initial service state first; a synchronous recognition error
+        // must remain the final status rather than being overwritten as active.
+        publishVoiceStatus(true, "بدأت خدمة الصوت؛ جارٍ تهيئة الاستماع.")
         voice?.startConversation()
-        publishVoiceStatus(true, "بدأت جلسة الاستماع الصوتية.")
     }
 
     private fun normalizeVoiceConfirmation(value: String): String = value.trim().lowercase()
