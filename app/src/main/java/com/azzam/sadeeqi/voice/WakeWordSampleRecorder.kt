@@ -163,7 +163,6 @@ class WakeWordSampleRecorder(context: Context) {
                 header.putInt(dataSize.toInt())
                 output.write(header.array())
                 FileInputStream(raw).use { input -> input.copyTo(output) }
-            }
         }
     }
 
