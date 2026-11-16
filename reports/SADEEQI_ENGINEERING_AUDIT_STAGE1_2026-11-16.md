@@ -13,8 +13,11 @@
 - Three Vercel projects are linked to the same GitHub repository: canonical `sadeeqi-ai-pdrk`, plus legacy `sadeeqi-ai` and `sadeeqi-ai-kh3l`.
 - Production `https://sadeeqi-ai-pdrk.vercel.app/health` returned HTTP 200, version 1.5.1, provider Groq, model `openai/gpt-oss-20b`, auth mode `supabase`, and `configured: true`. This proves health/configuration only, not an authenticated live model response.
 - Latest PR #35 preview deployment for commit `4876653` reached Vercel READY and its `/health` returned HTTP 200, but `configured: false` and `auth_mode: legacy`. The Vercel environment inventory shows the relevant Supabase and Groq variables scoped to production; preview Supabase variables are scoped to a different branch (`feature/supabase-auth`). No secrets were copied or modified.
-- GitHub Actions run 434 (Android/backend) and run 62 (security) both concluded FAILURE on commit `4876653`. Jobs reported failure with no step details available from the connected API. Root cause is therefore **not established**; do not describe these as code-test failures until runner logs are available.
-- CircleCI Semgrep SAST was SUCCESS; CircleCI backend dependency audit was FAILURE. The job page/logs were inaccessible in this audit, so the cause remains unknown.
+- GitHub Actions runs 434/435/436/437 (Android/backend) and 62/63/64/65 (security) concluded FAILURE across commits `4876653`, `5a11ed7`, `c3f47e0`, and `4745931`. Each job endpoint returned an empty step list; the failure happened before any step-level evidence was exposed. Root cause is therefore **not established**; do not describe these as code-test failures until runner logs are available.
+- CircleCI Semgrep SAST was SUCCESS on the original integration commit, then remained pending on the latest checked commit; CircleCI backend dependency audit was FAILURE on both original and latest checked commits. The job page/logs were inaccessible in this audit, so the cause remains unknown.
+- The latest Vercel preview deployment for commit `4745931` reached READY; its `/health` returned HTTP 200 but still reports `configured:false` and `auth_mode:legacy`. Production `/health` remains HTTP 200 and reports `configured:true` with `auth_mode:supabase`.
+- Vercel runtime error aggregation returned no runtime errors in the last seven days; the last-30-minute production error/fatal log query returned no matching logs. The Hobby plan rejected a one-hour log query because its retention window is shorter.
+- The canonical Vercel project has no custom firewall configuration (`configured:false`); the default firewall applies. The Vercel backend rate limiter in `server.js` is explicitly per-instance best-effort, and the Cloudflare Worker has no configured rate-limit binding.
 - No APK artifact or successful emulator/device acceptance was verified in this audit.
 
 ## 2. Module status
@@ -105,6 +108,16 @@ These figures must be revised after executable unit, integration, emulator, and 
 - **Evidence:** Root tree inventory contained no `.gitignore`.
 - **Change made:** Added root `.gitignore` on the integration branch to exclude local environment files, signing keys, Gradle/Android outputs, Node dependencies, Vercel/Wrangler state, logs, and temporary files.
 - **Verification:** Commit created; follow-up tree/commit verification and CI status still required.
+
+
+### AUD-010 — Rate limiting is not shared across backend instances
+- **Priority:** P1 (abuse/cost control)
+- **Affected:** `server.js:180-219`, `backend/src/worker.js:288-320`, `wrangler.jsonc`, Vercel Firewall
+- **Evidence:** Vercel uses an in-memory `Map` and explicitly labels it per-instance best-effort; the Worker authenticates and processes chat without a rate-limit binding; the canonical Vercel project has no custom firewall configuration.
+- **Root cause:** The Vercel counter is process-local and ephemeral; the Cloudflare Worker does not define a `ratelimits` binding.
+- **Impact:** Concurrent Vercel instances or direct Worker requests can exceed the intended per-user request budget and increase abuse/provider-consumption risk.
+- **Fix options:** Vercel Hobby supports one firewall rate-limit rule per project, but usage beyond the included allowance may be billable; do not enable it without a confirmed zero-cost usage cap. Cloudflare's Worker Rate Limiting binding is approximate per location, not a strict global quota; verify plan/usage before relying on it. The app currently targets Vercel, so Worker-only limiting does not protect direct Vercel traffic.
+- **Status:** Open; no firewall, billing, or secret settings changed.
 
 ## 4. Memory and prompt-injection review
 
