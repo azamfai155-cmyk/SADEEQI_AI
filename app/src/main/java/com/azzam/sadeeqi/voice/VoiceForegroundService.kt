@@ -58,9 +58,14 @@ class VoiceForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_INTERRUPT -> {
-                cancelActiveReply()
-                if (!started) startSession()
-                voice?.interruptAndListen()
+                if (!started) {
+                    // startSession() creates the controller and starts listening itself.
+                    // Do not immediately reset that fresh recognizer a second time.
+                    startSession()
+                } else {
+                    cancelActiveReply()
+                    voice?.interruptAndListen()
+                }
             }
             ACTION_MUTE -> {
                 val muted = intent.getBooleanExtra(EXTRA_MUTED, true)
