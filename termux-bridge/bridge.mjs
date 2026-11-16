@@ -35,7 +35,7 @@ const TASKS = Object.freeze({
 });
 
 function emit(payload, exitCode = 0) {
-  process.stdout.write(`${JSON.stringify(payload, null, 2)}\\n`);
+  process.stdout.write(JSON.stringify(payload, null, 2) + String.fromCharCode(10));
   process.exitCode = exitCode;
 }
 
