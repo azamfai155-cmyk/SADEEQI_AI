@@ -9,14 +9,18 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
     private val accessTokenProvider: () -> String
 ) {
     @Volatile private var activeCall: okhttp3.Call? = null
+    private val cancellationGeneration = AtomicLong(0)
 
     fun cancelCurrentRequest() {
+        // Increment first so a call being prepared concurrently cannot escape cancellation.
+        cancellationGeneration.incrementAndGet()
         activeCall?.cancel()
     }
 
@@ -29,6 +33,7 @@ class OpenAiGateway(
     data class Turn(val role: String, val content: String)
 
     fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
+        val requestGeneration = cancellationGeneration.get()
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
@@ -85,6 +90,8 @@ class OpenAiGateway(
 
         val call = http.newCall(request)
         activeCall = call
+        // Covers cancellation that happened while credentials/payload were being prepared.
+        if (requestGeneration != cancellationGeneration.get()) call.cancel()
         try {
             call.execute().use { response ->
                 val body = response.body?.string().orEmpty()
