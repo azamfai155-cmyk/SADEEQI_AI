@@ -1,6 +1,9 @@
 package com.azzam.sadeeqi.voice
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
@@ -21,6 +24,31 @@ class VoiceController(
 ) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    @Volatile private var hasAudioFocus = false
+    private val speechAudioFocusRequest = AudioFocusRequest.Builder(
+        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+    ).setAudioAttributes(
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    ).setOnAudioFocusChangeListener { change ->
+        if (change <= AudioManager.AUDIOFOCUS_LOSS) {
+            mainHandler.post {
+                if (speaking) {
+                    // A call or another app took audio focus. Stop this utterance cleanly
+                    // instead of talking over the higher-priority audio session.
+                    lastUtteranceId = null
+                    remoteSpeech?.cancel()
+                    runCatching { tts?.stop() }
+                    speaking = false
+                    abandonSpeechAudioFocus()
+                    if (conversationActive && !microphoneMuted) scheduleListening(350)
+                }
+            }
+        }
+    }.build()
     @Volatile private var recognizerGeneration = 0L
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
@@ -44,6 +72,7 @@ class VoiceController(
         remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
+        abandonSpeechAudioFocus()
         startListeningInternal()
     }
 
@@ -58,6 +87,7 @@ class VoiceController(
         remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
+        abandonSpeechAudioFocus()
     }
 
     fun interruptAndListen() {
@@ -69,6 +99,7 @@ class VoiceController(
         remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
+        abandonSpeechAudioFocus()
         resetRecognizer()
         listening = false
         startListeningInternal()
@@ -139,6 +170,11 @@ class VoiceController(
             if (conversationActive) scheduleListening(250)
             return
         }
+        if (!requestSpeechAudioFocus()) {
+            onError("الصوت مشغول بتطبيق أو مكالمة أخرى. سأنتظر حتى يصبح متاحاً.")
+            if (conversationActive && !microphoneMuted) scheduleListening(700)
+            return
+        }
         val settings = settingsStore.load()
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
@@ -152,6 +188,7 @@ class VoiceController(
                         mainHandler.post {
                             if (utteranceId == lastUtteranceId) {
                                 speaking = false
+                                abandonSpeechAudioFocus()
                                 if (conversationActive && !microphoneMuted) scheduleListening(250)
                             }
                         }
@@ -178,6 +215,7 @@ class VoiceController(
 
     private fun speakLocal(cleanText: String, settings: VoiceSettings, utteranceId: String) {
         if (!ttsReady) {
+            abandonSpeechAudioFocus()
             onError("محرك النطق لم يجهز بعد. تحقق من تثبيت صوت عربي في إعدادات الهاتف.")
             if (conversationActive) scheduleListening(900)
             return
@@ -195,6 +233,7 @@ class VoiceController(
             // Some TTS engines fail synchronously and never deliver an utterance
             // callback. Release the speaking gate so the microphone can recover.
             speaking = false
+            abandonSpeechAudioFocus()
             onError("تعذر بدء النطق. تحقق من محرك تحويل النص إلى كلام والصوت المختار.")
             if (conversationActive && !microphoneMuted) scheduleListening(700)
         }
@@ -218,6 +257,7 @@ class VoiceController(
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        abandonSpeechAudioFocus()
                         if (conversationActive && !microphoneMuted) scheduleListening(250)
                     }
                 }
@@ -225,6 +265,7 @@ class VoiceController(
                 override fun onError(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        abandonSpeechAudioFocus()
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
@@ -239,6 +280,21 @@ class VoiceController(
         } else {
             onError("تعذر تشغيل خدمة النطق في الهاتف.")
         }
+    }
+
+    private fun requestSpeechAudioFocus(): Boolean {
+        val granted = runCatching {
+            audioManager.requestAudioFocus(speechAudioFocusRequest) ==
+                AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }.getOrDefault(false)
+        hasAudioFocus = granted
+        return granted
+    }
+
+    private fun abandonSpeechAudioFocus() {
+        if (!hasAudioFocus) return
+        hasAudioFocus = false
+        runCatching { audioManager.abandonAudioFocusRequest(speechAudioFocusRequest) }
     }
 
     private fun scheduleListening(delayMs: Long) {
@@ -331,6 +387,7 @@ class VoiceController(
         remoteSpeech?.cancel()
         runCatching { tts?.stop() }
         speaking = false
+        abandonSpeechAudioFocus()
         tts?.shutdown()
         tts = null
         ttsReady = false
