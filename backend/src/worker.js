@@ -1,5 +1,6 @@
 import { isSafeImageInput } from '../../security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { consumeRateLimit, isInternalRateLimitAuthorized } from './rate-limit.js';
 
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
@@ -245,6 +246,20 @@ export async function handleRequest(request, env) {
   const cors = corsHeaders(request, env);
   const url = new URL(request.url);
 
+  if (url.pathname === '/_internal/rate-limit') {
+    if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405, { allow: 'POST' });
+    if (!isInternalRateLimitAuthorized(request, env.RATE_LIMIT_SERVICE_SECRET)) return json({ error: 'Unauthorized.' }, 401);
+    let input;
+    try {
+      const raw = await request.text();
+      if (raw.length > 2048) return json({ error: 'Invalid request.' }, 400);
+      input = JSON.parse(raw);
+    } catch { return json({ error: 'Invalid request.' }, 400); }
+    try {
+      const result = await consumeRateLimit(env, input?.identity, input?.scope, input?.limit, input?.windowMs);
+      return json(result);
+    } catch { return json({ error: 'Shared rate-limit service unavailable.' }, 503); }
+  }
   if (request.method === 'OPTIONS') {
     if (env.ALLOWED_ORIGIN && request.headers.get('Origin') !== env.ALLOWED_ORIGIN) {
       return json({ error: 'Origin not allowed.' }, 403, cors);
@@ -287,6 +302,18 @@ export async function handleRequest(request, env) {
 
   const auth = await authenticate(request, env);
   if (!auth.ok) return json(auth.body, auth.status, cors);
+
+  const clientIdentity = auth.userId
+    ? `user:${auth.userId}`
+    : (request.headers.get('cf-connecting-ip') ? `ip:${request.headers.get('cf-connecting-ip')}` : '');
+  if (!clientIdentity) return json({ error: 'A trusted client identity is unavailable.' }, 503, cors);
+
+  try {
+    const rate = await consumeRateLimit(env, clientIdentity, isSocial ? 'social-read' : 'chat', isSocial ? 60 : 20, 60_000);
+    if (!rate.allowed) return json({ error: 'Too many requests. Please retry later.' }, 429, { ...cors, 'retry-after': String(rate.retryAfterSeconds || 1) });
+  } catch {
+    return json({ error: 'Shared rate-limit service is temporarily unavailable.' }, 503, cors);
+  }
 
   if (isSocial) {
     return json({
