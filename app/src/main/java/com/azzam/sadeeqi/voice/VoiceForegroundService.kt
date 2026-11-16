@@ -56,6 +56,11 @@ class VoiceForegroundService : Service() {
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
+            ACTION_MUTE -> {
+                val muted = intent.getBooleanExtra(EXTRA_MUTED, true)
+                voice?.setMicrophoneMuted(muted)
+                updateNotification(if (muted) "الميكروفون مكتوم — اضغط لإلغاء الكتم" else "الميكروفون نشط — صديقي يستمع")
+            }
             ACTION_DICTATE -> startDictationSession()
             ACTION_START, null -> startSession()
         }
