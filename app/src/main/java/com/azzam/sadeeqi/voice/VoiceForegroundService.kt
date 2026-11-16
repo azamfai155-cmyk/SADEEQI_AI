@@ -19,6 +19,7 @@ import com.azzam.sadeeqi.BuildConfig
 import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
+import com.azzam.sadeeqi.identity.FounderIdentity
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.phone.DeviceCommand
@@ -48,6 +49,22 @@ class VoiceForegroundService : Service() {
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
     private var started = false
+    private val sessionState = VoiceSessionStateMachine()
+    private val idleTimeout = Runnable {
+        if (started && sessionState.isConversationActive()) {
+            setSessionState(VoiceSessionState.IDLE_TIMEOUT)
+            stopSession("انتهت مهلة الخمول. عادت صديقي إلى وضع الاستعداد.")
+        }
+    }
+
+    private fun setSessionState(next: VoiceSessionState) {
+        sessionState.transition(next)
+    }
+
+    private fun refreshIdleTimeout() {
+        mainHandler.removeCallbacks(idleTimeout)
+        mainHandler.postDelayed(idleTimeout, IDLE_TIMEOUT_MS)
+    }
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -122,6 +139,8 @@ class VoiceForegroundService : Service() {
             return
         }
         started = true
+        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+        mainHandler.removeCallbacks(idleTimeout)
         history.clear()
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
@@ -224,7 +243,22 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        mainHandler.removeCallbacks(idleTimeout)
         publishVoiceMessage("أنت", spoken)
+
+        val normalized = normalizeVoiceConfirmation(spoken).replace(" ", "")
+        if (normalized in setOf("خلاصياصديقي", "ارجعلوضعالاستعداد", "انهالمحادثة", "انهيالمحادثة", "اقفلالمحادثة")) {
+            setSessionState(VoiceSessionState.STANDBY_RESUME)
+            speakVoiceReply("حاضر عزام. أوقفت المحادثة الصوتية وعدت إلى وضع الاستعداد.")
+            mainHandler.postDelayed({ if (started) stopSession("عاد صديقي إلى وضع الاستعداد.") }, 900)
+            return
+        }
+
+        FounderIdentity.answerFor(spoken)?.let { answer ->
+            setSessionState(VoiceSessionState.PROCESSING)
+            speakVoiceReply(answer)
+            return
+        }
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -292,13 +326,14 @@ class VoiceForegroundService : Service() {
             }
             null -> Unit
         }
-        val normalized = spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "")
         if (normalized in setOf("ياصديقي", "صديقي")) {
-            val greeting = "نعم يا عزام، أنا معك"
-            speakVoiceReply(greeting)
+            setSessionState(VoiceSessionState.WAKE_DETECTED)
+            setSessionState(VoiceSessionState.GREETING)
+            speakVoiceReply(FounderIdentity.GREETING)
             return
         }
 
+        setSessionState(VoiceSessionState.PROCESSING)
         cancelActiveReply()
         val requestGeneration = replyGeneration
         history.add(OpenAiGateway.Turn("user", YemeniSpeechNormalizer.assistantContext(spoken)))
@@ -383,8 +418,10 @@ class VoiceForegroundService : Service() {
 
     private fun speakVoiceReply(text: String) {
         if (text.isBlank()) return
+        setSessionState(VoiceSessionState.SPEAKING)
         publishVoiceMessage("صديقي", text)
         voice?.speak(text)
+        refreshIdleTimeout()
     }
 
     private fun publishVoiceMessage(role: String, message: String) {
@@ -411,6 +448,8 @@ class VoiceForegroundService : Service() {
         val wasStarted = started
         started = false
         if (wasStarted) publishVoiceStatus(false, statusMessage)
+        mainHandler.removeCallbacks(idleTimeout)
+        setSessionState(VoiceSessionState.STANDBY)
         pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
@@ -427,6 +466,8 @@ class VoiceForegroundService : Service() {
         cancelActiveReply()
         val wasStarted = started
         started = false
+        mainHandler.removeCallbacks(idleTimeout)
+        setSessionState(VoiceSessionState.STANDBY)
         if (wasStarted) publishVoiceStatus(false, "انتهت جلسة الصوت.")
         pendingPhoneCommand = null
         voice?.close()
@@ -453,5 +494,6 @@ class VoiceForegroundService : Service() {
         const val EXTRA_MESSAGE_TEXT = "voice_message_text"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
+        private const val IDLE_TIMEOUT_MS = 45_000L
     }
 }
