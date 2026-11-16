@@ -77,6 +77,7 @@ async function runTask(taskName) {
     cwd: root,
     env: safeEnvironment(),
     shell: false,
+    detached: process.platform !== 'win32',
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -91,12 +92,21 @@ async function runTask(taskName) {
 
   // Always escalate to SIGKILL if SIGTERM does not stop the child.
   // This is shared by timeout and output-limit termination paths.
+  const sendSignal = (signal) => {
+    try {
+      if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, signal);
+      else child.kill(signal);
+    } catch (error) {
+      if (error.code !== 'ESRCH') child.kill(signal);
+    }
+  };
+
   const terminateChild = () => {
     if (completed || child.exitCode !== null || child.signalCode !== null) return;
-    child.kill('SIGTERM');
+    sendSignal('SIGTERM');
     if (!forceKillTimer) {
       forceKillTimer = setTimeout(() => {
-        if (!completed) child.kill('SIGKILL');
+        if (!completed) sendSignal('SIGKILL');
       }, 3000);
       forceKillTimer.unref();
     }
