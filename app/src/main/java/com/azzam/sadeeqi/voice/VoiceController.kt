@@ -30,7 +30,7 @@ class VoiceController(
         AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
     ).setAudioAttributes(
         AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+            .setUsage(AudioAttributes.USAGE_ASSISTANT)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
     ).setOnAudioFocusChangeListener { change ->
@@ -40,7 +40,7 @@ class VoiceController(
                     // A call or another app took audio focus. Stop this utterance cleanly
                     // instead of talking over the higher-priority audio session.
                     lastUtteranceId = null
-        pendingSpeech = null
+                    pendingSpeech = null
                     remoteSpeech?.cancel()
                     runCatching { tts?.stop() }
                     speaking = false
@@ -54,6 +54,7 @@ class VoiceController(
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var ttsReady = false
+    @Volatile private var closed = false
     @Volatile private var conversationActive = false
     @Volatile private var dictationActive = false
     @Volatile private var listening = false
@@ -73,6 +74,7 @@ class VoiceController(
     fun isConversationActive(): Boolean = conversationActive
 
     fun startConversation() {
+        if (closed) return
         lastUtteranceId = null
         pendingSpeech = null
         microphoneMuted = false
@@ -117,6 +119,7 @@ class VoiceController(
     }
 
     fun listen() {
+        if (closed) return
         microphoneMuted = false
         conversationActive = false
         dictationActive = true
@@ -139,7 +142,7 @@ class VoiceController(
     }
 
     private fun startListeningInternal() {
-        if (microphoneMuted || speaking) return
+        if (closed || microphoneMuted || speaking) return
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
             onError("خدمة التعرف على الكلام غير متاحة على هذا الجهاز.")
             return
@@ -171,6 +174,7 @@ class VoiceController(
     }
 
     fun speak(text: String) {
+        if (closed) return
         val cleanText = text
             .replace(Regex("https?://\\S+"), "رابط")
             .replace(Regex("[*_#>\\[\\]{}]"), " ")
@@ -234,7 +238,17 @@ class VoiceController(
             return
         }
         val locale = Locale.forLanguageTag(settings.languageTag)
-        tts?.setLanguage(locale)
+        val languageResult = tts?.setLanguage(locale) ?: TextToSpeech.ERROR
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+            languageResult == TextToSpeech.LANG_NOT_SUPPORTED ||
+            languageResult == TextToSpeech.ERROR
+        ) {
+            speaking = false
+            abandonSpeechAudioFocus()
+            onError("الصوت المحدد غير متوفر. اختر محركاً أو صوتاً عربياً من إعدادات الصوت.")
+            if (conversationActive && !microphoneMuted) scheduleListening(700)
+            return
+        }
         tts?.voices?.firstOrNull { it.name == settings.voiceName }?.let { tts?.voice = it }
         tts?.setSpeechRate(settings.speechRate)
         tts?.setPitch(settings.pitch)
@@ -253,6 +267,11 @@ class VoiceController(
     }
 
     override fun onInit(status: Int) {
+        if (closed) {
+            runCatching { tts?.shutdown() }
+            tts = null
+            return
+        }
         if (status == TextToSpeech.SUCCESS) {
             val settings = settingsStore.load()
             val locale = Locale.forLanguageTag(settings.languageTag)
@@ -332,7 +351,7 @@ class VoiceController(
     }
 
     private fun scheduleListening(delayMs: Long) {
-        if (!conversationActive || microphoneMuted) return
+        if (closed || !conversationActive || microphoneMuted) return
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.postDelayed({
             if (conversationActive && !microphoneMuted && !speaking) {
@@ -344,7 +363,7 @@ class VoiceController(
 
     private fun createRecognitionListener(generation: Long): RecognitionListener = object : RecognitionListener {
         private fun deliver(action: () -> Unit) {
-            if (generation == recognizerGeneration) action()
+            if (!closed && generation == recognizerGeneration) action()
         }
         override fun onReadyForSpeech(params: Bundle?) = deliver { listening = true }
         override fun onBeginningOfSpeech() = deliver { }
@@ -412,6 +431,8 @@ class VoiceController(
     }
 
     fun close() {
+        if (closed) return
+        closed = true
         conversationActive = false
         dictationActive = false
         microphoneMuted = false
