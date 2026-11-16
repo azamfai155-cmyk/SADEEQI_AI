@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
+import com.azzam.sadeeqi.BuildConfig
 import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
@@ -36,6 +37,11 @@ class VoiceForegroundService : Service() {
     private var activeReplyTask: Future<*>? = null
     @Volatile private var replyGeneration = 0L
     private val gateway by lazy { OpenAiGateway { SupabaseAuthClient(this@VoiceForegroundService).accessToken() } }
+    private val realtimeSpeech by lazy {
+        OpenAiRealtimeSpeech(BuildConfig.SADEEQI_API_BASE_URL) {
+            SupabaseAuthClient(this@VoiceForegroundService).accessToken()
+        }
+    }
     private val history = mutableListOf<OpenAiGateway.Turn>()
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
@@ -87,7 +93,8 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message -> updateNotification(message) },
+            realtimeSpeech
         )
         voice?.listen()
     }
@@ -121,7 +128,8 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message -> updateNotification(message) },
+            realtimeSpeech
         )
         voice?.startConversation()
     }
@@ -331,6 +339,7 @@ class VoiceForegroundService : Service() {
         voice = null
         musicManager?.release()
         musicManager = null
+        runCatching { realtimeSpeech.close() }
         executor.shutdownNow()
         super.onDestroy()
     }
