@@ -121,6 +121,41 @@ test('distributed rate limiter fails closed when shared service configuration is
   assert.equal(res.statusCode, 503);
 });
 
+test('distributed rate limiter fails closed on timeout or shared-store outage', async () => {
+  const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
+  const limiter = createDistributedRateLimiter({
+    env: { RATE_LIMIT_SERVICE_URL: 'https://ratelimit.example/_internal/rate-limit', RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) },
+    fetchImpl: async () => { throw new Error('simulated store outage'); }
+  });
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; }, set() { return this; } };
+  await limiter({ auth: { userId: 'user-a' }, headers: {} }, res, () => { throw new Error('must fail closed'); });
+  assert.equal(res.statusCode, 503);
+});
+
+test('independent Vercel middleware instances consult the same remote counter', async () => {
+  const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
+  let sharedCount = 0;
+  const sharedFetch = async (_url, init) => {
+    const payload = JSON.parse(init.body);
+    assert.equal(payload.identity, 'user:multi-instance-user');
+    sharedCount += 1;
+    return Response.json({ allowed: sharedCount <= 2, count: sharedCount, resetAt: Date.now() + 60_000, retryAfterSeconds: 60 });
+  };
+  const env = { RATE_LIMIT_SERVICE_URL: 'https://ratelimit.example/_internal/rate-limit', RATE_LIMIT_SERVICE_SECRET: 'x'.repeat(40) };
+  const firstInstance = createDistributedRateLimiter({ limit: 2, env, fetchImpl: sharedFetch });
+  const secondInstance = createDistributedRateLimiter({ limit: 2, env, fetchImpl: sharedFetch });
+  const makeResponse = () => ({ statusCode: 200, set() { return this; }, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+  const request = { auth: { userId: 'multi-instance-user' }, headers: {} };
+  let passed = 0;
+  const first = makeResponse(), second = makeResponse(), third = makeResponse();
+  await firstInstance(request, first, () => { passed += 1; });
+  await secondInstance(request, second, () => { passed += 1; });
+  await firstInstance(request, third, () => { passed += 1; });
+  assert.equal(sharedCount, 3);
+  assert.equal(passed, 2);
+  assert.equal(third.statusCode, 429);
+});
+
 test('distributed rate limiter rejects untrusted or malformed IP identity in legacy mode', async () => {
   const { createDistributedRateLimiter } = await import('./backend/src/vercel-rate-limit.js');
   const limiter = createDistributedRateLimiter({
