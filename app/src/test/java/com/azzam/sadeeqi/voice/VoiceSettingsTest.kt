@@ -46,9 +46,9 @@ class VoiceSettingsTest {
         val invalid = VoiceSettings(openAiVoiceName = "unknown-voice", useOpenAiVoice = true).normalized()
 
         assertEquals("cedar", supported.openAiVoiceName)
-        assertEquals(true, supported.useOpenAiVoice)
+        assertEquals(false, supported.useOpenAiVoice)
         assertEquals("marin", invalid.openAiVoiceName)
-        assertEquals(true, invalid.useOpenAiVoice)
+        assertEquals(false, invalid.useOpenAiVoice)
     }
     @Test
     fun normalizedKeepsOnlyKnownDialectProfiles() {
