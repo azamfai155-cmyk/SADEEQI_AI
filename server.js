@@ -177,7 +177,7 @@ export function createAuthMiddleware() {
 
 const requireAuth = createAuthMiddleware();
 
-// Per-instance best-effort protection; use a shared store for strict cross-instance limits.
+// All API instances consult the same Cloudflare Durable Object counter.
 const chatRateLimit = createDistributedRateLimiter({ scope: 'chat', windowMs: 60_000, limit: 20 });
 const socialRateLimit = createDistributedRateLimiter({ scope: 'social-read', windowMs: 60_000, limit: 60 });
 
