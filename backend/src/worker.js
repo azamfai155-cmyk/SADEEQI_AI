@@ -1,6 +1,7 @@
 import { isSafeImageInput } from '../../security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { consumeRateLimit, isInternalRateLimitAuthorized } from './rate-limit.js';
+import { consumeRateLimit, isInternalRateLimitAuthorized, RateLimitDurableObject } from './rate-limit.js';
+export { RateLimitDurableObject };
 
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
@@ -283,6 +284,8 @@ export async function handleRequest(request, env) {
       provider: config.provider,
       model: config.model,
       auth_mode: authMode,
+      rate_limiter_configured: Boolean(env.RATE_LIMITER),
+      rate_limit_service_auth_configured: Boolean(env.RATE_LIMIT_SERVICE_SECRET),
       configured: Boolean(config.apiKey && config.model && authModeValid && authConfigured)
     }, 200, cors);
   }
