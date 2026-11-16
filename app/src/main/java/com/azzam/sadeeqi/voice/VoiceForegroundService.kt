@@ -132,7 +132,7 @@ class VoiceForegroundService : Service() {
                 if (message.contains("إذن الميكروفون") ||
                     message.contains("غير متاحة على هذا الجهاز")
                 ) {
-                    publishVoiceStatus(false, message)
+                    stopSession(message)
                 }
             },
             realtimeSpeech
@@ -404,11 +404,11 @@ class VoiceForegroundService : Service() {
         gateway.cancelCurrentRequest()
     }
 
-    private fun stopSession() {
+    private fun stopSession(statusMessage: String = "تم إيقاف الاستماع الصوتي.") {
         cancelActiveReply()
         val wasStarted = started
         started = false
-        if (wasStarted) publishVoiceStatus(false, "تم إيقاف الاستماع الصوتي.")
+        if (wasStarted) publishVoiceStatus(false, statusMessage)
         pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
