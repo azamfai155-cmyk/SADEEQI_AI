@@ -215,6 +215,7 @@ app.get('/health', (_req, res) => {
     provider: PROVIDER,
     model: MODEL,
     auth_mode: AUTH_MODE,
+    rate_limiter_configured: Boolean(process.env.RATE_LIMIT_SERVICE_URL && process.env.RATE_LIMIT_SERVICE_SECRET),
     configured: Boolean(AUTH_MODE !== 'invalid' && API_KEY && MODEL && (AUTH_MODE === 'supabase' ? SUPABASE_JWKS : AUTH_MODE === 'dual' ? (SUPABASE_JWKS || APP_TOKEN) : APP_TOKEN)),
     provider_status: API_KEY && MODEL ? 'configured_not_live_tested' : 'missing_credentials_or_model'
   });
