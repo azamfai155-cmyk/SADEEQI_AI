@@ -6,7 +6,7 @@ import java.util.Locale
 /** Non-sensitive voice preferences; secrets and conversation content are never stored here. */
 data class VoiceSettings(
     val voiceName: String = "",
-    val languageTag: String = "ar",
+    val languageTag: String = "ar-YE",
     val speechRate: Float = 0.96f,
     val pitch: Float = 0.98f,
     val volume: Float = 1.0f,
@@ -30,6 +30,7 @@ fun VoiceSettings.normalized(): VoiceSettings {
         pitch = (if (pitch.isFinite()) pitch else 0.98f).coerceIn(0.5f, 2.0f),
         volume = (if (volume.isFinite()) volume else 1.0f).coerceIn(0.0f, 1.0f),
         openAiVoiceName = openAiVoiceName.takeIf { it in VoiceSettingsStore.OPENAI_VOICES } ?: "marin",
+        useOpenAiVoice = false,
         dialectProfileId = dialectProfileId.takeIf { id -> VoiceDialectProfiles.all.any { it.id == id } }
             ?: VoiceDialectProfiles.default.id
     )
