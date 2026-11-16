@@ -406,7 +406,9 @@ class VoiceForegroundService : Service() {
 
     override fun onDestroy() {
         cancelActiveReply()
+        val wasStarted = started
         started = false
+        if (wasStarted) publishVoiceStatus(false, "انتهت جلسة الصوت.")
         pendingPhoneCommand = null
         voice?.close()
         voice = null
