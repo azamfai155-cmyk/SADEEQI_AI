@@ -19,7 +19,7 @@ object VoiceDialectProfiles {
             displayName = "الصوت الإبّي",
             dialectLabel = "محافظة إب – اليمن",
             description = "الصوت اليمني الأساسي؛ نعمل على ضبطه ليكون إبّياً طبيعياً.",
-            languageTag = "ar-YE",
+            languageTag = "ar",
             speechRate = 0.94f,
             pitch = 1.00f,
             sampleText = "يا هلا، كيف حالك؟ عساك بخير؟ أنا صديقي، قل لي إيش تشتي وأنا معك."
@@ -29,7 +29,7 @@ object VoiceDialectProfiles {
             displayName = "هادي",
             dialectLabel = "إبّي – هادئ",
             description = "شخصية هادئة وودودة، مستقلة بإعداداتها.",
-            languageTag = "ar-YE",
+            languageTag = "ar",
             speechRate = 0.88f,
             pitch = 0.94f,
             sampleText = "يا مرحبا، خذ راحتك واحكي لي بهدوء، أنا أسمعك وموجود معك."
@@ -39,7 +39,7 @@ object VoiceDialectProfiles {
             displayName = "ذكي",
             dialectLabel = "إبّي – نشيط",
             description = "شخصية نشيطة وواضحة، مستقلة عن هادي.",
-            languageTag = "ar-YE",
+            languageTag = "ar",
             speechRate = 1.02f,
             pitch = 1.06f,
             sampleText = "أيوه، تمام! قل لي إيش ننجز اليوم، وبنرتبها مع بعض خطوة خطوة."
