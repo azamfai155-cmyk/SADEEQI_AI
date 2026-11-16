@@ -36,7 +36,8 @@ test('policy rejects unsafe scopes and out-of-range budgets', () => {
 test('Durable Object atomic counter rejects concurrent requests beyond the exact limit', async () => {
   const sql = new AtomicSqlMock();
   const objectA = new RateLimitDurableObject({ storage: { sql } });
-  const results = await Promise.all(Array.from({ length: 100 }, () => check(objectA)));
+  const objectB = new RateLimitDurableObject({ storage: { sql } });
+  const results = await Promise.all(Array.from({ length: 100 }, (_, index) => check(index % 2 ? objectA : objectB)));
   const allowed = results.filter(response => response.status === 200);
   const bodies = await Promise.all(results.map(response => response.json()));
   assert.equal(bodies.filter(result => result.allowed).length, 20);
@@ -53,6 +54,24 @@ test('counter survives creation of a new Worker-side Durable Object instance', a
   const result = await (await check(restartedInstance, 'chat', 5)).json();
   assert.equal(result.count, 4);
   assert.equal(result.allowed, true);
+});
+
+test('fixed window resets after its configured duration', async () => {
+  const sql = new AtomicSqlMock();
+  const originalNow = Date.now;
+  let now = 10_000;
+  Date.now = () => now;
+  try {
+    const object = new RateLimitDurableObject({ storage: { sql } });
+    const first = await (await check(object, 'chat', 1, 60_000)).json();
+    const second = await (await check(object, 'chat', 1, 60_000)).json();
+    assert.equal(first.allowed, true);
+    assert.equal(second.allowed, false);
+    now += 60_001;
+    const afterReset = await (await check(object, 'chat', 1, 60_000)).json();
+    assert.equal(afterReset.allowed, true);
+    assert.equal(afterReset.count, 1);
+  } finally { Date.now = originalNow; }
 });
 
 test('same identity is deterministically routed to one shared Durable Object id', async () => {
