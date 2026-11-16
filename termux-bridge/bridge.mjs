@@ -35,7 +35,7 @@ const TASKS = Object.freeze({
 });
 
 function emit(payload, exitCode = 0) {
-  process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(payload, null, 2)}\\n`);
   process.exitCode = exitCode;
 }
 
@@ -87,12 +87,36 @@ async function runTask(taskName) {
   let overflow = false;
   let timedOut = false;
   let completed = false;
+  let forceKillTimer;
+
+  // Always escalate to SIGKILL if SIGTERM does not stop the child.
+  // This is shared by timeout and output-limit termination paths.
+  const terminateChild = () => {
+    if (completed || child.exitCode !== null || child.signalCode !== null) return;
+    child.kill('SIGTERM');
+    if (!forceKillTimer) {
+      forceKillTimer = setTimeout(() => {
+        if (!completed) child.kill('SIGKILL');
+      }, 3000);
+      forceKillTimer.unref();
+    }
+  };
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    terminateChild();
+  }, task.timeoutMs);
+
+  const clearTimers = () => {
+    clearTimeout(timer);
+    if (forceKillTimer) clearTimeout(forceKillTimer);
+  };
 
   const collect = (target) => (chunk) => {
     outputBytes += chunk.length;
     if (outputBytes > MAX_OUTPUT_BYTES) {
       overflow = true;
-      child.kill('SIGTERM');
+      terminateChild();
       return;
     }
     if (target === 'stdout') stdout += chunk.toString('utf8');
@@ -102,17 +126,10 @@ async function runTask(taskName) {
   child.stdout.on('data', collect('stdout'));
   child.stderr.on('data', collect('stderr'));
 
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill('SIGTERM');
-    const forceKill = setTimeout(() => child.kill('SIGKILL'), 3000);
-    forceKill.unref();
-  }, task.timeoutMs);
-
   child.on('error', (error) => {
     if (completed) return;
     completed = true;
-    clearTimeout(timer);
+    clearTimers();
     emit({
       ok: false,
       task: taskName,
@@ -126,7 +143,7 @@ async function runTask(taskName) {
   child.on('close', (code, signal) => {
     if (completed) return;
     completed = true;
-    clearTimeout(timer);
+    clearTimers();
     const ok = code === 0 && !timedOut && !overflow;
     emit({
       ok,
