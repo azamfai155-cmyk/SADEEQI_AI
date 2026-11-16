@@ -38,6 +38,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     var engineReady by remember { mutableStateOf(false) }
     var voiceMenu by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
+    var recognitionLanguageMenu by remember { mutableStateOf(false) }
     var voiceNotice by remember { mutableStateOf("سيتم اختيار أفضل صوت عربي متاح على جهازك تلقائياً.") }
     val previewEngine = remember {
         TextToSpeech(context.applicationContext) { status ->
@@ -103,7 +104,7 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
     }
     Column(modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("SADEEQI VOICE STUDIO", color = Color(0xFFE6C77A))
-        Text("اختر شخصية صوتية مستقلة. اللهجة الإبّية هي الهدف، أما نطق اللهجة فعلياً فيعتمد على نموذج الصوت المثبت وسيتم التحقق منه بالاستماع.", color = Color.White)
+        Text("اختر شخصية صوتية مستقلة. لغة التعرّف على كلامك منفصلة عن لغة النطق؛ اختيار العربية اليمنية تجريبي ويتوقف على دعم محرك التعرف.", color = Color.White)
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("الشخصية واللهجة", color = Color(0xFFE6C77A))
@@ -142,6 +143,40 @@ fun VoiceStudioScreen(modifier: Modifier = Modifier) {
                     enabled = engineReady,
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("▶ معاينة الشخصية المختارة") }
+                Text("لغة التعرّف على كلامك", color = Color(0xFFE6C77A))
+                Text(
+                    if (settings.recognitionLanguageTag == "ar-YE") {
+                        "العربية اليمنية — إذا كان محرك التعرف يدعمها؛ قد يرجع المحرك إلى العربية العامة."
+                    } else {
+                        "العربية العامة — الخيار الأوسع توافقاً مع محركات التعرف."
+                    },
+                    color = Color.LightGray
+                )
+                Button(
+                    onClick = { recognitionLanguageMenu = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("اختيار لغة التعرّف") }
+                DropdownMenu(
+                    expanded = recognitionLanguageMenu,
+                    onDismissRequest = { recognitionLanguageMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("العربية العامة") },
+                        onClick = {
+                            update(settings.copy(recognitionLanguageTag = "ar"))
+                            recognitionLanguageMenu = false
+                            voiceNotice = "تم اختيار العربية العامة للتعرّف."
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("العربية اليمنية (تجريبية)") },
+                        onClick = {
+                            update(settings.copy(recognitionLanguageTag = "ar-YE"))
+                            recognitionLanguageMenu = false
+                            voiceNotice = "تم اختيار العربية اليمنية. نجاحها يعتمد على دعم محرك التعرف المثبت."
+                        }
+                    )
+                }
                 Text("الصوت المحلي", color = Color(0xFFE6C77A))
                 Text("يعمل دون مفتاح API أو اشتراك. اختلاف اللهجة الإبّية بدقة يحتاج نموذجاً مدرّباً عليها؛ إعدادات السرعة والحدة وحدها لا تصنع لهجة أصلية.", color = Color.LightGray)
                 Text("الصوت المعتمد", color = Color(0xFFE6C77A))

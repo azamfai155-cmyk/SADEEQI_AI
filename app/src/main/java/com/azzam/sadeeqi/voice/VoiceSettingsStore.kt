@@ -21,7 +21,8 @@ data class VoiceSettings(
     val autoRead: Boolean = false,
     val useOpenAiVoice: Boolean = false,
     val openAiVoiceName: String = "marin",
-    val dialectProfileId: String = "ibbi"
+    val dialectProfileId: String = "ibbi",
+    val recognitionLanguageTag: String = "ar"
 )
 
 /** Sanitizes persisted/user-controlled values before they reach Android's TTS engine. */
@@ -40,7 +41,9 @@ fun VoiceSettings.normalized(): VoiceSettings {
         openAiVoiceName = openAiVoiceName.takeIf { it in VoiceSettingsStore.OPENAI_VOICES } ?: "marin",
         useOpenAiVoice = false,
         dialectProfileId = dialectProfileId.takeIf { id -> VoiceDialectProfiles.all.any { it.id == id } }
-            ?: VoiceDialectProfiles.default.id
+            ?: VoiceDialectProfiles.default.id,
+        recognitionLanguageTag = recognitionLanguageTag.takeIf { it in VoiceSettingsStore.RECOGNITION_LANGUAGES }
+            ?: "ar"
     )
 }
 
@@ -58,6 +61,7 @@ class VoiceSettingsStore(context: Context) {
         pitch = prefs.getFloat(profilePitchKey(safeProfileId), defaults.pitch),
         volume = prefs.getFloat(KEY_VOLUME, 1.0f),
         autoRead = prefs.getBoolean(KEY_AUTO_READ, false),
+        recognitionLanguageTag = prefs.getString(KEY_RECOGNITION_LANGUAGE, "ar").orEmpty(),
         useOpenAiVoice = prefs.getBoolean(KEY_USE_OPENAI_VOICE, false),
         openAiVoiceName = prefs.getString(KEY_OPENAI_VOICE, "marin").orEmpty(),
         dialectProfileId = safeProfileId
@@ -97,6 +101,7 @@ class VoiceSettingsStore(context: Context) {
             .putFloat(KEY_PITCH, safe.pitch)
             .putFloat(KEY_VOLUME, safe.volume)
             .putBoolean(KEY_AUTO_READ, safe.autoRead)
+            .putString(KEY_RECOGNITION_LANGUAGE, safe.recognitionLanguageTag)
             .putBoolean(KEY_USE_OPENAI_VOICE, safe.useOpenAiVoice)
             .putString(KEY_OPENAI_VOICE, safe.openAiVoiceName)
             .putString(KEY_DIALECT_PROFILE, safe.dialectProfileId)
@@ -110,7 +115,9 @@ class VoiceSettingsStore(context: Context) {
         private const val KEY_PITCH = "speech_pitch"
         private const val KEY_VOLUME = "speech_volume"
         private const val KEY_AUTO_READ = "auto_read"
+        private const val KEY_RECOGNITION_LANGUAGE = "recognition_language_tag"
         private const val KEY_USE_OPENAI_VOICE = "use_openai_voice"
+        val RECOGNITION_LANGUAGES = setOf("ar", "ar-YE")
         private const val KEY_OPENAI_VOICE = "openai_voice_name"
         private const val KEY_DIALECT_PROFILE = "dialect_profile_id"
         val OPENAI_VOICES = setOf("alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "marin", "cedar")
