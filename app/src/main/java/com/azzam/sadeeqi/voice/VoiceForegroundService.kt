@@ -446,9 +446,7 @@ class VoiceForegroundService : Service() {
         // Preserve the explicit return-to-standby intent until the spoken
         // acknowledgement finishes; otherwise SPEAKING would overwrite it
         // and the completion callback would resume listening instead of stopping.
-        if (sessionState.state != VoiceSessionState.STANDBY_RESUME) {
-            setSessionState(VoiceSessionState.SPEAKING)
-        }
+        sessionState.beginSpeaking()
         publishVoiceMessage("صديقي", text)
         refreshIdleTimeout(SPEECH_FAILSAFE_TIMEOUT_MS)
         voice?.speak(text)
