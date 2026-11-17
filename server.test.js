@@ -250,6 +250,6 @@ test('default system and identity instructions use real newline separators', asy
   });
   const instructions = JSON.parse(request.init.body).instructions;
   assert.match(instructions, /\n/);
-  assert.equal(instructions.includes('\\\\n'), false);
+  assert.equal(instructions.includes('\\n'), false);
   assert.match(instructions, /صديقي/);
 });
