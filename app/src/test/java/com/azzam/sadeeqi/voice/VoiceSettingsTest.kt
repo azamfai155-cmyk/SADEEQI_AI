@@ -14,9 +14,9 @@ class VoiceSettingsTest {
         ).normalized()
 
         assertEquals("ar-YE", result.languageTag)
-        assertEquals(2.0f, result.speechRate)
-        assertEquals(0.5f, result.pitch)
-        assertEquals(1.0f, result.volume)
+        assertEquals(2.0f, result.speechRate, 0.0001f)
+        assertEquals(0.5f, result.pitch, 0.0001f)
+        assertEquals(1.0f, result.volume, 0.0001f)
     }
 
     @Test
@@ -29,8 +29,8 @@ class VoiceSettingsTest {
         ).normalized()
 
         assertEquals("ar", result.languageTag)
-        assertEquals(0.96f, result.speechRate)
-        assertEquals(0.98f, result.pitch)
+        assertEquals(0.96f, result.speechRate, 0.0001f)
+        assertEquals(0.98f, result.pitch, 0.0001f)
         assertEquals(1.0f, result.volume)
     }
 
