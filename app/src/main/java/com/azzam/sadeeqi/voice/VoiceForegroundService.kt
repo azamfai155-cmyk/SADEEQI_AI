@@ -85,6 +85,9 @@ class VoiceForegroundService : Service() {
                     startSession()
                 } else {
                     cancelActiveReply()
+                    // A deliberate user interrupt cancels any pending return-to-standby intent.
+                    setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                    refreshIdleTimeout()
                     voice?.interruptAndListen()
                 }
             }
@@ -183,6 +186,9 @@ class VoiceForegroundService : Service() {
         }
         if (started) {
             cancelActiveReply()
+            // A fresh start command must override a pending standby transition.
+            setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+            refreshIdleTimeout()
             voice?.interruptAndListen()
             return
         }
