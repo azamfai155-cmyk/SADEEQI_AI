@@ -412,8 +412,8 @@ class MainActivity : ComponentActivity() {
                             }
 
                             val mime = contentResolver.getType(uri) ?: "image/jpeg"
-                            require(mime.startsWith("image/")) {
-                                "الملف المحدد ليس صورة."
+                            require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/gif")) {
+                                "صيغة الصورة غير مدعومة. استخدم JPEG أو PNG أو WebP أو GIF."
                             }
 
                             "data:$mime;base64," +
