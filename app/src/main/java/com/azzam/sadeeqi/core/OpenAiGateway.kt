@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 
+private class NonRetryableGatewayException(message: String) : IOException(message)
+
 class OpenAiGateway(
     private val baseUrl: String = BuildConfig.SADEEQI_API_BASE_URL,
     private val accessTokenProvider: () -> String,
@@ -106,12 +108,13 @@ class OpenAiGateway(
                             JSONObject(responseBody).optString("error")
                         }.getOrDefault("خطأ اتصال")
                         val failure = IOException("الخادم رفض الطلب (${response.code}): $message")
-                        // Do not retry authentication, validation, or other client errors.
+                        // Retry only rate limits and server failures; never mask auth or validation errors.
                         if (response.code in 500..599 || response.code == 429) {
                             lastFailure = failure
                             if (index < candidates.lastIndex) continue
+                            throw failure
                         }
-                        throw failure
+                        throw NonRetryableGatewayException(failure.message ?: "طلب غير صالح.")
                     }
 
                     val output = runCatching {
@@ -123,6 +126,8 @@ class OpenAiGateway(
                     if (index < candidates.lastIndex) continue
                     throw lastFailure!!
                 }
+            } catch (failure: NonRetryableGatewayException) {
+                throw failure
             } catch (failure: IOException) {
                 if (requestGeneration != cancellationGeneration.get()) throw failure
                 lastFailure = failure
