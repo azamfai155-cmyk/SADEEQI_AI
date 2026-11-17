@@ -313,3 +313,49 @@ test('Worker OpenAI provider requires explicit paid opt-in', async () => {
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
 });
+
+
+test('Cloudflare Worker rejects malformed image input before provider readiness', async () => {
+  const response = await handleRequest(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { input: [{ role: 'user', content: [{ type: 'input_image', image_url: 'data:text/plain;base64,SGVsbG8=' }] }] }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token'
+  });
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(body.error, 'Invalid image input.');
+});
+
+test('Cloudflare Worker system instructions use real newline separators', async () => {
+  const originalFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (_url, init) => {
+    captured = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      id: 'resp_newline_test',
+      model: 'openai/gpt-oss-20b',
+      output: [{ content: [{ type: 'output_text', text: 'ok' }] }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const response = await handleRequest(request('/v1/chat', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { input: [{ role: 'user', content: 'hello' }] }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      AI_PROVIDER: 'groq',
+      GROQ_API_KEY: 'test-groq-key',
+      GROQ_MODEL: 'openai/gpt-oss-20b'
+    });
+    assert.equal(response.status, 200);
+    assert.match(captured.instructions, /\n/);
+    assert.equal(captured.instructions.includes('\\\\n'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
