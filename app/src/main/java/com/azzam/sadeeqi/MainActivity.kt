@@ -374,8 +374,14 @@ class MainActivity : ComponentActivity() {
                 scope.launch {
                     val dataUrl = withContext(Dispatchers.IO) {
                         val output = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
-                        "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+                        require(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)) {
+                            "تعذر ضغط الصورة الملتقطة."
+                        }
+                        val imageBytes = output.toByteArray()
+                        require(imageBytes.size <= 5 * 1024 * 1024) {
+                            "حجم الصورة الملتقطة أكبر من 5 ميغابايت."
+                        }
+                        "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
                     }
                     selectedImageDataUrl = dataUrl
                     status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
@@ -401,8 +407,8 @@ class MainActivity : ComponentActivity() {
                                 ?: error("تعذر قراءة الصورة")
 
                             require(bytes.isNotEmpty()) { "الصورة فارغة." }
-                            require(bytes.size <= 8 * 1024 * 1024) {
-                                "حجم الصورة أكبر من 8 ميغابايت"
+                            require(bytes.size <= 5 * 1024 * 1024) {
+                                "حجم الصورة أكبر من 5 ميغابايت"
                             }
 
                             val mime = contentResolver.getType(uri) ?: "image/jpeg"
