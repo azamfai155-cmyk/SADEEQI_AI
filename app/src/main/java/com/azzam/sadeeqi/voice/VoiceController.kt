@@ -152,7 +152,9 @@ class VoiceController(
             tts?.setSpeechRate(settings.speechRate)
             tts?.setPitch(settings.pitch)
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) { speaking = true }
+                override fun onStart(utteranceId: String?) {
+                    if (utteranceId == lastUtteranceId) speaking = true
+                }
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
