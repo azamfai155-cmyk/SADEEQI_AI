@@ -33,4 +33,22 @@ class EncryptedMemoryInstrumentedTest {
         assertEquals("updated-secret", memory.read("acceptance-key"))
         memory.delete("acceptance-key")
     }
+
+
+    @Test fun savingAndImportingSameLogicalIdDoesNotCreateDuplicates() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val memory = EncryptedMemory(context)
+        memory.delete("stable-logical-id")
+        memory.save("stable-logical-id", "test", "first")
+        memory.save("stable-logical-id", "test", "second")
+        assertEquals("second", memory.read("stable-logical-id"))
+        assertEquals(1, memory.search("stable-logical-id").count { it.first == "stable-logical-id" })
+
+        val backup = memory.exportEncrypted("test-password-123".toCharArray())
+        memory.importEncrypted(backup, "test-password-123".toCharArray())
+        assertEquals("second", memory.read("stable-logical-id"))
+        assertEquals(1, memory.search("stable-logical-id").count { it.first == "stable-logical-id" })
+        memory.delete("stable-logical-id")
+    }
+
 }
