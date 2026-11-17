@@ -280,6 +280,36 @@ test('unknown authentication mode fails closed and health reports not configured
 });
 
 
+test('WhatsApp readiness uses Cloud API token and phone-number credentials', async () => {
+  const response = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    META_CLIENT_ID: 'meta-id',
+    META_CLIENT_SECRET: 'meta-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+  });
+  const body = await response.json();
+  const whatsapp = body.providers.find(provider => provider.id === 'whatsapp');
+  assert.equal(response.status, 200);
+  assert.equal(whatsapp.configured, false);
+
+  const configuredResponse = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    WHATSAPP_TOKEN: 'business-token',
+    WHATSAPP_PHONE_NUMBER_ID: 'phone-number-id',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+  });
+  const configuredBody = await configuredResponse.json();
+  const configuredWhatsapp = configuredBody.providers.find(provider => provider.id === 'whatsapp');
+  assert.equal(configuredWhatsapp.configured, true);
+  assert.equal(configuredWhatsapp.connected, false);
+});
+
 test('social provider readiness uses the same Meta and Pinterest credential names as the Express backend', async () => {
   const response = await handleRequest(request('/v1/social/providers', {
     headers: { Authorization: 'Bearer expected-token' }
