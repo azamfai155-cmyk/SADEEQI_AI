@@ -401,15 +401,23 @@ class MainActivity : ComponentActivity() {
                 scope.launch {
                     val loaded = withContext(Dispatchers.IO) {
                         runCatching {
-                            val bytes = contentResolver
-                                .openInputStream(uri)
-                                ?.use { it.readBytes() }
-                                ?: error("تعذر قراءة الصورة")
+                            val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(8 * 1024)
+                                var totalBytes = 0
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    totalBytes += count
+                                    require(totalBytes <= 5 * 1024 * 1024) {
+                                        "حجم الصورة أكبر من 5 ميغابايت"
+                                    }
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            } ?: error("تعذر قراءة الصورة")
 
                             require(bytes.isNotEmpty()) { "الصورة فارغة." }
-                            require(bytes.size <= 5 * 1024 * 1024) {
-                                "حجم الصورة أكبر من 5 ميغابايت"
-                            }
 
                             val mime = contentResolver.getType(uri) ?: "image/jpeg"
                             require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/gif")) {
