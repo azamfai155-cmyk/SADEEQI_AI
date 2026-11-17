@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -13,9 +15,11 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
+import com.azzam.sadeeqi.BuildConfig
 import com.azzam.sadeeqi.R
 import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
+import com.azzam.sadeeqi.identity.FounderIdentity
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.phone.DeviceCommand
@@ -24,6 +28,7 @@ import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.AudiusMusicRepository
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * User-started, visible microphone session. The persistent notification provides
@@ -32,11 +37,36 @@ import java.util.concurrent.Executors
 class VoiceForegroundService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
+    private var activeReplyTask: Future<*>? = null
+    @Volatile private var replyGeneration = 0L
     private val gateway by lazy { OpenAiGateway { SupabaseAuthClient(this@VoiceForegroundService).accessToken() } }
+    private val realtimeSpeech by lazy {
+        OpenAiRealtimeSpeech(BuildConfig.SADEEQI_API_BASE_URL) {
+            SupabaseAuthClient(this@VoiceForegroundService).accessToken()
+        }
+    }
     private val history = mutableListOf<OpenAiGateway.Turn>()
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
     private var started = false
+    private val sessionState = VoiceSessionStateMachine()
+    private val idleTimeout = Runnable {
+        if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+            stopSession("عاد صديقي إلى وضع الاستعداد.")
+        } else if (started && sessionState.isConversationActive()) {
+            setSessionState(VoiceSessionState.IDLE_TIMEOUT)
+            stopSession("انتهت مهلة الخمول. عادت صديقي إلى وضع الاستعداد.")
+        }
+    }
+
+    private fun setSessionState(next: VoiceSessionState) {
+        sessionState.transition(next)
+    }
+
+    private fun refreshIdleTimeout(timeoutMs: Long = IDLE_TIMEOUT_MS) {
+        mainHandler.removeCallbacks(idleTimeout)
+        mainHandler.postDelayed(idleTimeout, timeoutMs)
+    }
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -49,17 +79,56 @@ class VoiceForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_INTERRUPT -> {
-                if (!started) startSession()
-                voice?.interruptAndListen()
+                if (!started) {
+                    // startSession() creates the controller and starts listening itself.
+                    // Do not immediately reset that fresh recognizer a second time.
+                    startSession()
+                } else {
+                    cancelActiveReply()
+                    // A deliberate user interrupt cancels any pending return-to-standby intent.
+                    setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                    refreshIdleTimeout()
+                    voice?.interruptAndListen()
+                }
+            }
+            ACTION_MUTE -> {
+                if (started) {
+                    val muted = intent.getBooleanExtra(EXTRA_MUTED, true)
+                    voice?.setMicrophoneMuted(muted)
+                    updateNotification(if (muted) "الميكروفون مكتوم — اضغط لإلغاء الكتم" else "الميكروفون نشط — صديقي يستمع")
+                } else {
+                    stopSelf(startId)
+                }
             }
             ACTION_DICTATE -> startDictationSession()
-            ACTION_START, null -> startSession()
+            ACTION_START -> startSession()
+            null -> {
+                // A null restart intent must never open the microphone by itself.
+                stopSelf(startId)
+            }
         }
         return START_NOT_STICKY
     }
 
+    private fun hasMicrophonePermission(): Boolean =
+        checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     private fun startDictationSession() {
-        if (started) stopSession()
+        if (!hasMicrophonePermission()) {
+            started = false
+            publishVoiceStatus(false, "إذن الميكروفون غير متاح. اسمح لصديقي باستخدام الميكروفون من إعدادات الهاتف.")
+            stopSelf()
+            return
+        }
+        // Switch modes in-place. stopSession() calls stopSelf(), which can tear down
+        // this same service start request before the dictation session is established.
+        if (started) {
+            cancelActiveReply()
+            pendingPhoneCommand = null
+            voice?.stopConversation()
+            voice?.close()
+            voice = null
+        }
         createNotificationChannel()
         val notification = buildNotification("استمع صديقي إلى رسالتك الصوتية")
         try {
@@ -69,22 +138,57 @@ class VoiceForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (error: Exception) {
+            started = false
+            publishVoiceStatus(false, "تعذر بدء خدمة الميكروفون: ${error.message ?: "تحقق من أذونات التطبيق وإعدادات النظام."}")
             stopSelf()
             return
         }
         started = true
+        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+        mainHandler.removeCallbacks(idleTimeout)
         history.clear()
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message ->
+                updateNotification(message)
+                if (message.contains("إذن الميكروفون") ||
+                    message.contains("غير متاحة على هذا الجهاز")
+                ) {
+                    stopSession(message)
+                }
+            },
+            realtimeSpeech,
+            {
+                mainHandler.post {
+                    if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+                        stopSession("عاد صديقي إلى وضع الاستعداد.")
+                    } else if (started) {
+                        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                        refreshIdleTimeout()
+                    }
+                }
+            }
         )
+        // Publish the service state before starting recognition so a synchronous
+        // recognizer failure cannot be overwritten by a later "active" broadcast.
+        publishVoiceStatus(true, "بدأت خدمة الإملاء؛ جارٍ تهيئة الاستماع.")
         voice?.listen()
     }
 
     private fun startSession() {
+        if (!hasMicrophonePermission()) {
+            started = false
+            publishVoiceStatus(false, "إذن الميكروفون غير متاح. اسمح لصديقي باستخدام الميكروفون من إعدادات الهاتف.")
+            stopSelf()
+            return
+        }
         if (started) {
+            cancelActiveReply()
+            // A fresh start command must override a pending standby transition.
+            setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+            refreshIdleTimeout()
             voice?.interruptAndListen()
             return
         }
@@ -101,19 +205,45 @@ class VoiceForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (error: Exception) {
+            started = false
+            publishVoiceStatus(false, "تعذر بدء خدمة الميكروفون: ${error.message ?: "تحقق من أذونات التطبيق وإعدادات النظام."}")
             stopSelf()
             return
         }
 
         started = true
+        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+        mainHandler.removeCallbacks(idleTimeout)
         history.clear()
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message ->
+                updateNotification(message)
+                if (message.contains("إذن الميكروفون") ||
+                    message.contains("غير متاحة على هذا الجهاز")
+                ) {
+                    publishVoiceStatus(false, message)
+                }
+            },
+            realtimeSpeech,
+            {
+                mainHandler.post {
+                    if (started && sessionState.state == VoiceSessionState.STANDBY_RESUME) {
+                        stopSession("عاد صديقي إلى وضع الاستعداد.")
+                    } else if (started) {
+                        setSessionState(VoiceSessionState.ACTIVE_LISTENING)
+                        refreshIdleTimeout()
+                    }
+                }
+            }
         )
+        // Set the initial service state first; a synchronous recognition error
+        // must remain the final status rather than being overwritten as active.
+        publishVoiceStatus(true, "بدأت خدمة الصوت؛ جارٍ تهيئة الاستماع.")
         voice?.startConversation()
+        refreshIdleTimeout()
     }
 
     private fun normalizeVoiceConfirmation(value: String): String = value.trim().lowercase()
@@ -144,6 +274,28 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        mainHandler.removeCallbacks(idleTimeout)
+        publishVoiceMessage("أنت", spoken)
+
+        val normalized = normalizeVoiceConfirmation(spoken).replace(" ", "")
+        if (normalized in setOf("خلاصياصديقي", "ارجعلوضعالاستعداد", "انهالمحادثة", "انهيالمحادثة", "انهاءالمحادثة", "اقفلالمحادثة")) {
+            setSessionState(VoiceSessionState.STANDBY_RESUME)
+            speakVoiceReply("حاضر عزام. أوقفت المحادثة الصوتية وعدت إلى وضع الاستعداد.")
+            return
+        }
+
+        if (normalized in setOf("ياصديقي", "صديقي")) {
+            setSessionState(VoiceSessionState.WAKE_DETECTED)
+            setSessionState(VoiceSessionState.GREETING)
+            speakVoiceReply(FounderIdentity.GREETING)
+            return
+        }
+
+        FounderIdentity.answerFor(spoken)?.let { answer ->
+            setSessionState(VoiceSessionState.PROCESSING)
+            speakVoiceReply(answer)
+            return
+        }
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -156,13 +308,13 @@ class VoiceForegroundService : Service() {
                     "تعذر تنفيذ الأمر: ${error.message ?: "تحقق من إعدادات الهاتف."}"
                 }
                 updateNotification(reply)
-                voice?.speak(reply)
+                speakVoiceReply(reply)
             } else if (confirmation in setOf("لا", "الغاء", "الغاء الامر", "تراجع", "مش موافق")) {
                 pendingPhoneCommand = null
                 updateNotification("تم إلغاء أمر الهاتف.")
-                voice?.speak("تم إلغاء أمر الهاتف.")
+                speakVoiceReply("تم إلغاء أمر الهاتف.")
             } else {
-                voice?.speak("لم أفهم التأكيد. قل نعم للتنفيذ أو لا للإلغاء.")
+                speakVoiceReply("لم أفهم التأكيد. قل نعم للتنفيذ أو لا للإلغاء.")
             }
             return
         }
@@ -172,17 +324,17 @@ class VoiceForegroundService : Service() {
             pendingPhoneCommand = phoneCommand
             val prompt = DeviceCommandParser.confirmationText(phoneCommand) + " قل نعم للتأكيد أو لا للإلغاء."
             updateNotification(prompt)
-            voice?.speak(prompt)
+            speakVoiceReply(prompt)
             return
         }
 
         when (val command = MusicCommandParser.parse(spoken)) {
-            MusicCommand.Pause -> { musicManager?.pause(); voice?.speak("تم إيقاف الموسيقى مؤقتاً"); return }
-            MusicCommand.Resume -> { musicManager?.resume(); voice?.speak("تم استئناف الموسيقى"); return }
-            MusicCommand.Next -> { musicManager?.next(); voice?.speak("انتقلت إلى المقطع التالي"); return }
-            MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
-            MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
-            MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
+            MusicCommand.Pause -> { musicManager?.pause(); speakVoiceReply("تم إيقاف الموسيقى مؤقتاً"); return }
+            MusicCommand.Resume -> { musicManager?.resume(); speakVoiceReply("تم استئناف الموسيقى"); return }
+            MusicCommand.Next -> { musicManager?.next(); speakVoiceReply("انتقلت إلى المقطع التالي"); return }
+            MusicCommand.Previous -> { musicManager?.previous(); speakVoiceReply("عدت إلى المقطع السابق"); return }
+            MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); speakVoiceReply("تم رفع الصوت"); return }
+            MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); speakVoiceReply("تم خفض الصوت"); return }
             is MusicCommand.Search -> {
                 updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
                 executor.execute {
@@ -191,18 +343,18 @@ class VoiceForegroundService : Service() {
                         mainHandler.post {
                             if (!started) return@post
                             if (tracks.isEmpty()) {
-                                voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
+                                speakVoiceReply("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
                             } else {
                                 musicManager?.playRemoteQueue(tracks, 0)
                                 updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
-                                voice?.speak("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
+                                speakVoiceReply("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
                             }
                         }
                     } catch (error: Exception) {
                         mainHandler.post {
                             if (started) {
                                 updateNotification("تعذر البحث عن الموسيقى")
-                                voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
+                                speakVoiceReply("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
                             }
                         }
                     }
@@ -211,29 +363,30 @@ class VoiceForegroundService : Service() {
             }
             null -> Unit
         }
-        val normalized = spoken.trim().replace(Regex("[!！؟?،,.\\s]+"), "")
-        if (normalized in setOf("ياصديقي", "صديقي")) {
-            val greeting = "نعم يا عزام، أنا معك"
-            voice?.speak(greeting)
-            return
-        }
-
-        history.add(OpenAiGateway.Turn("user", spoken))
+        setSessionState(VoiceSessionState.PROCESSING)
+        refreshIdleTimeout(PROCESSING_TIMEOUT_MS)
+        cancelActiveReply()
+        val requestGeneration = replyGeneration
+        history.add(OpenAiGateway.Turn("user", YemeniSpeechNormalizer.assistantContext(spoken)))
+        while (history.size > 24) history.removeAt(0)
         updateNotification("صديقي يعالج كلامك…")
         val snapshot = history.takeLast(24).toList()
-        executor.execute {
+        activeReplyTask = executor.submit {
             try {
                 val answer = gateway.reply(snapshot)
-                history.add(OpenAiGateway.Turn("assistant", answer))
                 mainHandler.post {
-                    if (started) {
+                    if (started && requestGeneration == replyGeneration) {
+                        activeReplyTask = null
+                        history.add(OpenAiGateway.Turn("assistant", answer))
+                        while (history.size > 24) history.removeAt(0)
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
-                        voice?.speak(answer)
+                        speakVoiceReply(answer)
                     }
                 }
             } catch (error: Exception) {
                 mainHandler.post {
-                    if (started) {
+                    if (started && requestGeneration == replyGeneration) {
+                        activeReplyTask = null
                         updateNotification("تعذر الرد: ${error.message ?: "خطأ اتصال"}")
                         voice?.resumeAfterTurnFailure()
                     }
@@ -285,8 +438,52 @@ class VoiceForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
-    private fun stopSession() {
+    private fun publishVoiceStatus(active: Boolean, message: String) {
+        sendBroadcast(
+            Intent(ACTION_STATUS)
+                .setPackage(packageName)
+                .putExtra(EXTRA_STATUS_ACTIVE, active)
+                .putExtra(EXTRA_STATUS_MESSAGE, message)
+        )
+    }
+
+    private fun speakVoiceReply(text: String) {
+        if (text.isBlank()) return
+        // Preserve the explicit return-to-standby intent until the spoken
+        // acknowledgement finishes; otherwise SPEAKING would overwrite it
+        // and the completion callback would resume listening instead of stopping.
+        sessionState.beginSpeaking()
+        publishVoiceMessage("صديقي", text)
+        refreshIdleTimeout(SPEECH_FAILSAFE_TIMEOUT_MS)
+        voice?.speak(text)
+    }
+
+    private fun publishVoiceMessage(role: String, message: String) {
+        if (message.isBlank()) return
+        sendBroadcast(
+            Intent(ACTION_MESSAGE)
+                .setPackage(packageName)
+                .putExtra(EXTRA_MESSAGE_ROLE, role)
+                .putExtra(EXTRA_MESSAGE_TEXT, message)
+        )
+    }
+
+    private fun cancelActiveReply() {
+        // Invalidate callbacks before cancelling the worker/network call so a late
+        // response can never be spoken or appended to the next conversation turn.
+        replyGeneration += 1
+        activeReplyTask?.cancel(true)
+        activeReplyTask = null
+        gateway.cancelCurrentRequest()
+    }
+
+    private fun stopSession(statusMessage: String = "تم إيقاف الاستماع الصوتي.") {
+        cancelActiveReply()
+        val wasStarted = started
         started = false
+        if (wasStarted) publishVoiceStatus(false, statusMessage)
+        mainHandler.removeCallbacks(idleTimeout)
+        setSessionState(VoiceSessionState.STANDBY)
         pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
@@ -300,12 +497,18 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        cancelActiveReply()
+        val wasStarted = started
         started = false
+        mainHandler.removeCallbacks(idleTimeout)
+        setSessionState(VoiceSessionState.STANDBY)
+        if (wasStarted) publishVoiceStatus(false, "انتهت جلسة الصوت.")
         pendingPhoneCommand = null
         voice?.close()
         voice = null
         musicManager?.release()
         musicManager = null
+        runCatching { realtimeSpeech.close() }
         executor.shutdownNow()
         super.onDestroy()
     }
@@ -317,7 +520,16 @@ class VoiceForegroundService : Service() {
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
         const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"
         const val EXTRA_MUTED = "microphone_muted"
+        const val ACTION_STATUS = "com.azzam.sadeeqi.voice.STATUS"
+        const val EXTRA_STATUS_ACTIVE = "voice_status_active"
+        const val EXTRA_STATUS_MESSAGE = "voice_status_message"
+        const val ACTION_MESSAGE = "com.azzam.sadeeqi.voice.MESSAGE"
+        const val EXTRA_MESSAGE_ROLE = "voice_message_role"
+        const val EXTRA_MESSAGE_TEXT = "voice_message_text"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
+        private const val IDLE_TIMEOUT_MS = 45_000L
+        private const val SPEECH_FAILSAFE_TIMEOUT_MS = 180_000L
+        private const val PROCESSING_TIMEOUT_MS = 120_000L
     }
 }

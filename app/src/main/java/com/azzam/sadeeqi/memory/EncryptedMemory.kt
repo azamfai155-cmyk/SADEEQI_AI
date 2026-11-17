@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.room.*
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -26,7 +27,7 @@ import javax.crypto.spec.SecretKeySpec
 data class MemoryRow(@PrimaryKey val id: String, val category: String, val iv: String, val ciphertext: String, val updatedAt: Long)
 
 @Dao interface MemoryDao {
-    @Query("SELECT * FROM secure_memory ORDER BY updatedAt DESC") suspend fun all(): List<MemoryRow>
+    @Query("SELECT * FROM secure_memory ORDER BY rowid DESC") suspend fun all(): List<MemoryRow>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(row: MemoryRow)
     @Query("DELETE FROM secure_memory WHERE id=:id") suspend fun delete(id: String)
     @Query("DELETE FROM secure_memory") suspend fun clear()
@@ -50,7 +51,8 @@ abstract class MemoryDatabase : RoomDatabase() {
  */
 class EncryptedMemory(context: Context) {
     private val appContext = context.applicationContext
-    private val dao = MemoryDatabase.get(appContext).dao()
+    private val database = MemoryDatabase.get(appContext)
+    private val dao = database.dao()
     private val alias = "SADEEQI_MEMORY_AES_GCM_V1"
     private val legacyAlias = "SADEEQI_MEMORY_KEY"
     private val legacyPreferences = appContext.getSharedPreferences("sadeeqi_encrypted_memory", Context.MODE_PRIVATE)
@@ -77,18 +79,21 @@ class EncryptedMemory(context: Context) {
         return b64(cipher.iv) to b64(cipher.doFinal(plain))
     }
 
-    private fun decryptDevice(rowId: String, iv: String, ciphertext: String): ByteArray {
+    private fun isV2Row(row: MemoryRow): Boolean =
+        row.id.startsWith("v2:") && row.category == "__encrypted__"
+
+    private fun decryptDevice(row: MemoryRow): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, deviceKey(), GCMParameterSpec(128, un64(iv)))
+        cipher.init(Cipher.DECRYPT_MODE, deviceKey(), GCMParameterSpec(128, un64(row.iv)))
         // New rows authenticate their opaque database key as AAD. Legacy v1 rows did not.
-        if (rowId.startsWith("v2:")) cipher.updateAAD(rowId.toByteArray(StandardCharsets.UTF_8))
-        return cipher.doFinal(un64(ciphertext))
+        if (isV2Row(row)) cipher.updateAAD(row.id.toByteArray(StandardCharsets.UTF_8))
+        return cipher.doFinal(un64(row.ciphertext))
     }
 
     private data class Record(val logicalId: String, val category: String, val value: String, val updatedAt: Long)
     private fun decode(row: MemoryRow): Record {
-        val raw = String(decryptDevice(row.id, row.iv, row.ciphertext), StandardCharsets.UTF_8)
-        return if (row.id.startsWith("v2:")) {
+        val raw = String(decryptDevice(row), StandardCharsets.UTF_8)
+        return if (isV2Row(row)) {
             val j = JSONObject(raw)
             Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
         } else {
@@ -133,23 +138,38 @@ class EncryptedMemory(context: Context) {
         migrateLegacyRows()
     }
 
+    /**
+     * Replace a logical record without ever deleting its previous copy first.
+     * The new ciphertext is prepared before the transaction; inside the transaction
+     * it is inserted before older copies are removed. A failed encryption or insert
+     * therefore cannot destroy the last readable copy.
+     */
     private suspend fun storeRecord(record: Record) {
         val rowId = "v2:" + UUID.randomUUID().toString()
         val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
             .put("value", record.value).put("updatedAt", record.updatedAt).toString()
         val (iv, ct) = encryptDevice(rowId, payload.toByteArray(StandardCharsets.UTF_8))
-        dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
+        val replacement = MemoryRow(rowId, "__encrypted__", iv, ct, 0L)
+        database.withTransaction {
+            val previousIds = dao.all().mapNotNull { row ->
+                runCatching { row.id.takeIf { decode(row).logicalId == record.logicalId } }.getOrNull()
+            }
+            dao.put(replacement)
+            previousIds.forEach { dao.delete(it) }
+        }
     }
 
+    /** Decode valid rows, prefer the newest logical version, and ignore corrupt rows. */
+    private suspend fun latestRecords(): List<Record> =
+        dao.all().mapNotNull { row -> runCatching { decode(row) }.getOrNull() }
+            .sortedByDescending { it.updatedAt }
+            .distinctBy { it.logicalId }
+
     private suspend fun migrateLegacyRows() {
-        dao.all().filter { !it.id.startsWith("v2:") }.forEach { old ->
-            val record = decode(old)
-            val rowId = "v2:" + UUID.randomUUID().toString()
-            val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
-                .put("value", record.value).put("updatedAt", record.updatedAt).toString()
-            val (iv, ct) = encryptDevice(rowId, payload.toByteArray(StandardCharsets.UTF_8))
-            dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
-            dao.delete(old.id)
+        dao.all().filter { !isV2Row(it) }.forEach { old ->
+            // Reuse the safe upsert path so an interrupted earlier migration cannot
+            // leave multiple encrypted rows for the same logical ID.
+            storeRecord(decode(old))
         }
     }
 
@@ -161,12 +181,12 @@ class EncryptedMemory(context: Context) {
 
     suspend fun read(id: String): String? = withContext(Dispatchers.IO) {
         migrateLegacyData()
-        dao.all().firstNotNullOfOrNull { row -> runCatching { decode(row).takeIf { it.logicalId == id }?.value }.getOrNull() }
+        latestRecords().firstOrNull { it.logicalId == id }?.value
     }
 
     suspend fun search(query: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         migrateLegacyData()
-        dao.all().mapNotNull { row -> runCatching { decode(row) }.getOrNull() }
+        latestRecords()
             .filter { it.logicalId.contains(query, true) || it.category.contains(query, true) || it.value.contains(query, true) }
             .map { it.logicalId to it.value }
     }
@@ -177,8 +197,8 @@ class EncryptedMemory(context: Context) {
     }
 
     suspend fun update(id: String, category: String, value: String) = withContext(Dispatchers.IO) {
+        require(id.isNotBlank() && category.isNotBlank())
         migrateLegacyData()
-        dao.all().filter { row -> runCatching { decode(row).logicalId == id }.getOrDefault(false) }.forEach { dao.delete(it.id) }
         storeRecord(Record(id, category, value, System.currentTimeMillis()))
     }
 
@@ -187,7 +207,7 @@ class EncryptedMemory(context: Context) {
         require(password.size >= 12) { "استخدم كلمة مرور من 12 خانة على الأقل" }
         migrateLegacyData()
         val records = JSONArray()
-        dao.all().forEach { row -> decode(row).let { r -> records.put(JSONObject().put("id", r.logicalId).put("category", r.category).put("value", r.value).put("updatedAt", r.updatedAt)) } }
+        latestRecords().forEach { r -> records.put(JSONObject().put("id", r.logicalId).put("category", r.category).put("value", r.value).put("updatedAt", r.updatedAt)) }
         val salt = ByteArray(16).also(random::nextBytes)
         val iv = ByteArray(12).also(random::nextBytes)
         val key = deriveBackupKey(password, salt)
@@ -211,12 +231,16 @@ class EncryptedMemory(context: Context) {
         val records = JSONArray(String(cipher.doFinal(un64(envelope.getString("data"))), StandardCharsets.UTF_8))
         // Authenticate and parse the complete archive before modifying the database.
         val validated = (0 until records.length()).map { i -> records.getJSONObject(i).let { j ->
-            Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            val record = Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            require(record.logicalId.isNotBlank() && record.category.isNotBlank()) {
+                "تحتوي النسخة الاحتياطية على سجل ذاكرة غير صالح."
+            }
+            record
         } }
         migrateLegacyData()
-        validated.forEach { r ->
-            storeRecord(r)
-        }
+        validated.groupBy { it.logicalId }.values
+            .mapNotNull { versions -> versions.maxByOrNull { it.updatedAt } }
+            .forEach { record -> storeRecord(record) }
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {

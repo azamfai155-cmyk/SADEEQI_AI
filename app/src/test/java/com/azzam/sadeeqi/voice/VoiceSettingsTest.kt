@@ -14,9 +14,9 @@ class VoiceSettingsTest {
         ).normalized()
 
         assertEquals("ar-YE", result.languageTag)
-        assertEquals(2.0f, result.speechRate)
-        assertEquals(0.5f, result.pitch)
-        assertEquals(1.0f, result.volume)
+        assertEquals(2.0f, result.speechRate, 0.0001f)
+        assertEquals(0.5f, result.pitch, 0.0001f)
+        assertEquals(1.0f, result.volume, 0.0001f)
     }
 
     @Test
@@ -29,8 +29,8 @@ class VoiceSettingsTest {
         ).normalized()
 
         assertEquals("ar", result.languageTag)
-        assertEquals(0.96f, result.speechRate)
-        assertEquals(0.98f, result.pitch)
+        assertEquals(0.96f, result.speechRate, 0.0001f)
+        assertEquals(0.98f, result.pitch, 0.0001f)
         assertEquals(1.0f, result.volume)
     }
 
@@ -39,4 +39,53 @@ class VoiceSettingsTest {
         val result = VoiceSettings(voiceName = "v".repeat(400)).normalized()
         assertEquals(256, result.voiceName.length)
     }
+
+    @Test
+    fun normalizedKeepsOnlySupportedOpenAiRealtimeVoices() {
+        val supported = VoiceSettings(openAiVoiceName = "cedar", useOpenAiVoice = true).normalized()
+        val invalid = VoiceSettings(openAiVoiceName = "unknown-voice", useOpenAiVoice = true).normalized()
+
+        assertEquals("cedar", supported.openAiVoiceName)
+        assertEquals(false, supported.useOpenAiVoice)
+        assertEquals("marin", invalid.openAiVoiceName)
+        assertEquals(false, invalid.useOpenAiVoice)
+    }
+    @Test
+    fun voicePersonasHaveDistinctIdentityAndTuning() {
+        val profiles = VoiceDialectProfiles.all
+        assertEquals(setOf("ibbi", "hadi", "dhaki"), profiles.map { it.id }.toSet())
+        assertEquals(3, profiles.map { it.displayName }.toSet().size)
+        assertEquals(3, profiles.map { it.sampleText }.toSet().size)
+        assertEquals(3, profiles.map { it.speechRate }.toSet().size)
+        assertEquals(3, profiles.map { it.pitch }.toSet().size)
+        profiles.forEach { assertEquals("ar", it.languageTag) }
+    }
+
+    @Test
+    fun normalizedKeepsSupportedRecognitionLanguages() {
+        assertEquals("ar", VoiceSettings(recognitionLanguageTag = "ar").normalized().recognitionLanguageTag)
+        assertEquals("ar-YE", VoiceSettings(recognitionLanguageTag = "ar-YE").normalized().recognitionLanguageTag)
+    }
+
+    @Test
+    fun normalizedFallsBackForUnsupportedRecognitionLanguage() {
+        assertEquals(
+            "ar",
+            VoiceSettings(recognitionLanguageTag = "en-US").normalized().recognitionLanguageTag
+        )
+    }
+
+    @Test
+    fun normalizedKeepsOnlyKnownDialectProfiles() {
+        val ibbi = VoiceSettings(dialectProfileId = "ibbi").normalized()
+        val hadi = VoiceSettings(dialectProfileId = "hadi").normalized()
+        val dhaki = VoiceSettings(dialectProfileId = "dhaki").normalized()
+        val invalid = VoiceSettings(dialectProfileId = "unknown").normalized()
+
+        assertEquals("ibbi", ibbi.dialectProfileId)
+        assertEquals("hadi", hadi.dialectProfileId)
+        assertEquals("dhaki", dhaki.dialectProfileId)
+        assertEquals("ibbi", invalid.dialectProfileId)
+    }
+
 }

@@ -123,6 +123,37 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
   }
 });
 
+test('OpenAI Responses requests explicitly disable provider-side response storage', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerPayload;
+  globalThis.fetch = async (_url, init) => {
+    providerPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      output: [{ content: [{ type: 'output_text', text: 'رد اختباري' }] }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/chat', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { input: [{ role: 'user', content: 'رسالة خاصة' }] }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      AI_PROVIDER: 'openai',
+      ALLOW_PAID_AI_PROVIDER: 'true',
+      OPENAI_API_KEY: 'server-only-test-key',
+      OPENAI_MODEL: 'gpt-4.1-mini'
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(providerPayload.store, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('input validation enforces the supported turn and content shapes', () => {
   assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
   assert.equal(validateInput([{ role: 'user', content: [{ type: 'unsupported' }] }]), 'Invalid content part.');
@@ -249,6 +280,36 @@ test('unknown authentication mode fails closed and health reports not configured
 });
 
 
+test('WhatsApp readiness uses Cloud API token and phone-number credentials', async () => {
+  const response = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    META_CLIENT_ID: 'meta-id',
+    META_CLIENT_SECRET: 'meta-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+  });
+  const body = await response.json();
+  const whatsapp = body.providers.find(provider => provider.id === 'whatsapp');
+  assert.equal(response.status, 200);
+  assert.equal(whatsapp.configured, false);
+
+  const configuredResponse = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    WHATSAPP_TOKEN: 'business-token',
+    WHATSAPP_PHONE_NUMBER_ID: 'phone-number-id',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+  });
+  const configuredBody = await configuredResponse.json();
+  const configuredWhatsapp = configuredBody.providers.find(provider => provider.id === 'whatsapp');
+  assert.equal(configuredWhatsapp.configured, true);
+  assert.equal(configuredWhatsapp.connected, false);
+});
+
 test('social provider readiness uses the same Meta and Pinterest credential names as the Express backend', async () => {
   const response = await handleRequest(request('/v1/social/providers', {
     headers: { Authorization: 'Bearer expected-token' }
@@ -312,4 +373,102 @@ test('Worker OpenAI provider requires explicit paid opt-in', async () => {
   });
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
+});
+
+
+test('Realtime voice session endpoint stays disabled unless explicitly enabled', async () => {
+  const response = await handleRequest(request('/v1/voice/session', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { voice: 'marin' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /disabled/);
+});
+
+test('Realtime voice session endpoint validates voice names before contacting OpenAI', async () => {
+  const response = await handleRequest(request('/v1/voice/session', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer expected-token' },
+    body: { voice: 'not-a-supported-voice' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    ALLOW_OPENAI_VOICE: 'true',
+    OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, 'Unsupported voice.');
+});
+
+test('Realtime voice endpoint returns only an ephemeral client secret and applies the selected voice', async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = '';
+  let calledPayload;
+  globalThis.fetch = async (url, init) => {
+    calledUrl = String(url);
+    calledPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      value: 'ek_short_lived_test_secret',
+      expires_at: 1900000000
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/voice/session', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { voice: 'cedar' }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      ALLOW_OPENAI_VOICE: 'true',
+      OPENAI_REALTIME_API_KEY: 'server-only-test-key'
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(calledUrl, 'https://api.openai.com/v1/realtime/client_secrets');
+    assert.equal(calledPayload.session.model, 'gpt-realtime-2.1-mini');
+    assert.equal(calledPayload.session.audio.output.voice, 'cedar');
+    assert.equal(body.client_secret, 'ek_short_lived_test_secret');
+    assert.equal(body.voice, 'cedar');
+    assert.equal(JSON.stringify(body).includes('server-only-test-key'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('chat system policy preserves the canonical SADEEQI founder identity', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerPayload;
+  globalThis.fetch = async (_url, init) => {
+    providerPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      output: [{ content: [{ type: 'output_text', text: 'أنا صديقي.' }] }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/chat', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { input: [{ role: 'user', content: 'من مؤسسك؟' }] }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      AI_PROVIDER: 'groq',
+      GROQ_API_KEY: 'server-only-test-key',
+      GROQ_MODEL: 'openai/gpt-oss-20b'
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(providerPayload.instructions, /المؤسس وصاحب فكرة مشروع SADEEQI AI هو عزام فايز/);
+    assert.match(providerPayload.instructions, /لا تدّعِ أن عزام كتب كل سطر برمجي بنفسه/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -4,7 +4,10 @@ package com.azzam.sadeeqi
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.ComponentActivity
@@ -31,6 +34,7 @@ import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.AuthActivity
 import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
+import com.azzam.sadeeqi.identity.FounderIdentity
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
@@ -64,25 +68,77 @@ class MainActivity : ComponentActivity() {
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
     private var onVoiceSession: ((Boolean) -> Unit)? = null
+    private var onVoiceMessage: ((String, String) -> Unit)? = null
+    private var voiceStatusReceiverRegistered = false
+    private val voiceStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            when (intent?.action) {
+                VoiceForegroundService.ACTION_STATUS -> {
+                    val active = intent.getBooleanExtra(VoiceForegroundService.EXTRA_STATUS_ACTIVE, false)
+                    val message = intent.getStringExtra(VoiceForegroundService.EXTRA_STATUS_MESSAGE).orEmpty()
+                    onVoiceSession?.invoke(active)
+                    if (message.isNotBlank()) onVoiceError?.invoke(message)
+                }
+                VoiceForegroundService.ACTION_MESSAGE -> {
+                    val role = intent.getStringExtra(VoiceForegroundService.EXTRA_MESSAGE_ROLE).orEmpty()
+                    val message = intent.getStringExtra(VoiceForegroundService.EXTRA_MESSAGE_TEXT).orEmpty()
+                    if (role.isNotBlank() && message.isNotBlank()) onVoiceMessage?.invoke(role, message)
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!voiceStatusReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                voiceStatusReceiver,
+                IntentFilter().apply {
+                    addAction(VoiceForegroundService.ACTION_STATUS)
+                    addAction(VoiceForegroundService.ACTION_MESSAGE)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            voiceStatusReceiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        if (voiceStatusReceiverRegistered) {
+            unregisterReceiver(voiceStatusReceiver)
+            voiceStatusReceiverRegistered = false
+        }
+        super.onStop()
+    }
 
     private val requestMic =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
                 ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(requestedVoiceAction))
-                onVoiceSession?.invoke(true)
             } else {
                 onVoiceSession?.invoke(false)
                 onVoiceError?.invoke("تم رفض إذن الميكروفون. اسمح به من إعدادات التطبيق.")
             }
         }
 
+    private val requestNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* Permission is optional; foreground service remains user-controlled. */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FounderIdentity.persist(this)
 
         if (EncryptedSessionStore.accessToken(this).isNullOrBlank()) {
             startActivity(Intent(this, AuthActivity::class.java))
             finish()
             return
+        }
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         // Use the bundled premium Sadeeqi background drawable behind the Compose UI.
@@ -94,8 +150,7 @@ class MainActivity : ComponentActivity() {
                     requestedVoiceAction = VoiceForegroundService.ACTION_DICTATE
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_DICTATE))
-                        onVoiceSession?.invoke(true)
-                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                            } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 onStartVoice = {
                     requestedVoiceAction = VoiceForegroundService.ACTION_START
@@ -106,8 +161,7 @@ class MainActivity : ComponentActivity() {
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_START))
-                        onVoiceSession?.invoke(true)
-                    } else {
+                            } else {
                         requestMic.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
@@ -115,11 +169,17 @@ class MainActivity : ComponentActivity() {
                     startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP))
                     onVoiceSession?.invoke(false)
                 },
+                onMuteVoice = { muted ->
+                    startService(
+                        Intent(this, VoiceForegroundService::class.java)
+                            .setAction(VoiceForegroundService.ACTION_MUTE)
+                            .putExtra(VoiceForegroundService.EXTRA_MUTED, muted)
+                    )
+                },
                 onInterruptVoice = {
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         ContextCompat.startForegroundService(this, Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_INTERRUPT))
-                        onVoiceSession?.invoke(true)
-                    } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                            } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
                 },
                 onReply = { },
                 onStopListening = { startService(Intent(this, VoiceForegroundService::class.java).setAction(VoiceForegroundService.ACTION_STOP)) },
@@ -133,6 +193,7 @@ class MainActivity : ComponentActivity() {
         onStartDictation: () -> Unit,
         onStartVoice: () -> Unit,
         onStopVoice: () -> Unit,
+        onMuteVoice: (Boolean) -> Unit,
         onInterruptVoice: () -> Unit,
         onReply: (String) -> Unit,
         onStopListening: () -> Unit,
@@ -150,6 +211,22 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        var lastVoiceMessageStamp by remember { mutableLongStateOf(0L) }
+        onVoiceMessage = { role, text ->
+            if (role.isNotBlank() && text.isNotBlank()) {
+                messages.add(role to text)
+                val stamp = maxOf(System.currentTimeMillis(), lastVoiceMessageStamp + 1L)
+                lastVoiceMessageStamp = stamp
+                scope.launch {
+                    memory.save(
+                        "chat:$stamp:${if (role == "أنت") 1 else 2}",
+                        "conversation",
+                        "$role\n$text"
+                    )
+                }
+            }
+        }
+
         var input by remember {
             mutableStateOf("")
         }
@@ -158,10 +235,22 @@ class MainActivity : ComponentActivity() {
         var generationJob by remember { mutableStateOf<Job?>(null) }
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
         var openMessageMenuIndex by remember { mutableStateOf<Int?>(null) }
-        val messageReader = remember { TextToSpeech(this@MainActivity, null) }
+        var messageReaderReady by remember { mutableStateOf(false) }
+        var messageReaderInitFailed by remember { mutableStateOf(false) }
+        var pendingMessageSpeech by remember { mutableStateOf<String?>(null) }
+        val messageReader = remember {
+            TextToSpeech(this@MainActivity) { initStatus ->
+                messageReaderReady = initStatus == TextToSpeech.SUCCESS
+                messageReaderInitFailed = initStatus != TextToSpeech.SUCCESS
+            }
+        }
         DisposableEffect(messageReader) {
-            messageReader.setLanguage(Locale("ar"))
-            onDispose { messageReader.stop(); messageReader.shutdown() }
+            onDispose {
+                pendingMessageSpeech = null
+                messageReaderReady = false
+                messageReader.stop()
+                messageReader.shutdown()
+            }
         }
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
@@ -196,6 +285,48 @@ class MainActivity : ComponentActivity() {
         }
         var status by remember {
             mutableStateOf("الإصدار 1.5.1 — المحادثة والصوت والموسيقى")
+        }
+
+        fun speakMessage(text: String) {
+            if (text.isBlank()) return
+            if (!messageReaderReady) {
+                pendingMessageSpeech = text
+                return
+            }
+            val settings = VoiceSettingsStore(this@MainActivity).load()
+            val languageResult = messageReader.setLanguage(Locale.forLanguageTag(settings.languageTag))
+            if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+                languageResult == TextToSpeech.LANG_NOT_SUPPORTED
+            ) {
+                status = "بيانات الصوت العربي غير متوفرة. ثبّت صوتاً عربياً من إعدادات الهاتف."
+                return
+            }
+            messageReader.setSpeechRate(settings.speechRate)
+            messageReader.setPitch(settings.pitch)
+            messageReader.voices?.firstOrNull { it.name == settings.voiceName }?.let {
+                messageReader.voice = it
+            }
+            val params = Bundle().apply {
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume)
+            }
+            if (messageReader.speak(text, TextToSpeech.QUEUE_FLUSH, params, "sadeeqi-message-read") ==
+                TextToSpeech.ERROR
+            ) {
+                status = "تعذرت قراءة الرد صوتياً."
+            }
+        }
+
+        LaunchedEffect(messageReaderReady, messageReaderInitFailed, pendingMessageSpeech) {
+            if (messageReaderReady) {
+                val pending = pendingMessageSpeech
+                if (pending != null) {
+                    pendingMessageSpeech = null
+                    speakMessage(pending)
+                }
+            } else if (messageReaderInitFailed) {
+                pendingMessageSpeech = null
+                status = "تعذر تشغيل محرك النطق في الهاتف. تحقق من خدمة تحويل النص إلى كلام."
+            }
         }
 
         var selectedImageDataUrl by remember {
@@ -241,13 +372,26 @@ class MainActivity : ComponentActivity() {
         ) { bitmap ->
             if (bitmap != null) {
                 scope.launch {
-                    val dataUrl = withContext(Dispatchers.IO) {
-                        val output = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
-                        "data:image/jpeg;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val output = ByteArrayOutputStream()
+                            require(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)) {
+                                "تعذر ضغط الصورة الملتقطة."
+                            }
+                            val imageBytes = output.toByteArray()
+                            require(imageBytes.size <= 5 * 1024 * 1024) {
+                                "حجم الصورة الملتقطة أكبر من 5 ميغابايت."
+                            }
+                            "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+                        }
                     }
-                    selectedImageDataUrl = dataUrl
-                    status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                    result.onSuccess { dataUrl ->
+                        selectedImageDataUrl = dataUrl
+                        status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                    }.onFailure { error ->
+                        selectedImageDataUrl = null
+                        status = error.message ?: "تعذر تجهيز الصورة الملتقطة."
+                    }
                 }
             } else {
                 status = "تم إلغاء التقاط الصورة."
@@ -264,19 +408,27 @@ class MainActivity : ComponentActivity() {
                 scope.launch {
                     val loaded = withContext(Dispatchers.IO) {
                         runCatching {
-                            val bytes = contentResolver
-                                .openInputStream(uri)
-                                ?.use { it.readBytes() }
-                                ?: error("تعذر قراءة الصورة")
+                            val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                                val output = ByteArrayOutputStream()
+                                val buffer = ByteArray(8 * 1024)
+                                var totalBytes = 0
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    totalBytes += count
+                                    require(totalBytes <= 5 * 1024 * 1024) {
+                                        "حجم الصورة أكبر من 5 ميغابايت"
+                                    }
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            } ?: error("تعذر قراءة الصورة")
 
                             require(bytes.isNotEmpty()) { "الصورة فارغة." }
-                            require(bytes.size <= 8 * 1024 * 1024) {
-                                "حجم الصورة أكبر من 8 ميغابايت"
-                            }
 
                             val mime = contentResolver.getType(uri) ?: "image/jpeg"
-                            require(mime.startsWith("image/")) {
-                                "الملف المحدد ليس صورة."
+                            require(mime in setOf("image/jpeg", "image/png", "image/webp", "image/gif")) {
+                                "صيغة الصورة غير مدعومة. استخدم JPEG أو PNG أو WebP أو GIF."
                             }
 
                             "data:$mime;base64," +
@@ -295,7 +447,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        fun sendQuestion(question: String) {
+        fun sendQuestion(question: String, enableWebSearch: Boolean = false) {
 
             if (question.isBlank() && selectedImageDataUrl == null) return
 
@@ -322,27 +474,39 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            if (imageForRequest == null) {
+                val fixedAnswer = FounderIdentity.answerFor(effectiveQuestion)
+                if (fixedAnswer != null) {
+                    messages.add("صديقي" to fixedAnswer)
+                    val stamp = System.currentTimeMillis()
+                    scope.launch {
+                        memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                        memory.save("chat:$stamp:2", "conversation", "صديقي\n$fixedAnswer")
+                    }
+                    onReply(fixedAnswer)
+                    status = "تمت الإجابة من هوية صديقي الثابتة."
+                    return
+                }
+            }
+
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
+            if (isGenerating) return
             isGenerating = true
-            generationJob = scope.launch {
+            val job = scope.launch {
+                val currentJob = coroutineContext[Job]
                 try {
                     val turns = messages.takeLast(24).map { (who, body) ->
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(turns, imageForRequest, enableWebSearch)
                     }
                     messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
                     if (voiceSettings.autoRead) {
                         withContext(Dispatchers.Main) {
-                            messageReader.language = Locale.forLanguageTag(voiceSettings.languageTag)
-                            messageReader.setSpeechRate(voiceSettings.speechRate)
-                            messageReader.setPitch(voiceSettings.pitch)
-                            messageReader.voices?.firstOrNull { it.name == voiceSettings.voiceName }?.let { messageReader.voice = it }
-                            val speechParams = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, voiceSettings.volume) }
-                            messageReader.speak(answer, TextToSpeech.QUEUE_FLUSH, speechParams, "sadeeqi-auto-read")
+                            speakMessage(answer)
                         }
                     }
                     val stamp = System.currentTimeMillis()
@@ -357,10 +521,14 @@ class MainActivity : ComponentActivity() {
                     messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
                     status = "تعذر الاتصال بالخادم"
                 } finally {
-                    isGenerating = false
-                    generationJob = null
+                    // An older request must not clear the state/reference of a newer one.
+                    if (generationJob === currentJob) {
+                        isGenerating = false
+                        generationJob = null
+                    }
                 }
             }
+            generationJob = job
         }
 
         LaunchedEffect(Unit) {
@@ -368,16 +536,16 @@ class MainActivity : ComponentActivity() {
             val saved = memory.search("chat:")
 
             if (saved.isNotEmpty()) {
-
-                messages.clear()
-
-                saved.sortedBy { it.first }.forEach { entry ->
-
+                // Preserve live voice events that may arrive while encrypted history loads.
+                val liveMessages = messages.drop(1).toList()
+                val restoredMessages = saved.sortedBy { it.first }.mapNotNull { entry ->
                     val parts = entry.second.split("\n", limit = 2)
-
-                    if (parts.size == 2) {
-                        messages.add(parts[0] to parts[1])
-                    }
+                    if (parts.size == 2) parts[0] to parts[1] else null
+                }
+                messages.clear()
+                messages.addAll(restoredMessages)
+                liveMessages.forEach { live ->
+                    if (messages.lastOrNull() != live) messages.add(live)
                 }
             }
         }
@@ -657,7 +825,7 @@ class MainActivity : ComponentActivity() {
                                                         })
                                                         DropdownMenuItem(text = { Text("قراءة الرد صوتياً") }, onClick = {
                                                             openMessageMenuIndex = null
-                                                            messageReader.speak(body, TextToSpeech.QUEUE_FLUSH, null, "sadeeqi-reply")
+                                                            speakMessage(body)
                                                         })
                                                         DropdownMenuItem(text = { Text("إيقاف القراءة") }, onClick = {
                                                             openMessageMenuIndex = null
@@ -761,7 +929,7 @@ class MainActivity : ComponentActivity() {
                                                 val query = input.trim()
                                                 if (query.isNotBlank()) {
                                                     input = ""
-                                                    sendQuestion("ابحث في الإنترنت عن: $query")
+                                                    sendQuestion("ابحث في الإنترنت عن: $query", enableWebSearch = true)
                                                 } else {
                                                     status = "اكتب موضوع البحث أولاً."
                                                 }
@@ -807,6 +975,7 @@ class MainActivity : ComponentActivity() {
                                         if (voiceSessionActive) {
                                             onStopVoice()
                                             voiceSessionActive = false
+                                            microphoneMuted = false
                                             status = "تم إيقاف المحادثة الصوتية"
                                         } else {
                                             onStartVoice()
@@ -816,6 +985,22 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.size(40.dp)
                                 ) {
                                     Text("〰", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
+                                }
+                                if (voiceSessionActive) {
+                                    IconButton(
+                                        onClick = {
+                                            microphoneMuted = !microphoneMuted
+                                            onMuteVoice(microphoneMuted)
+                                            status = if (microphoneMuted) "الميكروفون مكتوم" else "الميكروفون نشط"
+                                        },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Text(
+                                            if (microphoneMuted) "🔇" else "🎤",
+                                            color = if (microphoneMuted) Color(0xFFE6C77A) else Color.White,
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                    }
                                 }
                                 if (isGenerating) {
                                     IconButton(

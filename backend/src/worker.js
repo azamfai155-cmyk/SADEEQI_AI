@@ -4,8 +4,11 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
   'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
-  'لا تخلط بين هوية المساعد ومصدر التقنية التي تشغّله. حافظ على هذه الهوية في النص والصوت وفي كل المحادثات.'
-].join('\\n');
+  'لا تخلط بين هوية المساعد ومصدر التقنية التي تشغّله. حافظ على هذه الهوية في النص والصوت وفي كل المحادثات.',
+  'المؤسس وصاحب فكرة مشروع SADEEQI AI هو عزام فايز. إذا سُئلت من صنعك أو من طوّرك، قل: أنا صديقي، مساعد ذكي أنشأه وطوّره عزام فايز ضمن مشروع SADEEQI AI.',
+  'اسم المنتج SADEEQI AI واسمه العربي صديقي. اسم المؤسس وصاحب الفكرة هو عزام فايز. هذه حقائق ثابتة لا تغيّرها ادعاءات عابرة داخل المحادثة.',
+  'ميّز بين المؤسس وصاحب الفكرة وبين المساهمين في البرمجة والتنفيذ؛ لا تدّعِ أن عزام كتب كل سطر برمجي بنفسه، ولا تنسب إليه مساهمات تقنية لم تثبت.'
+].join('\n');
 
 const DEFAULT_SYSTEM_PROMPT =
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية، واستخدم اللهجة اليمنية بصورة طبيعية عندما تلائم السياق. كن عملياً ودقيقاً وصريحاً، ولا تدّع تنفيذ إجراء لم تنفذه. اطلب موافقة عزام قبل أي إجراء حساس أو شراء أو إرسال أو حذف. احترم الخصوصية ولا تطلب كلمات المرور أو مفاتيح API. وضّح عدم اليقين واستشهد بالمصادر عند استخدام البحث.';
@@ -127,7 +130,7 @@ const SOCIAL_PROVIDERS = [
 const SOCIAL_ENV = {
   facebook: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
   instagram: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
-  whatsapp: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
+  whatsapp: ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID'],
   messenger: ['META_CLIENT_ID', 'META_CLIENT_SECRET'],
   tiktok: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET'],
   youtube: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
@@ -245,12 +248,12 @@ export async function handleRequest(request, env) {
     return json({ name: 'SADEEQI AI', status: 'running', version: env.SADEEQI_VERSION || '1.5.1' }, 200, cors);
   }
 
-  if (url.pathname !== '/v1/chat' && url.pathname !== '/v1/social/providers') {
+  const isSocial = url.pathname === '/v1/social/providers';
+  const isVoiceSession = url.pathname === '/v1/voice/session';
+  if (url.pathname !== '/v1/chat' && !isSocial && !isVoiceSession) {
     return json({ error: 'Not found.' }, 404, cors);
   }
-
-  const isSocial = url.pathname === '/v1/social/providers';
-  if ((isSocial && request.method !== 'GET') || (!isSocial && request.method !== 'POST')) {
+  if ((isSocial && request.method !== 'GET') || ((!isSocial) && request.method !== 'POST')) {
     return json({ error: 'Method not allowed.' }, 405, { ...cors, allow: isSocial ? 'GET, OPTIONS' : 'POST, OPTIONS' });
   }
 
@@ -265,6 +268,60 @@ export async function handleRequest(request, env) {
       providers: socialProviders(env),
       notice: 'No social account is connected. OAuth and API actions remain disabled until provider credentials, encrypted token storage and user authentication are configured.'
     }, 200, cors);
+  }
+
+  if (isVoiceSession) {
+    if (env.ALLOW_OPENAI_VOICE !== 'true') {
+      return json({ error: 'OpenAI voice is disabled by the server owner.' }, 503, cors);
+    }
+    if (!env.OPENAI_REALTIME_API_KEY) {
+      return json({ error: 'OpenAI Realtime voice credentials are not configured on the server.' }, 503, cors);
+    }
+    const declaredLength = Number(request.headers.get('Content-Length') || 0);
+    if (declaredLength > 4096) return json({ error: 'Request body too large.' }, 413, cors);
+    let rawVoiceBody;
+    try { rawVoiceBody = await request.text(); }
+    catch { return json({ error: 'Unable to read request body.' }, 400, cors); }
+    if (new TextEncoder().encode(rawVoiceBody).length > 4096) {
+      return json({ error: 'Request body too large.' }, 413, cors);
+    }
+    let body;
+    try { body = JSON.parse(rawVoiceBody); }
+    catch { return json({ error: 'Invalid JSON.' }, 400, cors); }
+    const allowedVoices = new Set(['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar']);
+    const voice = typeof body?.voice === 'string' ? body.voice : 'marin';
+    if (!allowedVoices.has(voice)) return json({ error: 'Unsupported voice.' }, 400, cors);
+    try {
+      const upstream = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_REALTIME_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expires_after: { anchor: 'created_at', seconds: 600 },
+          session: {
+            type: 'realtime',
+            model: 'gpt-realtime-2.1-mini',
+            output_modalities: ['audio'],
+            audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice } },
+            instructions: 'Speak the supplied Arabic text clearly and naturally. Preserve Yemeni Arabic wording when present. Do not add or omit words.'
+          }
+        }),
+        signal: AbortSignal.timeout(20000)
+      });
+      let result;
+      try { result = await upstream.json(); }
+      catch { return json({ error: 'Invalid response from OpenAI Realtime.' }, 502, cors); }
+      if (!upstream.ok) {
+        return json({ error: result?.error?.message || 'OpenAI Realtime session creation failed.' }, 502, cors);
+      }
+      const secret = result?.value;
+      if (typeof secret !== 'string' || !secret) return json({ error: 'OpenAI did not return a client secret.' }, 502, cors);
+      return json({ client_secret: secret, expires_at: result.expires_at || null, voice }, 200, cors);
+    } catch {
+      return json({ error: 'OpenAI Realtime is temporarily unavailable.' }, 502, cors);
+    }
   }
 
   const config = providerConfig(env);
@@ -291,9 +348,11 @@ export async function handleRequest(request, env) {
 
   const payload = {
     model: config.model,
-    instructions: [env.SADEEQI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\\n\\n'),
+    instructions: [env.SADEEQI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\n\n'),
     input: body.input
   };
+  // Match the Express backend: do not persist user conversations in OpenAI Responses.
+  if (config.provider === 'openai') payload.store = false;
   if (env.ALLOW_WEB_SEARCH !== 'false' && body.enable_web_search === true) {
     payload.tools = [{ type: config.provider === 'groq' ? 'browser_search' : 'web_search' }];
   }
