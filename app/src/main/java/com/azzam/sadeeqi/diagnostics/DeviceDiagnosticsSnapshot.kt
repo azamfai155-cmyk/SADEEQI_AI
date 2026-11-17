@@ -56,7 +56,7 @@ data class DeviceDiagnosticsSnapshot(
 
     fun deltaSince(earlier: DeviceDiagnosticsSnapshot): Delta = Delta(
         elapsedMs = (capturedAtEpochMs - earlier.capturedAtEpochMs).coerceAtLeast(0),
-        batteryPercentagePoints = batteryPercent?.minus(earlier.batteryPercent ?: batteryPercent),
+        batteryPercentagePoints = if (batteryPercent != null && earlier.batteryPercent != null) batteryPercent - earlier.batteryPercent else null,
         processPssDeltaKb = processPssKb - earlier.processPssKb,
         appRxDeltaBytes = counterDelta(appRxBytes, earlier.appRxBytes),
         appTxDeltaBytes = counterDelta(appTxBytes, earlier.appTxBytes)
