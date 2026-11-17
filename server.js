@@ -1,4 +1,5 @@
 import express from 'express';
+import { pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -344,4 +345,16 @@ app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
 
 export default function handler(req, res) {
   return app(req, res);
+}
+
+
+// Run as a standalone HTTP server in containers; Vercel imports the handler instead.
+const isDirectExecution = Boolean(
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+);
+if (isDirectExecution) {
+  const port = Number.parseInt(process.env.PORT || '8080', 10);
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`SADEEQI API listening on port ${port}`);
+  });
 }
