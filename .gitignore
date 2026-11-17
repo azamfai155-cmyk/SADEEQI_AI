@@ -1,0 +1,47 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
+local.properties
+
+# Android / Gradle
+.gradle/
+**/build/
+**/.gradle/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Deployment tooling
+.vercel/
+.wrangler/
+.cloudflare/
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Reports and temporary diagnostics
+*.log
+*.tmp
