@@ -20,6 +20,13 @@ class VoiceSessionStateMachine {
         state = next
     }
 
+    /** Starts speech without erasing an explicit request to return to standby afterward. */
+    fun beginSpeaking() {
+        if (state != VoiceSessionState.STANDBY_RESUME) {
+            state = VoiceSessionState.SPEAKING
+        }
+    }
+
     fun isConversationActive(): Boolean = state in setOf(
         VoiceSessionState.WAKE_DETECTED,
         VoiceSessionState.GREETING,
