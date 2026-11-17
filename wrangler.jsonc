@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "sadeeqi-ai",
+  "name": "sadeeqi-ai-v2",
   "main": "backend/src/worker.js",
   "compatibility_date": "2026-11-11",
   "workers_dev": true
