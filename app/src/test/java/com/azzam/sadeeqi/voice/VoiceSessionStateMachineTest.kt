@@ -20,4 +20,24 @@ class VoiceSessionStateMachineTest {
         machine.transition(VoiceSessionState.STANDBY)
         assertFalse(machine.isConversationActive())
     }
+    @Test fun speakingPreservesExplicitStandbyResumeIntent() {
+        val machine = VoiceSessionStateMachine()
+        machine.transition(VoiceSessionState.STANDBY_RESUME)
+
+        machine.beginSpeaking()
+
+        assertEquals(VoiceSessionState.STANDBY_RESUME, machine.state)
+        assertFalse(machine.isConversationActive())
+    }
+
+    @Test fun speakingMovesOrdinaryConversationIntoSpeakingState() {
+        val machine = VoiceSessionStateMachine()
+        machine.transition(VoiceSessionState.ACTIVE_LISTENING)
+
+        machine.beginSpeaking()
+
+        assertEquals(VoiceSessionState.SPEAKING, machine.state)
+        assertTrue(machine.isConversationActive())
+    }
+
 }
