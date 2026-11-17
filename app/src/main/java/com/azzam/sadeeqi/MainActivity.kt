@@ -372,19 +372,26 @@ class MainActivity : ComponentActivity() {
         ) { bitmap ->
             if (bitmap != null) {
                 scope.launch {
-                    val dataUrl = withContext(Dispatchers.IO) {
-                        val output = ByteArrayOutputStream()
-                        require(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)) {
-                            "تعذر ضغط الصورة الملتقطة."
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val output = ByteArrayOutputStream()
+                            require(bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)) {
+                                "تعذر ضغط الصورة الملتقطة."
+                            }
+                            val imageBytes = output.toByteArray()
+                            require(imageBytes.size <= 5 * 1024 * 1024) {
+                                "حجم الصورة الملتقطة أكبر من 5 ميغابايت."
+                            }
+                            "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
                         }
-                        val imageBytes = output.toByteArray()
-                        require(imageBytes.size <= 5 * 1024 * 1024) {
-                            "حجم الصورة الملتقطة أكبر من 5 ميغابايت."
-                        }
-                        "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
                     }
-                    selectedImageDataUrl = dataUrl
-                    status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                    result.onSuccess { dataUrl ->
+                        selectedImageDataUrl = dataUrl
+                        status = "تم تجهيز الصورة من الكاميرا — اكتب سؤالك."
+                    }.onFailure { error ->
+                        selectedImageDataUrl = null
+                        status = error.message ?: "تعذر تجهيز الصورة الملتقطة."
+                    }
                 }
             } else {
                 status = "تم إلغاء التقاط الصورة."
