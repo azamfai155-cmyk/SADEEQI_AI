@@ -123,6 +123,37 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
   }
 });
 
+test('OpenAI Responses requests explicitly disable provider-side response storage', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerPayload;
+  globalThis.fetch = async (_url, init) => {
+    providerPayload = JSON.parse(init.body);
+    return new Response(JSON.stringify({
+      output: [{ content: [{ type: 'output_text', text: 'رد اختباري' }] }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const response = await handleRequest(request('/v1/chat', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer expected-token' },
+      body: { input: [{ role: 'user', content: 'رسالة خاصة' }] }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      AI_PROVIDER: 'openai',
+      ALLOW_PAID_AI_PROVIDER: 'true',
+      OPENAI_API_KEY: 'server-only-test-key',
+      OPENAI_MODEL: 'gpt-4.1-mini'
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(providerPayload.store, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('input validation enforces the supported turn and content shapes', () => {
   assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
   assert.equal(validateInput([{ role: 'user', content: [{ type: 'unsupported' }] }]), 'Invalid content part.');
