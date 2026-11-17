@@ -351,6 +351,8 @@ export async function handleRequest(request, env) {
     instructions: [env.SADEEQI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\n\n'),
     input: body.input
   };
+  // Match the Express backend: do not persist user conversations in OpenAI Responses.
+  if (config.provider === 'openai') payload.store = false;
   if (env.ALLOW_WEB_SEARCH !== 'false' && body.enable_web_search === true) {
     payload.tools = [{ type: config.provider === 'groq' ? 'browser_search' : 'web_search' }];
   }
