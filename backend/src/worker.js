@@ -5,7 +5,7 @@ const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
   'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
   'لا تخلط بين هوية المساعد ومصدر التقنية التي تشغّله. حافظ على هذه الهوية في النص والصوت وفي كل المحادثات.'
-].join('\\n');
+].join('\n');
 
 const DEFAULT_SYSTEM_PROMPT =
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية، واستخدم اللهجة اليمنية بصورة طبيعية عندما تلائم السياق. كن عملياً ودقيقاً وصريحاً، ولا تدّع تنفيذ إجراء لم تنفذه. اطلب موافقة عزام قبل أي إجراء حساس أو شراء أو إرسال أو حذف. احترم الخصوصية ولا تطلب كلمات المرور أو مفاتيح API. وضّح عدم اليقين واستشهد بالمصادر عند استخدام البحث.';
@@ -267,11 +267,6 @@ export async function handleRequest(request, env) {
     }, 200, cors);
   }
 
-  const config = providerConfig(env);
-  if (!config.apiKey || !config.model || !config.apiUrl) {
-    return json({ error: `${config.provider} server credentials are not configured.` }, 503, cors);
-  }
-
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request body too large.' }, 413, cors);
 
@@ -289,9 +284,14 @@ export async function handleRequest(request, env) {
   const validationError = validateInput(body?.input);
   if (validationError) return json({ error: validationError }, 400, cors);
 
+  const config = providerConfig(env);
+  if (!config.apiKey || !config.model || !config.apiUrl) {
+    return json({ error: `${config.provider} server credentials are not configured.` }, 503, cors);
+  }
+
   const payload = {
     model: config.model,
-    instructions: [env.SADEEQI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\\n\\n'),
+    instructions: [env.SADEEQI_SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\n\n'),
     input: body.input
   };
   if (env.ALLOW_WEB_SEARCH !== 'false' && body.enable_web_search === true) {
