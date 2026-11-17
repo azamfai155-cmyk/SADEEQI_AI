@@ -167,8 +167,10 @@ class VoiceController(
                     }
                 }
                 override fun onError(utteranceId: String?, errorCode: Int) {
-                    speaking = false
-                    if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    if (utteranceId == lastUtteranceId) {
+                        speaking = false
+                        if (conversationActive && !microphoneMuted) scheduleListening(700)
+                    }
                 }
             })
             if (!ttsReady) onError("الصوت العربي غير متوفر. ثبّت بيانات صوت عربي من إعدادات تحويل النص إلى كلام.")
