@@ -200,6 +200,10 @@ class VoiceController(
         }
         if (!requestSpeechAudioFocus()) {
             onError("الصوت مشغول بتطبيق أو مكالمة أخرى. سأنتظر حتى يصبح متاحاً.")
+            // Treat a rejected speech attempt as a completed turn. This is
+            // important for commands such as return-to-standby, whose service
+            // completion callback must still run when TTS never starts.
+            onSpeechFinished()
             if (conversationActive && !microphoneMuted) scheduleListening(700)
             return
         }
