@@ -121,7 +121,7 @@ class EncryptedMemory(context: Context) {
             Triple(id, json.optString("category", "legacy"), json.getString("content"))
         }
         decoded.forEach { (id, category, value) ->
-            storeRecord(Record(id, category, value, System.currentTimeMillis()))
+            replaceRecord(Record(id, category, value, System.currentTimeMillis()))
         }
         check(legacyPreferences.edit().clear().commit()) {
             "تم نقل الذاكرة لكن تعذر تنظيف التخزين القديم؛ ستُعاد محاولة التحقق في المرة القادمة."
@@ -141,6 +141,15 @@ class EncryptedMemory(context: Context) {
         dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
     }
 
+    /** Keep one logical record per ID; safe to retry migrations and imports. */
+    private suspend fun replaceRecord(record: Record) {
+        dao.all().forEach { row ->
+            val existing = runCatching { decode(row) }.getOrNull()
+            if (existing?.logicalId == record.logicalId) dao.delete(row.id)
+        }
+        storeRecord(record)
+    }
+
     private suspend fun migrateLegacyRows() {
         dao.all().filter { !it.id.startsWith("v2:") }.forEach { old ->
             val record = decode(old)
@@ -156,7 +165,7 @@ class EncryptedMemory(context: Context) {
     suspend fun save(id: String, category: String, value: String) = withContext(Dispatchers.IO) {
         require(id.isNotBlank() && category.isNotBlank())
         migrateLegacyData()
-        storeRecord(Record(id, category, value, System.currentTimeMillis()))
+        replaceRecord(Record(id, category, value, System.currentTimeMillis()))
     }
 
     suspend fun read(id: String): String? = withContext(Dispatchers.IO) {
@@ -215,7 +224,7 @@ class EncryptedMemory(context: Context) {
         } }
         migrateLegacyData()
         validated.forEach { r ->
-            storeRecord(r)
+            replaceRecord(r)
         }
     }
 
