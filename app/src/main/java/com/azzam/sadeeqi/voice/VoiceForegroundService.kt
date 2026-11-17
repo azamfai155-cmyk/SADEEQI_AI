@@ -52,6 +52,9 @@ class VoiceForegroundService : Service() {
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
+            ACTION_MUTE -> {
+                voice?.setMicrophoneMuted(intent.getBooleanExtra(EXTRA_MUTED, true))
+            }
             ACTION_DICTATE -> startDictationSession()
             ACTION_START, null -> startSession()
         }
