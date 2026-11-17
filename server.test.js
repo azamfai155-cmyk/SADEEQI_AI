@@ -238,3 +238,18 @@ test('OpenAI provider is blocked unless paid usage is explicitly enabled', async
   assert.equal(enabled.apiKey, 'paid-key');
   assert.equal(enabled.apiUrl, 'https://api.openai.com/v1/responses');
 });
+
+
+test('default system and identity instructions use real newline separators', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const request = buildProviderRequest({
+    provider: 'groq',
+    model: 'openai/gpt-oss-20b',
+    apiKey: 'test-groq-key',
+    input: [{ role: 'user', content: 'hello' }]
+  });
+  const instructions = JSON.parse(request.init.body).instructions;
+  assert.match(instructions, /\n/);
+  assert.equal(instructions.includes('\\\\n'), false);
+  assert.match(instructions, /صديقي/);
+});
