@@ -31,13 +31,13 @@ import androidx.compose.ui.unit.dp
  * avatar or a speech waveform.
  */
 @Composable
-fun Avatar3DScreen(modifier: Modifier = Modifier) {
+fun Avatar3DScreen(isSpeaking: Boolean = false, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "sadeeqi-golden-orb")
     val pulse by transition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
+        initialValue = 0.97f,
+        targetValue = if (isSpeaking) 1.12f else 1.025f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400),
+            animation = tween(durationMillis = if (isSpeaking) 360 else 2200),
             repeatMode = RepeatMode.Reverse
         ),
         label = "orb-pulse"
@@ -46,7 +46,7 @@ fun Avatar3DScreen(modifier: Modifier = Modifier) {
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 9000),
+            animation = tween(durationMillis = if (isSpeaking) 1800 else 9000),
             repeatMode = RepeatMode.Restart
         ),
         label = "orb-shimmer"
@@ -118,7 +118,7 @@ fun Avatar3DScreen(modifier: Modifier = Modifier) {
             }
         }
         Text(
-            text = "صديقي",
+            text = if (isSpeaking) "صديقي يتحدث…" else "صديقي",
             color = Color(0xFFE8BD62),
             style = MaterialTheme.typography.titleLarge
         )
