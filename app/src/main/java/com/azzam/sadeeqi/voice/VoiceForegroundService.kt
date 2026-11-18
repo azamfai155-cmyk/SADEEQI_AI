@@ -23,6 +23,7 @@ import com.azzam.sadeeqi.phone.DeviceCommandParser
 import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.QuranAudioRepository
 import java.util.concurrent.Executors
 
 /**
@@ -186,6 +187,36 @@ class VoiceForegroundService : Service() {
             MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
             MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
             MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
+            MusicCommand.OpenQuran -> {
+                voice?.speak("يمكنك قول شغل سورة البقرة أو أي سورة تريدها، وسأبدأ التلاوة.")
+                return
+            }
+            is MusicCommand.PlayQuran -> {
+                updateNotification("جاري تجهيز سورة ${command.surahName}…")
+                executor.execute {
+                    try {
+                        val tracks = QuranAudioRepository().loadSurah(command.surahNumber)
+                        mainHandler.post {
+                            if (!started) return@post
+                            if (tracks.isEmpty()) {
+                                voice?.speak("لم تتوفر تلاوة هذه السورة حالياً.")
+                            } else {
+                                musicManager?.playRemoteQueue(tracks, 0)
+                                updateNotification("تلاوة سورة ${command.surahName} — ${tracks.first().artist}")
+                                voice?.speak("بدأت تلاوة سورة ${command.surahName} بصوت مشاري العفاسي.")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        mainHandler.post {
+                            if (started) {
+                                updateNotification("تعذر تحميل تلاوة القرآن")
+                                voice?.speak("تعذر تشغيل السورة. تحقق من اتصال الإنترنت وحاول مرة أخرى.")
+                            }
+                        }
+                    }
+                }
+                return
+            }
             is MusicCommand.Search -> {
                 updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
                 executor.execute {
