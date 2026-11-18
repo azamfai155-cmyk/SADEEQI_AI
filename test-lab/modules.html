@@ -7,7 +7,7 @@
 <main><div class="panel"><b>تنبيه مهم:</b> هذه اللوحة تجمع واجهات الأوامر والمنطق القابل للاختبار في المتصفح. أوامر فتح التطبيقات والمنبه والصوت والتحكم بالنظام لا تنفذ على الهاتف من صفحة ويب. الذاكرة المشفرة ومفاتيح الخادم تبقى في Android/الخادم ولا تُنقل إلى المتصفح.</div>
 <div class="layout"><nav class="nav" aria-label="وحدات التطبيق">
 <button class="active" data-page="overview">نظرة عامة</button><button data-page="assistant">المحادثة والأوامر</button><button data-page="voice">استوديو الصوت</button><button data-page="phone">التحكم بالهاتف</button><button data-page="memory">الذاكرة</button><button data-page="music">الموسيقى</button><button data-page="social">SOCIAL HUB</button><button data-page="trading">التداول</button><button data-page="architecture">ترتيب الكود</button>
-</nav><div>
+<button data-page="tasks">المهام المستديمة</button></nav><div>
 <section class="page active" id="overview"><div class="grid3"><div class="stat"><b>9</b>وحدات رئيسية</div><div class="stat"><b>6</b>أوامر هاتف مبدئية</div><div class="stat"><b>7</b>أنواع أوامر موسيقى</div></div><div class="panel"><h2>خريطة التطبيق الموحّدة</h2><div class="grid2" id="moduleCards"></div></div><div class="panel"><h2>قاعدة التنفيذ</h2><p class="list">1. فهم الأمر وتحديد الوحدة المناسبة.<br>2. بناء خطة وخطوات واضحة.<br>3. فحص الصلاحيات وتحديد إن كان الإجراء حساساً.<br>4. طلب موافقة صريحة قبل الإرسال أو الحذف أو الشراء أو الدفع أو التداول أو النشر أو المكالمات أو تغيير الأمان.<br>5. تنفيذ عبر موصل موثوق فقط، ثم التحقق من النتيجة وتسجيلها.</p></div></section>
 <section class="page" id="assistant"><div class="panel"><h2>مركز تجربة الأوامر</h2><p class="muted">أدخل الأمر، وسيُصنف محلياً إلى وحدة التطبيق. هذا فاحص قواعد وليس نموذج ذكاء اصطناعي.</p><div class="field"><label>الأمر</label><textarea id="cmd" placeholder="مثال: افتح واتساب أو شغل الموسيقى أو احسب المخاطرة"></textarea></div><div class="row"><button class="primary" id="classify">حلّل الأمر</button><button data-fill="افتح واتساب">فتح واتساب</button><button data-fill="اضبط منبه الساعة 7:30">منبه</button><button data-fill="شغل الموسيقى التالية">موسيقى</button><button data-fill="أرسل رسالة إلى صديقي">إرسال رسالة</button></div><div class="out" id="cmdOut">نتيجة التحليل ستظهر هنا.</div></div></section>
 <section class="page" id="voice"><div class="grid2"><div class="panel"><h2>التعرف على الكلام</h2><p class="muted">Web Speech API عند توفره ودعم العربية في المتصفح.</p><div class="row"><button class="primary" id="listen">🎙 بدء الاستماع</button><button id="stopListen">إيقاف</button></div><textarea id="heard" placeholder="النص المتعرف عليه"></textarea><p id="voiceState" class="muted">لم يُطلب إذن الميكروفون.</p></div><div class="panel"><h2>النطق وإعداداته</h2><div class="field"><label>النص</label><textarea id="say">مرحباً، أنا صديقي. كيف أساعدك؟</textarea></div><div class="field"><label>الصوت المتاح</label><select id="voiceChoice"></select></div><div class="grid2"><div><label>السرعة <span id="rateVal">0.96</span></label><input id="rate" type="range" min=".5" max="2" step=".02" value=".96"></div><div><label>الحدة <span id="pitchVal">.98</span></label><input id="pitch" type="range" min=".5" max="2" step=".02" value=".98"></div></div><div class="field"><label>مستوى الصوت <span id="volumeVal">100%</span></label><input id="volume" type="range" min="0" max="1" step=".01" value="1"></div><div class="row"><button class="primary" id="speak">اختبار النطق</button><button id="stopSpeak">إيقاف</button></div><p class="muted">القيم الافتراضية مطابقة لتفضيلات VoiceSettings في Android. لا يمكن ضمان وجود صوت عربي على الجهاز.</p></div></div></section>
@@ -16,9 +16,78 @@
 <section class="page" id="music"><div class="panel"><h2>مشغل الموسيقى — فاحص الأوامر</h2><div class="field"><label>أمر الموسيقى</label><input id="musicCmd" placeholder="مثال: ابحث عن موسيقى هادئة"></div><div class="row"><button class="primary" id="musicParse">تحليل الأمر</button><button data-music="وقف الموسيقى">إيقاف</button><button data-music="كمل الموسيقى">استئناف</button><button data-music="التالي">التالي</button><button data-music="السابق">السابق</button><button data-music="ارفع الصوت">رفع الصوت</button><button data-music="ابحث عن موسيقى هادئة">بحث</button></div><div class="out" id="musicOut">الأوامر المطابقة لـ MusicCommandParser تظهر هنا.</div><p class="muted">تشغيل الملفات المحلية وخدمة Audius والطابور والمفضلة وسجل التشغيل تحتاج موصل ويب/خادم؛ هذه الصفحة لا تشغل موسيقى من تلقاء نفسها.</p></div></section>
 <section class="page" id="social"><div class="panel"><h2>SOCIAL HUB</h2><p>في تطبيق Android توجد شاشة حالة تكاملات المنصات، تعرض عدد الحسابات المتصلة والإعدادات المكتملة من 15، ولا تطلب كلمات مرور المنصات. OAuth والنشر غير مفعّلين حتى يكتمل تخزين الرموز المشفر على الخادم.</p><div class="grid2"><div class="module"><h3>قراءة الحالة</h3><span class="tag pending">تحتاج جلسة خادم</span></div><div class="module"><h3>النشر والإرسال</h3><span class="tag pending">موقوفان حتى موافقة صريحة</span></div></div></div></section>
 <section class="page" id="trading"><div class="panel"><h2>حاسبات التداول المنقولة من TradingMath</h2><p class="muted">حسابات تعليمية فقط، لا تنفذ صفقات ولا تتصل بوسيط.</p><div class="grid2"><div class="module"><h3>المخاطرة وحجم المركز النظري</h3><label>رصيد الحساب</label><input id="balance" type="number" value="1000" min=".01"><label>المخاطرة %</label><input id="risk" type="number" value="1" min=".01" max="100" step=".01"><label>مسافة وقف الخسارة</label><input id="distance" type="number" value="20" min=".000001" step=".01"><button class="primary" id="riskCalc">احسب</button><div class="out" id="riskOut"></div></div><div class="module"><h3>العائد إلى المخاطرة R:R</h3><label>الدخول</label><input id="entry" type="number" value="1.0800" step=".0001"><label>وقف الخسارة</label><input id="stop" type="number" value="1.0780" step=".0001"><label>الهدف</label><input id="target" type="number" value="1.0840" step=".0001"><button class="primary" id="rrCalc">احسب R:R</button><div class="out" id="rrOut"></div></div><div class="module"><h3>إحصاء Backtest يدوي</h3><label>الرابحة</label><input id="wins" type="number" value="20" min="0"><label>الخاسرة</label><input id="losses" type="number" value="10" min="0"><label>متوسط الربح R</label><input id="avgWin" type="number" value="2" min="0" step=".1"><label>متوسط الخسارة R</label><input id="avgLoss" type="number" value="1" min="0" step=".1"><button class="primary" id="backtest">احسب النتائج</button><div class="out" id="backtestOut"></div></div><div class="module"><h3>مكتبة الدروس ومدرب SMC</h3><p>حفظ الدروس ومصادرها وملاحظاتها موجود على Android داخل الذاكرة المشفرة. واجهة الويب تحتاج API آمن للمزامنة.</p><span class="tag pending">ربط قادم</span></div></div></div></section>
+<section class="page" id="tasks">
+<div class="panel"><h2>ربط الخادم والهوية</h2><p class="muted">تسجيل الدخول إلى Supabase ثم الاتصال بواجهة المهام /v1/tasks. يتم الاحتفاظ برمز الجلسة في ذاكرة الصفحة فقط.</p>
+<div class="field"><label>Supabase Project URL</label><input id="taskSupabaseUrl" placeholder="https://YOUR-PROJECT.supabase.co"></div>
+<div class="field"><label>Supabase anon / publishable key (عام فقط)</label><input id="taskAnonKey" autocomplete="off" placeholder="المفتاح العام فقط — لا تستخدم service_role"></div>
+<div class="grid2"><div class="field"><label>البريد الإلكتروني</label><input id="taskEmail" type="email" autocomplete="username"></div><div class="field"><label>كلمة المرور</label><input id="taskPassword" type="password" autocomplete="current-password"></div></div>
+<div class="field"><label>Cloudflare Worker URL</label><input id="taskWorkerUrl" placeholder="https://your-worker.example.workers.dev"></div>
+<div class="row"><button class="primary" id="taskSignIn">تسجيل الدخول</button><button id="taskSignUp">إنشاء حساب</button><button id="taskSignOut">إنهاء الجلسة</button><button id="taskHealth">فحص الخادم</button></div><div class="out" id="taskAuthStatus">غير متصل — لم يتم تسجيل الدخول.</div></div>
+<div class="panel"><h2>إنشاء ومتابعة المهام</h2><div class="field"><label>عنوان المهمة</label><input id="newTaskTitle" maxlength="160" placeholder="مثال: تجهيز تقرير"></div><div class="field"><label>الهدف والتفاصيل</label><textarea id="newTaskGoal" maxlength="8000" placeholder="اكتب المطلوب بوضوح"></textarea></div><div class="field"><label>خطوات المهمة (كل خطوة في سطر مستقل)</label><textarea id="newTaskSteps" placeholder="جمع المعلومات\nمراجعة النتائج\nإعداد التقرير"></textarea></div><div class="row"><button class="primary" id="taskCreate">حفظ المهمة على الخادم</button><button id="taskRefresh">تحديث القائمة</button></div><div class="out" id="taskActionStatus">المهام لن تُحفظ حتى تنجح المصادقة واتصال قاعدة البيانات.</div><div id="taskList" class="list"></div></div>
+<div class="panel"><h3>حالات المهمة والإجراءات</h3><p class="muted">تشغيل/إيقاف/إكمال المهمة يغير حالتها فقط ولا ينفذ خطوات خارجية. الإجراءات الحساسة تتطلب طلب موافقة ثم قراراً صريحاً.</p><span class="tag">queued</span> <span class="tag">running</span> <span class="tag">waiting_approval</span> <span class="tag">paused</span> <span class="tag">completed</span> <span class="tag">failed</span> <span class="tag">cancelled</span></div>
+</section>
 <section class="page" id="architecture"><div class="panel"><h2>ترتيب الكود المقترح — مصدر واحد لكل من Android والويب</h2><div class="list"><p><code>shared/command-schema</code> — أسماء الأوامر، النوايا، التحقق، وسياسات الموافقة.</p><p><code>backend/src/agent-core.js</code> — تخطيط المهام وانتقال الحالات وبوابة الموافقة.</p><p><code>backend/src/task-store.js</code> — تخزين المهام الدائم المرتبط بهوية المستخدم.</p><p><code>backend/src/worker.js</code> — واجهات API والمصادقة والذكاء الاصطناعي.</p><p><code>test-lab/</code> — واجهات الاختبار والمحاكاة ومقارنة النتائج.</p><p><code>app/src/main/java/.../voice</code> — التقاط الصوت والنطق وخدمة Android.</p><p><code>app/src/main/java/.../phone</code> — أوامر الهاتف التي لا يستطيع المتصفح تنفيذها.</p><p><code>app/src/main/java/.../memory</code> — ذاكرة الجهاز المشفرة.</p><p><code>app/src/main/java/.../music</code> — المشغل والطابور والمكتبة ومصدر الموسيقى.</p><p><code>app/src/main/java/.../social</code> — حالة موفري التواصل وOAuth الآمن.</p><p><code>app/src/main/java/.../trading</code> — دروس التداول والحاسبات والإحصاء.</p></div><p class="muted">لا ننسخ أسرار Android أو مفاتيح الخدمة إلى JavaScript. الأفضل لاحقاً نقل قواعد الأعمال المشتركة إلى TypeScript/JSON schema واختبارها في المنصتين، مع إبقاء تكاملات النظام داخل Android.</p></div></section>
 </div></div></main><footer>SADEEQI AI · لوحة الوحدات · نسخة اختبارية مستقلة</footer>
 <script>
+
+// Authenticated durable-task connector. Credentials/tokens stay in page memory.
+let taskSession=null, taskTasks=[];
+const taskVal=id=>$(id).value.trim();
+const taskBase=()=>taskVal('taskWorkerUrl').replace(/\\/$/,'');
+const taskHeaders=()=>({Authorization:'Bearer '+taskSession.access_token,'Content-Type':'application/json'});
+function taskStatus(message){$('taskAuthStatus').textContent=message}
+function taskAction(message){$('taskActionStatus').textContent=message}
+async function taskSupabaseAuth(mode){
+ const base=taskVal('taskSupabaseUrl').replace(/\\/$/,'');
+ const key=taskVal('taskAnonKey'),email=taskVal('taskEmail'),password=$('taskPassword').value;
+ if(!/^https:\\/\\//i.test(base)||!key||!email||!password)throw Error('أدخل رابط Supabase والمفتاح العام والبريد وكلمة المرور.');
+ const response=await fetch(base+'/auth/v1/'+(mode==='signup'?'signup':'token?grant_type=password'),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.msg||data.message||data.error_description||data.error||'فشل تسجيل الدخول');
+ if(!data.access_token){$('taskPassword').value='';throw Error('تم إرسال طلب إنشاء الحساب. تحقق من بريدك إذا كان تأكيد البريد مفعلاً، ثم سجل الدخول.')}
+ taskSession=data;$('taskPassword').value='';taskStatus('تم تسجيل الدخول: '+(data.user?.email||email));return data;
+}
+async function taskApi(path,options={}){
+ if(!taskSession?.access_token)throw Error('سجل الدخول أولاً.');
+ if(!taskBase())throw Error('أدخل رابط Worker.');
+ const response=await fetch(taskBase()+path,{method:options.method||'GET',headers:taskHeaders(),body:options.body?JSON.stringify(options.body):undefined});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.error||'HTTP '+response.status);
+ return data;
+}
+function renderDurableTasks(){
+ const root=$('taskList');root.replaceChildren();
+ if(!taskTasks.length){root.textContent='لا توجد مهام محفوظة.';return}
+ for(const task of taskTasks){
+  const card=document.createElement('div');card.className='module';card.style.marginTop='9px';
+  const title=document.createElement('b');title.textContent=task.title+' — '+task.state;card.append(title);
+  const goal=document.createElement('p');goal.textContent=task.goal;card.append(goal);
+  const steps=document.createElement('p');steps.textContent=(task.steps||[]).map((s,i)=>(i+1)+'. '+s.title+' ['+s.state+']').join(' | ');card.append(steps);
+  const actions=document.createElement('div');actions.className='row';
+  const add=(label,operation,body={})=>{const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{const d=await taskApi('/v1/tasks/'+task.id,{method:'PATCH',body:{operation,...body}});taskTasks=taskTasks.map(x=>x.id===task.id?d.task:x);renderDurableTasks();taskAction('تم تحديث حالة المهمة.')}catch(e){taskAction('تعذر تحديث المهمة: '+e.message)}};actions.append(b)};
+  if(task.state==='queued'||task.state==='failed')add('بدء','start');
+  if(task.state==='running')add('إيقاف مؤقت','pause');
+  if(task.state==='paused')add('استئناف','resume');
+  if(task.state==='running')add('إكمال','complete');
+  if(['queued','running'].includes(task.state))add('طلب موافقة لإرسال رسالة','request_approval',{action:'send_message'});
+  if(task.state==='waiting_approval'&&task.approval?.decision==='pending'){
+   add('الموافقة','resolve_approval',{approved:true});add('رفض','resolve_approval',{approved:false});
+  }
+  card.append(actions);root.append(card);
+ }
+}
+async function refreshDurableTasks(){const d=await taskApi('/v1/tasks');taskTasks=d.tasks||[];renderDurableTasks();taskAction('تم تحميل '+taskTasks.length+' مهمة من الخادم.')}
+$('taskSignIn').onclick=async()=>{try{await taskSupabaseAuth('signin');await refreshDurableTasks()}catch(e){taskStatus('فشل الاتصال: '+e.message)}};
+$('taskSignUp').onclick=async()=>{try{await taskSupabaseAuth('signup')}catch(e){taskStatus(e.message)}};
+$('taskSignOut').onclick=()=>{taskSession=null;taskTasks=[];$('taskPassword').value='';renderDurableTasks();taskStatus('تم إنهاء الجلسة محلياً.');taskAction('لا يوجد اتصال مصادق عليه.')};
+$('taskHealth').onclick=async()=>{try{const r=await fetch(taskBase()+'/health');const d=await r.json();taskStatus('Worker health: '+JSON.stringify(d));}catch(e){taskStatus('فشل فحص الخادم: '+e.message)}};
+$('taskRefresh').onclick=async()=>{try{await refreshDurableTasks()}catch(e){taskAction(e.message)}};
+$('taskCreate').onclick=async()=>{try{
+ const title=taskVal('newTaskTitle'),goal=taskVal('newTaskGoal');
+ const steps= $('newTaskSteps').value.split('\\n').map(x=>x.trim()).filter(Boolean).map((title,i)=>({id:'step-'+(i+1),title}));
+ const d=await taskApi('/v1/tasks',{method:'POST',body:{title,goal,steps}});
+ taskTasks.unshift(d.task);renderDurableTasks();taskAction('تم حفظ المهمة في قاعدة البيانات: '+d.task.id);
+}catch(e){taskAction('لم يتم حفظ المهمة: '+e.message)}};
 const $=id=>document.getElementById(id);document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));$(b.dataset.page).classList.add('active');b.classList.add('active')});
 const modules=[['المحادثة والأوامر','تحليل النية، تخطيط الخطوات، محادثة مع الخادم','جزئي'],['الصوت','التعرف على الكلام، TTS، إعدادات اللغة والسرعة والحدة','تجريبي بالمتصفح'],['الشخصية ثلاثية الأبعاد','عارض الشخصية والوجه ومزامنة الشفاه','غير منفذ'],['التحكم بالهاتف','فتح تطبيق، كاميرا، إعدادات، صوت، منبه','Android فقط'],['الذاكرة','تخزين مشفر، بحث، نسخ احتياطي واستعادة','Android فقط'],['الموسيقى','تشغيل، بحث، طابور، مفضلة وسجل','Android جزئي'],['SOCIAL HUB','حالة 15 منصة وربط OAuth','الربط غير مكتمل'],['التداول','مكتبة دروس، مخاطرة، R:R، إحصاء Backtest','الحاسبات محلية'],['المهام والخادم','مهام مستديمة، مصادقة، موافقات وAI API','Backend جزئي']];
 $('moduleCards').innerHTML=modules.map(m=>'<div class="module"><h3>'+m[0]+'</h3><p>'+m[1]+'</p><span class="tag">'+m[2]+'</span></div>').join('');
