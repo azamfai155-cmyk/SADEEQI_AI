@@ -400,6 +400,8 @@ class VoiceForegroundService : Service() {
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
         const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"
+        const val ACTION_SPEECH_STATE = "com.azzam.sadeeqi.voice.SPEECH_STATE"
+        const val EXTRA_SPEAKING = "is_speaking"
         const val EXTRA_MUTED = "microphone_muted"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
