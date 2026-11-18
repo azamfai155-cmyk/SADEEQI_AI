@@ -74,6 +74,23 @@ class VoiceController(
         startListeningInternal()
     }
 
+    /**
+     * Promote a wake-word-only session into a normal two-way conversation.
+     * The greeting is spoken first; onDone then resumes microphone capture.
+     */
+    fun beginConversationWithGreeting(greeting: String) {
+        conversationActive = true
+        microphoneMuted = false
+        lastUtteranceId = null
+        mainHandler.removeCallbacksAndMessages(null)
+        runCatching { recognizer?.cancel() }
+        listening = false
+        runCatching { tts?.stop() }
+        speaking = false
+        onSpeakingChanged(false)
+        speak(greeting)
+    }
+
     fun setMicrophoneMuted(muted: Boolean) {
         microphoneMuted = muted
         if (muted) {
