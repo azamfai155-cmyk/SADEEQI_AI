@@ -43,6 +43,8 @@ jobs:
 
       - name: Install trainer dependencies
         working-directory: trainer
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
         run: npm install
 
       - name: Add Arabic wake phrase configuration
