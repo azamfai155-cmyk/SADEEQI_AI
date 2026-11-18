@@ -80,4 +80,4 @@ No verified before/after APK artifact measurement or physical-device memory prof
 - Internet Archive, Wikimedia Commons, Freesound and other catalogues require source-specific playback/redistribution and license validation before enabling direct playback.
 - Openverse indexes openly licensed media, not a complete trending chart or a substitute for licensed commercial streaming services.
 - No global all-songs guarantee is technically or legally possible with free-only sources.
-- Provider attribution/license labels still need to be surfaced clearly in the music results UI; adapter metadata is retained in the track model.
+- Music results now display provider and license identifiers; detailed attribution and license links remain retained in the track model and should be added to a dedicated details view before public release.
