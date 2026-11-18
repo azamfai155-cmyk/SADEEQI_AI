@@ -18,7 +18,8 @@ data class MusicPlaybackState(
     val positionMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffleEnabled: Boolean = false,
-    val volume: Float = 1f
+    val volume: Float = 1f,
+    val errorMessage: String? = null
 )
 
 class MusicPlayerManager(
@@ -29,11 +30,17 @@ class MusicPlayerManager(
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var pendingRemoteQueue: Pair<List<RemoteMusicTrack>, Int>? = null
+    private var pendingLocalQueue: Pair<List<Pair<Uri, String>>, Int>? = null
+    private var lastErrorMessage: String? = null
     private var dataSaverEnabled: Boolean = true
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = publish()
         override fun onPlaybackStateChanged(playbackState: Int) = publish()
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            lastErrorMessage = error.message ?: "تعذر تشغيل المقطع الصوتي."
+            publish()
+        }
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
@@ -46,21 +53,33 @@ class MusicPlayerManager(
         val future = MediaController.Builder(appContext, token).buildAsync()
         controllerFuture = future
         future.addListener({
-            runCatching {
+            try {
                 controller = future.get().also { it.addListener(listener) }
                 applyDataSaver()
                 publish()
+                pendingLocalQueue?.let { (tracks, index) ->
+                    pendingLocalQueue = null
+                    playQueue(tracks, index)
+                }
                 pendingRemoteQueue?.let { (tracks, index) ->
                     pendingRemoteQueue = null
                     playRemoteQueue(tracks, index)
                 }
+            } catch (error: Exception) {
+                lastErrorMessage = "تعذر الاتصال بمشغل الصوت. أعد فتح المشغل وحاول مرة أخرى."
+                onState(MusicPlaybackState(errorMessage = lastErrorMessage))
             }
         }, MoreExecutors.directExecutor())
     }
 
     fun playQueue(tracks: List<Pair<Uri, String>>, startIndex: Int = 0) {
-        val player = controller ?: return
         if (tracks.isEmpty()) return
+        val player = controller
+        if (player == null) {
+            pendingLocalQueue = tracks to startIndex
+            return
+        }
+        lastErrorMessage = null
         val items = tracks.map { (uri, title) ->
             MediaItem.Builder().setUri(uri)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
@@ -79,6 +98,7 @@ class MusicPlayerManager(
             pendingRemoteQueue = tracks to startIndex
             return
         }
+        lastErrorMessage = null
         val items = tracks.map { track ->
             MediaItem.Builder()
                 .setUri(track.streamUrl)
@@ -149,7 +169,8 @@ class MusicPlayerManager(
                 positionMs = p.currentPosition.coerceAtLeast(0L),
                 repeatMode = p.repeatMode,
                 shuffleEnabled = p.shuffleModeEnabled,
-                volume = p.volume
+                volume = p.volume,
+                errorMessage = lastErrorMessage
             )
         )
     }
@@ -160,5 +181,6 @@ class MusicPlayerManager(
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         pendingRemoteQueue = null
+        pendingLocalQueue = null
     }
 }

@@ -22,7 +22,9 @@ import com.azzam.sadeeqi.phone.DeviceCommand
 import com.azzam.sadeeqi.phone.DeviceCommandParser
 import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
-import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.MusicCatalogRepository
+import com.azzam.sadeeqi.music.RuqyahRepository
+import com.azzam.sadeeqi.music.QuranAudioRepository
 import java.util.concurrent.Executors
 
 /**
@@ -186,26 +188,80 @@ class VoiceForegroundService : Service() {
             MusicCommand.Previous -> { musicManager?.previous(); voice?.speak("عدت إلى المقطع السابق"); return }
             MusicCommand.VolumeUp -> { musicManager?.adjustVolume(0.1f); voice?.speak("تم رفع الصوت"); return }
             MusicCommand.VolumeDown -> { musicManager?.adjustVolume(-0.1f); voice?.speak("تم خفض الصوت"); return }
-            is MusicCommand.Search -> {
-                updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
+            MusicCommand.OpenQuran -> {
+                voice?.speak("يمكنك قول شغل سورة البقرة أو أي سورة تريدها، وسأبدأ التلاوة.")
+                return
+            }
+            is MusicCommand.PlayQuran -> {
+                updateNotification("جاري تجهيز سورة ${command.surahName}…")
                 executor.execute {
                     try {
-                        val tracks = AudiusMusicRepository().search(command.query)
+                        val tracks = QuranAudioRepository().loadSurah(command.surahNumber)
                         mainHandler.post {
                             if (!started) return@post
                             if (tracks.isEmpty()) {
-                                voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
+                                voice?.speak("لم تتوفر تلاوة هذه السورة حالياً.")
                             } else {
                                 musicManager?.playRemoteQueue(tracks, 0)
-                                updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
-                                voice?.speak("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
+                                updateNotification("تلاوة سورة ${command.surahName} — ${tracks.first().artist}")
+                                voice?.speak("بدأت تلاوة سورة ${command.surahName} بصوت مشاري العفاسي.")
                             }
                         }
                     } catch (error: Exception) {
                         mainHandler.post {
                             if (started) {
-                                updateNotification("تعذر البحث عن الموسيقى")
-                                voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
+                                updateNotification("تعذر تحميل تلاوة القرآن")
+                                voice?.speak("تعذر تشغيل السورة. تحقق من اتصال الإنترنت وحاول مرة أخرى.")
+                            }
+                        }
+                    }
+                }
+                return
+            }
+            MusicCommand.PlayRuqyah -> {
+                updateNotification("جاري تجهيز الرقية من آيات القرآن الكريم…")
+                executor.execute {
+                    try {
+                        val tracks = RuqyahRepository().loadPlaylist()
+                        mainHandler.post {
+                            if (!started) return@post
+                            if (tracks.isEmpty()) {
+                                voice?.speak("تعذر تجهيز مقاطع الرقية حالياً. تحقق من الإنترنت.")
+                            } else {
+                                musicManager?.playRemoteQueue(tracks, 0)
+                                updateNotification("تشغيل رقية شرعية من القرآن الكريم")
+                                voice?.speak("بدأت تشغيل آيات الرقية من القرآن الكريم. يمكنك قول التالي أو أوقف.")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        mainHandler.post {
+                            if (started) voice?.speak("تعذر تحميل آيات الرقية. تحقق من اتصال الإنترنت.")
+                        }
+                    }
+                }
+                return
+            }
+            is MusicCommand.Search -> {
+                updateNotification("جاري البحث في المكتبات الموسيقية المجانية…")
+                executor.execute {
+                    try {
+                        val tracks = MusicCatalogRepository().search(command.query, 40)
+                        mainHandler.post {
+                            if (!started) return@post
+                            if (tracks.isEmpty()) {
+                                updateNotification("لم نعثر على نتيجة مجانية قابلة للتشغيل")
+                                voice?.speak("لم أجد نتيجة مجانية قابلة للتشغيل في المصادر المتاحة. جرّب اسم الفنان أو الأغنية بطريقة أخرى.")
+                            } else {
+                                musicManager?.playRemoteQueue(tracks, 0)
+                                updateNotification("تشغيل ${tracks.first().title} — ${tracks.first().sourceName}")
+                                voice?.speak("وجدت ${tracks.size} نتيجة من مصادر مجانية. بدأت تشغيل ${tracks.first().title}.")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        mainHandler.post {
+                            if (started) {
+                                updateNotification("تعذر البحث في المصادر الموسيقية")
+                                voice?.speak("تعذر إكمال البحث حالياً. تحقق من الإنترنت وحاول مرة أخرى.")
                             }
                         }
                     }
