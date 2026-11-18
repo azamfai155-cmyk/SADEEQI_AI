@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -225,7 +226,17 @@ class VoiceForegroundService : Service() {
                         mainHandler.post {
                             if (!started) return@post
                             if (tracks.isEmpty()) {
-                                voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
+                                val opened = runCatching {
+                                    val searchUri = Uri.parse("https://music.youtube.com/search?q=${Uri.encode(command.query)}")
+                                    startActivity(Intent(Intent.ACTION_VIEW, searchUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                    true
+                                }.getOrDefault(false)
+                                if (opened) {
+                                    updateNotification("لم تتوفر الأغنية في Audius — تم فتح نتائج YouTube Music")
+                                    voice?.speak("لم أجد الأغنية في مكتبة البث المفتوحة. فتحت نتائج YouTube Music؛ اختر النسخة التي تريد تشغيلها.")
+                                } else {
+                                    voice?.speak("لم أجد نتائج قابلة للبث، وتعذر فتح YouTube Music. جرّب اسماً آخر.")
+                                }
                             } else {
                                 musicManager?.playRemoteQueue(tracks, 0)
                                 updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
