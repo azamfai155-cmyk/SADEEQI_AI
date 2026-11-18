@@ -6,6 +6,7 @@ import org.junit.Test
 class MusicCommandParserTest {
     @Test fun parsesArabicPause() {
         assertEquals(MusicCommand.Pause, MusicCommandParser.parse("أوقف الموسيقى"))
+        assertEquals(MusicCommand.Pause, MusicCommandParser.parse("اطفئ الأغنية"))
     }
 
     @Test fun parsesNextTrack() {
@@ -16,8 +17,16 @@ class MusicCommandParserTest {
         assertEquals(MusicCommand.VolumeUp, MusicCommandParser.parse("ارفع الصوت"))
     }
 
-    @Test fun preservesSearchQuery() {
-        assertEquals(MusicCommand.Search("موسيقى يمنية"), MusicCommandParser.parse("ابحث عن موسيقى يمنية"))
+    @Test fun preservesSpokenSongAndArtistQuery() {
+        assertEquals(MusicCommand.Search("بتمنى أنساك حق شيرين"), MusicCommandParser.parse("شغل لي أغنية بتمنى أنساك حق شيرين"))
+    }
+
+    @Test fun parsesQuranSurah() {
+        assertEquals(MusicCommand.PlayQuran(2, "البقرة"), MusicCommandParser.parse("شغل سورة البقرة من القرآن"))
+    }
+
+    @Test fun opensQuranPickerWithoutSurah() {
+        assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("شغل لي القرآن الكريم"))
     }
 
     @Test fun ignoresUnrelatedText() {
