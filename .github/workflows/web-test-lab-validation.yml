@@ -37,7 +37,7 @@ jobs:
             process.exit(1);
           }
           new Function(matches[0][1]);
-          for (const id of ['auth', 'app', 'messages', 'chatInput', 'voiceSelect', 'calcRisk', 'calcBacktest', 'audioFiles', 'socialList', 'memoryRows', 'parseDevice']) {
+          for (const id of ['auth', 'app', 'messages', 'chatInput', 'voiceSelect', 'calcRisk', 'calcBacktest', 'audioFiles', 'socialList', 'memoryRows', 'parseDevice', 'musicCommand', 'parseMusicCommand', 'musicSeek', 'musicDuration']) {
             if (!html.includes('id="' + id + '"')) {
               console.error('Missing Android app control: ' + id);
               process.exit(1);
