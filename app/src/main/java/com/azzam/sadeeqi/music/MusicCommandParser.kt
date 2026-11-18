@@ -43,7 +43,7 @@ object MusicCommandParser {
     fun parse(raw: String): MusicCommand? {
         val text = normalize(raw)
         if (text.isBlank()) return null
-        if (listOf("رقية شرعية", "الرقية الشرعية", "شغل رقية", "شغل الرقية", "اريد رقية")
+        if (listOf("رقية شرعية", "الرقية الشرعية", "شغل رقية", "شغل الرقية", "اريد رقية", "اقرا الرقية", "اسمع الرقية", "شغل لي الرقية")
                 .any { normalize(it) in text }) return MusicCommand.PlayRuqyah
 
         if (listOf("وقف", "توقف", "اطف", "اطفي", "اطفئ", "اقفل", "اسكت", "اوقف", "ايقاف", "انهاء")
