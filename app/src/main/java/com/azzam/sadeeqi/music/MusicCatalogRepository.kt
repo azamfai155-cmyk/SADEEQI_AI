@@ -7,17 +7,19 @@ import java.util.concurrent.Executors
 class MusicCatalogRepository(
     private val audius: AudiusMusicRepository = AudiusMusicRepository(),
     private val openverse: OpenverseMusicRepository = OpenverseMusicRepository(),
-    private val commons: WikimediaCommonsAudioRepository = WikimediaCommonsAudioRepository()
+    private val commons: WikimediaCommonsAudioRepository = WikimediaCommonsAudioRepository(),
+    private val archive: InternetArchiveAudioRepository = InternetArchiveAudioRepository()
 ) {
     fun search(query: String, limit: Int = 20): List<RemoteMusicTrack> {
         require(query.isNotBlank()) { "اكتب اسم أغنية أو فنان للبحث." }
         val perProvider = limit.coerceIn(1, 30)
-        val pool = Executors.newFixedThreadPool(3)
+        val pool = Executors.newFixedThreadPool(4)
         return try {
             val jobs = listOf(
                 Callable { runCatching { audius.search(query, perProvider) }.getOrDefault(emptyList()) },
                 Callable { runCatching { openverse.search(query, perProvider) }.getOrDefault(emptyList()) },
-                Callable { runCatching { commons.search(query, perProvider) }.getOrDefault(emptyList()) }
+                Callable { runCatching { commons.search(query, perProvider) }.getOrDefault(emptyList()) },
+                Callable { runCatching { archive.search(query, minOf(perProvider, 8)) }.getOrDefault(emptyList()) }
             )
             pool.invokeAll(jobs).flatMap { future -> runCatching { future.get() }.getOrDefault(emptyList()) }
                 .distinctBy {
