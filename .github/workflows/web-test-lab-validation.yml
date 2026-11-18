@@ -60,3 +60,23 @@ jobs:
           }
           console.log('Unified modules dashboard JavaScript and controls validated.');
           NODE
+
+      - name: Validate isolated development studio
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/dev-studio.html', 'utf8');
+          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected exactly one inline script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['htmlCode', 'cssCode', 'jsCode', 'preview', 'runChecks', 'exportProject']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing development studio control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Development studio JavaScript syntax and editor controls validated.');
+          NODE
