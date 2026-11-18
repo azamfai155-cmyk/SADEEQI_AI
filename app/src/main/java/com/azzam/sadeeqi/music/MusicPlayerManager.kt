@@ -18,7 +18,8 @@ data class MusicPlaybackState(
     val positionMs: Long = 0L,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val shuffleEnabled: Boolean = false,
-    val volume: Float = 1f
+    val volume: Float = 1f,
+    val errorMessage: String? = null
 )
 
 class MusicPlayerManager(
@@ -29,6 +30,8 @@ class MusicPlayerManager(
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
     private var pendingRemoteQueue: Pair<List<RemoteMusicTrack>, Int>? = null
+    private var pendingLocalQueue: Pair<List<Pair<Uri, String>>, Int>? = null
+    private var lastErrorMessage: String? = null
     private var dataSaverEnabled: Boolean = true
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
@@ -46,14 +49,21 @@ class MusicPlayerManager(
         val future = MediaController.Builder(appContext, token).buildAsync()
         controllerFuture = future
         future.addListener({
-            runCatching {
+            try {
                 controller = future.get().also { it.addListener(listener) }
                 applyDataSaver()
                 publish()
+                pendingLocalQueue?.let { (tracks, index) ->
+                    pendingLocalQueue = null
+                    playQueue(tracks, index)
+                }
                 pendingRemoteQueue?.let { (tracks, index) ->
                     pendingRemoteQueue = null
                     playRemoteQueue(tracks, index)
                 }
+            } catch (error: Exception) {
+                lastErrorMessage = "تعذر الاتصال بمشغل الصوت. أعد فتح المشغل وحاول مرة أخرى."
+                onState(MusicPlaybackState(errorMessage = lastErrorMessage))
             }
         }, MoreExecutors.directExecutor())
     }
