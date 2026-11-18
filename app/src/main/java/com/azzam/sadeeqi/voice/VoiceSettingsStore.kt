@@ -6,9 +6,9 @@ import java.util.Locale
 /** Non-sensitive voice preferences; secrets and conversation content are never stored here. */
 data class VoiceSettings(
     val voiceName: String = "",
-    val languageTag: String = "ar",
-    val speechRate: Float = 0.96f,
-    val pitch: Float = 0.98f,
+    val languageTag: String = "ar-YE",
+    val speechRate: Float = 0.92f,
+    val pitch: Float = 0.90f,
     val volume: Float = 1.0f,
     val autoRead: Boolean = false
 )
@@ -19,12 +19,12 @@ fun VoiceSettings.normalized(): VoiceSettings {
     val safeLanguage = candidateLanguage
         .takeIf { it.matches(Regex("[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*")) }
         ?.let { Locale.forLanguageTag(it).toLanguageTag().takeUnless { tag -> tag == "und" } }
-        ?: "ar"
+        ?: "ar-YE"
     return copy(
         voiceName = voiceName.take(256),
         languageTag = safeLanguage,
-        speechRate = (if (speechRate.isFinite()) speechRate else 0.96f).coerceIn(0.5f, 2.0f),
-        pitch = (if (pitch.isFinite()) pitch else 0.98f).coerceIn(0.5f, 2.0f),
+        speechRate = (if (speechRate.isFinite()) speechRate else 0.92f).coerceIn(0.5f, 2.0f),
+        pitch = (if (pitch.isFinite()) pitch else 0.90f).coerceIn(0.5f, 2.0f),
         volume = (if (volume.isFinite()) volume else 1.0f).coerceIn(0.0f, 1.0f)
     )
 }
@@ -34,7 +34,7 @@ class VoiceSettingsStore(context: Context) {
 
     fun load(): VoiceSettings = VoiceSettings(
         voiceName = prefs.getString(KEY_VOICE, "").orEmpty(),
-        languageTag = prefs.getString(KEY_LANGUAGE, "ar").orEmpty(),
+        languageTag = prefs.getString(KEY_LANGUAGE, "ar-YE").orEmpty(),
         speechRate = prefs.getFloat(KEY_RATE, 0.96f),
         pitch = prefs.getFloat(KEY_PITCH, 0.98f),
         volume = prefs.getFloat(KEY_VOLUME, 1.0f),
