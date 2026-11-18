@@ -10,7 +10,7 @@ class MusicCatalogRepository(
         val perProvider = limit.coerceIn(1, 30)
         val results = mutableListOf<RemoteMusicTrack>()
         runCatching { audius.search(query, perProvider) }.onSuccess { results.addAll(it) }
-        runCatching { openverse.search(query, perProvider) }.onSuccess(results::addAll)
+        runCatching { openverse.search(query, perProvider) }.onSuccess { results.addAll(it) }
         return results.distinctBy {
             "${it.title.trim().lowercase()}|${it.artist.trim().lowercase()}".replace(Regex("\\s+"), " ")
         }.take(limit.coerceIn(1, 60))
