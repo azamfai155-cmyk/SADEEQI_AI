@@ -27,7 +27,7 @@ class WikimediaCommonsAudioRepository {
             .build().toString()
         val request = Request.Builder().url(url)
             .header("Accept", "application/json")
-            .header("User-Agent", "SadeeqiAI/1.0 (Android audio catalogue; contact: support@sadeeqi.app)")
+            .header("User-Agent", "SadeeqiAI/1.0 (Android audio catalogue)")
             .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("Wikimedia Commons أعاد خطأ HTTP ${response.code}")
