@@ -46,3 +46,21 @@ Open `index.html` in a modern browser, or serve this directory with a static web
 8. Verify Android-only capabilities on a physical device before packaging the stable modules as the Android app.
 
 Never put provider secrets, database service-role keys, or privileged credentials in browser JavaScript or a public repository. Do not enable real-world side effects without explicit approval and server-side enforcement.
+
+## Live backend connection (new)
+The lab now includes an optional direct connector to the existing Cloudflare Worker:
+- Configure the Supabase project URL and public anon/publishable key in the browser.
+- Sign in or sign up through Supabase Auth REST endpoints. The password is cleared after successful sign-in; the access token is kept in page memory only and is not written to localStorage.
+- Configure the Worker base URL, run its `GET /health` check, then explicitly enable remote chat.
+- Remote chat sends the recent conversation to `POST /v1/chat` with the Supabase access token as a Bearer token. It does not send provider credentials to the browser.
+
+### Required server-side configuration
+For the existing `backend/src/worker.js` implementation, configure Worker secrets/variables:
+- `AUTH_MODE=supabase`
+- `SUPABASE_URL` = the same Supabase project URL
+- `AI_PROVIDER=groq` and `GROQ_API_KEY` as a Worker secret, with `GROQ_MODEL` set to a model supported by the account; alternatively use another provider only when deliberately configured server-side.
+- `ALLOWED_ORIGIN=https://sadeeqi-web-test-lab.vercel.app` so browser preflight and API responses permit this exact site origin.
+
+Do not switch authentication modes or alter production credentials as part of the browser test. Configure a separate test Worker and Supabase project where possible. The Supabase anon key is designed to be public; never enter a service-role key, provider key, or shared app token in the browser. Supabase sign-up may require email confirmation. CORS, Worker secrets, provider quota, and model availability can prevent a successful chat even when the UI is ready.
+
+The browser connector is optional and inactive until configured and explicitly enabled. It uses the existing Worker contract; it does not create a new backend or grant Android/device permissions.
