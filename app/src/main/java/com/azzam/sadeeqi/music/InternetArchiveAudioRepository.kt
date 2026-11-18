@@ -14,7 +14,10 @@ class InternetArchiveAudioRepository {
 
     fun search(query: String, limit: Int = 8): List<RemoteMusicTrack> {
         require(query.isNotBlank()) { "اكتب عبارة للبحث." }
-        val safeQuery = query.trim().replace(Regex("[\\"\\\\]"), " ").take(100)
+        val safeQuery = query.trim().split(Regex("\\s+"))
+            .map { it.replace(Regex("[^\\p{L}\\p{N}_-]"), "") }
+            .filter { it.isNotBlank() }.joinToString(" ").take(100)
+        if (safeQuery.isBlank()) return emptyList()
         val lucene = "mediatype:audio AND (licenseurl:http*by* OR licenseurl:http*publicdomain*) AND ($safeQuery)"
         val searchUrl = Uri.parse(SEARCH_URL).buildUpon()
             .appendQueryParameter("q", lucene)
