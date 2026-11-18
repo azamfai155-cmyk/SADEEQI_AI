@@ -244,16 +244,25 @@ class VoiceForegroundService : Service() {
             is MusicCommand.Search -> {
                 updateNotification("جاري البحث في المكتبات الموسيقية المجانية…")
                 executor.execute {
-                    val tracks = MusicCatalogRepository().search(command.query, 40)
-                    mainHandler.post {
-                        if (!started) return@post
-                        if (tracks.isEmpty()) {
-                            updateNotification("لم نعثر على نتيجة مجانية قابلة للتشغيل")
-                            voice?.speak("لم أجد نتيجة مجانية قابلة للتشغيل في المصادر المتاحة. جرّب اسم الفنان أو الأغنية بطريقة أخرى.")
-                        } else {
-                            musicManager?.playRemoteQueue(tracks, 0)
-                            updateNotification("تشغيل ${tracks.first().title} — ${tracks.first().sourceName}")
-                            voice?.speak("وجدت ${tracks.size} نتيجة من مصادر مجانية. بدأت تشغيل ${tracks.first().title}.")
+                    try {
+                        val tracks = MusicCatalogRepository().search(command.query, 40)
+                        mainHandler.post {
+                            if (!started) return@post
+                            if (tracks.isEmpty()) {
+                                updateNotification("لم نعثر على نتيجة مجانية قابلة للتشغيل")
+                                voice?.speak("لم أجد نتيجة مجانية قابلة للتشغيل في المصادر المتاحة. جرّب اسم الفنان أو الأغنية بطريقة أخرى.")
+                            } else {
+                                musicManager?.playRemoteQueue(tracks, 0)
+                                updateNotification("تشغيل ${tracks.first().title} — ${tracks.first().sourceName}")
+                                voice?.speak("وجدت ${tracks.size} نتيجة من مصادر مجانية. بدأت تشغيل ${tracks.first().title}.")
+                            }
+                        }
+                    } catch (error: Exception) {
+                        mainHandler.post {
+                            if (started) {
+                                updateNotification("تعذر البحث في المصادر الموسيقية")
+                                voice?.speak("تعذر إكمال البحث حالياً. تحقق من الإنترنت وحاول مرة أخرى.")
+                            }
                         }
                     }
                 }
