@@ -59,13 +59,15 @@ object MusicCommandParser {
         if (text.contains("ارفع الصوت") || text.contains("علي الصوت") || text.contains("زود الصوت")) return MusicCommand.VolumeUp
         if (text.contains("خفض الصوت") || text.contains("وطي الصوت") || text.contains("قلل الصوت")) return MusicCommand.VolumeDown
 
+        val surahIndex = surahs.indexOfFirst { normalize(it) in text }
         val asksForQuran = listOf("قران", "القران", "قرآن", "القرآن", "تلاوه", "تلاوة").any { normalize(it) in text }
+        val asksToPlay = listOf("شغل", "شغلي", "اقرا", "استمع", "ابدأ", "ابدا").any { text.contains(normalize(it)) }
+        if (surahIndex >= 0 && text.contains("سوره") && asksToPlay) {
+            return MusicCommand.PlayQuran(surahIndex + 1, surahs[surahIndex])
+        }
         if (asksForQuran) {
-            val surahIndex = surahs.indexOfFirst { normalize(it) in text }
             if (surahIndex >= 0) return MusicCommand.PlayQuran(surahIndex + 1, surahs[surahIndex])
-            if (text.contains("شغل") || text.contains("اقرا") || text.contains("استمع") || text.contains("تلاوه")) {
-                return MusicCommand.OpenQuran
-            }
+            if (asksToPlay) return MusicCommand.OpenQuran
         }
 
         val searchPrefixes = listOf("ابحث عن", "دور لي على", "دور على", "شغل لي", "شغل", "اسمع", "اريد اسمع", "اريد تشغيل")
