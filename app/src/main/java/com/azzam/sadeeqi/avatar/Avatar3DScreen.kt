@@ -1,96 +1,126 @@
 package com.azzam.sadeeqi.avatar
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import io.github.sceneview.Scene
-import io.github.sceneview.rememberEngine
-import io.github.sceneview.rememberModelLoader
-import io.github.sceneview.model.model
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.nio.ByteBuffer
 
 /**
- * First integrated 3D character viewport.
- *
- * The externally hosted model is a licensed animated male sample used to validate
- * GLB loading and skeletal animation. It is not the final photorealistic custom avatar
- * and it does not include facial blend-shapes or speech lip-sync.
+ * Sadeeqi voice identity: a softly animated golden orb, inspired by the
+ * circular voice indicator. The orb is a visual state indicator, not a 3D
+ * avatar or a speech waveform.
  */
 @Composable
 fun Avatar3DScreen(modifier: Modifier = Modifier) {
-    val engine = rememberEngine()
-    val modelLoader = rememberModelLoader(engine)
-    val httpClient = remember { OkHttpClient() }
-    var character by remember { mutableStateOf<com.google.android.filament.gltfio.FilamentInstance?>(null) }
-    var loadMessage by remember { mutableStateOf("جاري تحميل نموذج الشخصية ثلاثي الأبعاد…") }
-
-    LaunchedEffect(modelLoader) {
-        try {
-            val bytes = withContext(Dispatchers.IO) {
-                val request = Request.Builder().url(CHARACTER_MODEL_URL).build()
-                httpClient.newCall(request).execute().use { response ->
-                    check(response.isSuccessful) { "HTTP ${response.code}" }
-                    requireNotNull(response.body) { "ملف النموذج فارغ" }.bytes()
-                }
-            }
-            require(bytes.isNotEmpty()) { "ملف النموذج فارغ" }
-            // Filament model creation stays on the main thread.
-            character = modelLoader.createModelInstance(ByteBuffer.wrap(bytes))
-            loadMessage = "تم تحميل نموذج تجريبي متحرك"
-        } catch (error: Exception) {
-            loadMessage = "تعذر تحميل النموذج: ${error.message ?: "تحقق من الإنترنت"}"
-        }
-    }
-
-    DisposableEffect(modelLoader, character) {
-        onDispose {
-            character?.let { instance -> runCatching { modelLoader.destroyModel(instance.model) } }
-        }
-    }
+    val transition = rememberInfiniteTransition(label = "sadeeqi-golden-orb")
+    val pulse by transition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "orb-pulse"
+    )
+    val shimmer by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orb-shimmer"
+    )
 
     Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = "شخصية صديقي ثلاثية الأبعاد",
-            color = Color(0xFFE6C77A),
-            style = MaterialTheme.typography.titleLarge
-        )
-        Text(text = loadMessage, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-        Scene(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            engine = engine,
-            modelLoader = modelLoader
+        Box(
+            modifier = Modifier.size(292.dp),
+            contentAlignment = Alignment.Center
         ) {
-            character?.let { instance ->
-                ModelNode(modelInstance = instance, scaleToUnits = 1.0f, autoAnimate = true)
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val radius = size.minDimension * 0.39f * pulse
+
+                // Soft golden aura around the orb.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x66FFD76A),
+                            Color(0x22D99A24),
+                            Color.Transparent
+                        ),
+                        center = center,
+                        radius = radius * 1.75f
+                    ),
+                    radius = radius * 1.75f,
+                    center = center
+                )
+
+                // Pearlescent gold sphere with a bright upper-left highlight.
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color(0xFFFFF4C2),
+                            0.20f to Color(0xFFFFD978),
+                            0.52f to Color(0xFFE5A92F),
+                            0.82f to Color(0xFF9B5C12),
+                            1.0f to Color(0xFF4B2B0B)
+                        ),
+                        center = Offset(center.x - radius * 0.34f, center.y - radius * 0.42f),
+                        radius = radius * 1.75f
+                    ),
+                    radius = radius,
+                    center = center
+                )
+
+                // Slow luminous sweep, giving the orb a living voice-assistant feel.
+                drawArc(
+                    color = Color(0x99FFF0B0),
+                    startAngle = shimmer,
+                    sweepAngle = 92f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - radius * 0.91f, center.y - radius * 0.91f),
+                    size = androidx.compose.ui.geometry.Size(radius * 1.82f, radius * 1.82f),
+                    style = Stroke(width = size.minDimension * 0.012f, cap = StrokeCap.Round)
+                )
+                drawCircle(
+                    color = Color(0x55FFF2C4),
+                    radius = radius * 0.88f,
+                    center = center,
+                    style = Stroke(width = size.minDimension * 0.004f)
+                )
             }
         }
         Text(
-            text = "النموذج التجريبي: Cesium Man — CC BY 4.0 — Cesium. يلزم استبداله بشخصية رجل واقعية مخصصة وإضافة تعابير الوجه ومزامنة الشفاه قبل اعتماد النسخة النهائية.",
-            color = Color(0xFFB9B4C7),
-            style = MaterialTheme.typography.bodySmall
+            text = "صديقي",
+            color = Color(0xFFE8BD62),
+            style = MaterialTheme.typography.titleLarge
         )
     }
 }
-
-private const val CHARACTER_MODEL_URL =
-    "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CesiumMan/glTF-Binary/CesiumMan.glb"
