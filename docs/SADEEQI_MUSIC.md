@@ -26,6 +26,14 @@ Updated: 2026-11-14
 
 The integration uses Audius documented track search and stream endpoints. Before public release, review Audius API terms, track-level rights/availability, attribution requirements, rate limits, regional availability and background playback conditions. Do not scrape music sites, bypass DRM or bundle commercial music.
 
+## Quran recitation playback
+
+- Added AlQuran Cloud verse-by-verse audio streaming for a selected surah.
+- Voice command examples: "شغل سورة البقرة من القرآن", "شغل سورة يس", "أوقف التلاوة", "كمل التلاوة", and the usual next/previous/volume commands.
+- The Quran picker lists all 114 surahs and offers four reciter editions in the music screen; the live voice session currently defaults to Mishary Alafasy.
+- Quran audio uses the same Media3 playback session, background service, notification and lock-screen controls as music.
+- Requires internet access. Reciter/edition availability and CDN reachability must be validated on-device; no claim of complete offline Quran audio is made.
+
 ## Data and storage estimates
 
 The local-file player itself adds **0 streaming data** when playing a file already on the device. Selecting files uses document-provider URIs and does not intentionally duplicate audio bytes inside the app. Metadata preferences are small and bounded (history retains up to 50 entries).
