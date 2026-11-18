@@ -33,6 +33,15 @@ class MusicCommandParserTest {
         assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("شغل لي القرآن الكريم"))
     }
 
+    @Test fun parsesRuqyahRequest() {
+        assertEquals(MusicCommand.PlayRuqyah, MusicCommandParser.parse("شغل رقية شرعية"))
+    }
+
+    @Test fun parsesMoodBasedMusicRequests() {
+        assertEquals(MusicCommand.Search("upbeat energetic music"), MusicCommandParser.parse("شغل شيء حماسي"))
+        assertEquals(MusicCommand.Search("calm relaxing instrumental music"), MusicCommandParser.parse("خلينا نروق"))
+    }
+
     @Test fun ignoresUnrelatedText() {
         assertEquals(null, MusicCommandParser.parse("ما حالة الطقس اليوم"))
     }
