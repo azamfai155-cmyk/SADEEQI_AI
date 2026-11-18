@@ -49,7 +49,8 @@ object MusicCommandParser {
                 .any { text.contains(it) && listOf("وقف", "توقف", "اطف", "اطفي", "اطفئ", "اقفل", "اوقف", "ايقاف").any(text::contains) }
         ) return MusicCommand.Pause
 
-        if (listOf("كمل", "استأنف", "استأنف", "تابع", "اكمل", "واصل").any { text == normalize(it) } ||
+        if (listOf("كمل", "استأنف", "تابع", "اكمل", "واصل", "استمر")
+                .map(::normalize).any { text == it || text.startsWith("$it ") } ||
             text in listOf("شغل الموسيقي", "تشغيل الموسيقي", "استئناف الموسيقي")
         ) return MusicCommand.Resume
 
