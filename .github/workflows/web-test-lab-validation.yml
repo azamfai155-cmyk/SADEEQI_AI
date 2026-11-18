@@ -80,3 +80,23 @@ jobs:
           }
           console.log('Development studio JavaScript syntax and editor controls validated.');
           NODE
+
+      - name: Validate Android parity lab JavaScript and feature coverage
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/android-parity.html', 'utf8');
+          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected one Android parity script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['chat', 'voice', 'trading', 'music', 'social', 'memory', 'tools', 'settings', 'messages', 'audioPlayer', 'parseDevice', 'calcRisk']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing Android parity module/control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Android parity lab JavaScript and module controls validated.');
+          NODE
