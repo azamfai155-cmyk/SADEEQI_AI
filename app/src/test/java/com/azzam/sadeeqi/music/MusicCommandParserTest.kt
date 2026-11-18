@@ -25,6 +25,10 @@ class MusicCommandParserTest {
         assertEquals(MusicCommand.PlayQuran(2, "البقرة"), MusicCommandParser.parse("شغل سورة البقرة من القرآن"))
     }
 
+    @Test fun parsesDirectSurahPlayCommand() {
+        assertEquals(MusicCommand.PlayQuran(36, "يس"), MusicCommandParser.parse("شغل سورة يس"))
+    }
+
     @Test fun opensQuranPickerWithoutSurah() {
         assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("شغل لي القرآن الكريم"))
     }
