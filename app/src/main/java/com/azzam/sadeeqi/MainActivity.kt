@@ -434,6 +434,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        fun playRuqyah() {
+            selectedTab = "موسيقى"
+            musicNotice = "جاري تجهيز آيات الرقية الشرعية…"
+            scope.launch {
+                try {
+                    val tracks = withContext(Dispatchers.IO) {
+                        RuqyahRepository(quranRepository).loadPlaylist(selectedQuranReciter)
+                    }
+                    check(tracks.isNotEmpty()) { "لم تتوفر روابط آيات الرقية حالياً." }
+                    ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                    musicManager.playRemoteQueue(tracks)
+                    musicNotice = "بدأ تشغيل آيات الرقية من القرآن الكريم — ${tracks.first().artist}"
+                } catch (error: Exception) {
+                    musicNotice = "تعذر تشغيل الرقية: ${error.message ?: "تحقق من الإنترنت."}"
+                }
+            }
+        }
         fun searchOnlineMusic(query: String) {
             val cleanQuery = query.trim()
             if (cleanQuery.isBlank()) {
@@ -976,7 +993,7 @@ class MainActivity : ComponentActivity() {
                     }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
-                        Text("بث موسيقى عالمي عبر Audius + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Text("بحث موحد في Audius وOpenverse وWikimedia Commons + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         Text(musicNotice, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(
                             value = remoteSearchQuery,
@@ -1017,6 +1034,12 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        OutlinedButton(
+                            onClick = { playRuqyah() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("۞ تشغيل الرقية الشرعية من القرآن")
+                        }
                         Button(
                             onClick = { searchOnlineMusic(remoteSearchQuery) },
                             enabled = !isSearchingMusic && remoteSearchQuery.isNotBlank(),
@@ -1043,6 +1066,7 @@ class MainActivity : ComponentActivity() {
                                         Text("♫  ${track.title}", color = Color.White, maxLines = 1)
                                         Text(track.artist, color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall, maxLines = 1)
                                         Text("${track.sourceName}${track.license?.let { " · ترخيص $it" } ?: ""}", color = Color(0xFF8F9AA8), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        track.attribution?.let { Text(it, color = Color(0xFF8F9AA8), style = MaterialTheme.typography.labelSmall, maxLines = 2) }
                                     }
                                 }
                             }
