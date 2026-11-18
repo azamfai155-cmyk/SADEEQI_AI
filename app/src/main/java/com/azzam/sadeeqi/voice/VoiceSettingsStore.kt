@@ -35,8 +35,8 @@ class VoiceSettingsStore(context: Context) {
     fun load(): VoiceSettings = VoiceSettings(
         voiceName = prefs.getString(KEY_VOICE, "").orEmpty(),
         languageTag = prefs.getString(KEY_LANGUAGE, "ar-YE").orEmpty(),
-        speechRate = prefs.getFloat(KEY_RATE, 0.96f),
-        pitch = prefs.getFloat(KEY_PITCH, 0.98f),
+        speechRate = prefs.getFloat(KEY_RATE, 0.92f),
+        pitch = prefs.getFloat(KEY_PITCH, 0.90f),
         volume = prefs.getFloat(KEY_VOLUME, 1.0f),
         autoRead = prefs.getBoolean(KEY_AUTO_READ, false)
     ).normalized()
