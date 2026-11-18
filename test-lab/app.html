@@ -93,9 +93,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;padding-top:14px}.sc
 </nav></div>
 <script>
 const $=id=>document.getElementById(id), KEY='sadeeqi-web-app-v1';
-let messages=read('sadeeqi-chat',[{who:'صديقي',body:'أهلاً! أنا صديقي. اكتب رسالتك أو اضغط الميكروفون.'}]), pendingCommand=null, selectedScreen='home';
 const read=(k,d=[])=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch{return d}};
 const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+let messages=read('sadeeqi-chat',[{who:'صديقي',body:'أهلاً! أنا صديقي. اكتب رسالتك أو اضغط الميكروفون.'}]), pendingCommand=null, selectedScreen='home';
 function showAuth(){ $('auth').hidden=false;$('app').hidden=true }
 function showApp(){ $('auth').hidden=true;$('app').hidden=false;drawMessages() }
 $('demo').onclick=()=>{sessionStorage.setItem(KEY,'demo');showApp()};
