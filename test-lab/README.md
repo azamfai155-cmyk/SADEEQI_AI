@@ -1,34 +1,48 @@
 # SADEEQI AI Web Test Lab
 
-An isolated, Arabic RTL browser test harness for early SADEEQI AI development.
+An isolated Arabic RTL browser console for developing and testing the SADEEQI AI experience before porting stable modules to Android.
 
-## Included now
-- Local heuristic intent classification (not an LLM).
-- Simulated task lifecycle with an explicit transition table.
-- Safety checks for approval-gated actions (messages, deletion, purchases).
-- A 12-case automated smoke suite for intent classification, approval gates, and task transitions.
-- Exportable JSON test report.
-- No API keys, backend connection, phone access, external side effects, or persistent storage.
+## Current browser modules
+- Home dashboard and quick-command launcher.
+- Local intent analysis and conversation UI (heuristics only; not an LLM).
+- Browser speech recognition where supported by the browser, microphone permission, and installed language packs.
+- Browser speech synthesis with available device voices.
+- Animated placeholder avatar and local display settings (not a 3D human avatar).
+- Simulated task lifecycle and cancellation.
+- Server health URL checker using GET only; subject to network and CORS restrictions.
+- Tool-category launchers for research, files, vision, reminders, maps, coding, trading, media, Android, and social integrations. These are test placeholders, not connected adapters.
+- Approval gates for messages, deletion, purchases, trading, publishing, and calls.
+- 15 local regression checks and downloadable JSON report.
+- Downloadable event log.
 
 ## Run locally
-Open `index.html` in a modern browser, or serve this directory with any static web server.
+Open `index.html` in a modern browser, or serve this directory with a static web server. For microphone access, use HTTPS or localhost and grant permission.
 
 ## Test workflow
-1. Open the conversation panel and submit sample commands.
-2. Create tasks and run the lifecycle simulation.
-3. Run all automated tests and inspect the pass/fail list.
-4. Export the JSON report for regression tracking.
-5. Exercise each safety check and verify that approval is required.
+1. Open each module from the left navigation.
+2. Test typed commands and quick-command buttons.
+3. Test speech recognition and speech synthesis on a supported browser/device.
+4. Add a public health endpoint URL and run the GET-only connectivity check.
+5. Create, run, and cancel sample tasks.
+6. Exercise all approval gates.
+7. Run the regression suite and export its JSON report.
 
-## Important boundary
-This is still a front-end simulation. It does not call an LLM, persist tasks, invoke real tools, or control Android. A passing browser suite verifies only this isolated demo.
+## Important limitations
+- Conversation classification is local heuristic logic, not a real model response.
+- Voice uses browser-native Web Speech APIs; availability and Arabic voice quality vary by browser/device.
+- Server check is a basic GET health probe only. It does not authenticate, call the model, or connect a database.
+- No backend API, persistent database, provider key, Android bridge, or external tool adapter is currently wired into this static lab.
+- The avatar is a CSS animated placeholder, not a human 3D model, facial rig, or lip-synced character.
+- No real messages, calls, purchases, trades, publishing, deletion, or phone operations are performed.
 
-## Integration phases
-1. Inspect and document the actual backend API contract.
-2. Add authenticated, read-only backend connectivity and health diagnostics.
-3. Add isolated test fixtures and contract tests.
-4. Add allow-listed tool adapters in dry-run mode.
-5. Add approval enforcement and auditable execution tests.
-6. Verify on a physical Android device before porting stable behavior.
+## Integration roadmap
+1. Inspect the repository's actual backend routes and document the API contract.
+2. Add a same-origin server-side proxy with server-only secrets and explicit authentication.
+3. Connect real conversation streaming and backend health diagnostics.
+4. Add durable task API integration and contract tests.
+5. Add allow-listed tool adapters in dry-run mode, then approval-gated execution.
+6. Add secure user/session management, persistence, audit logs, and failure recovery.
+7. Build the 3D human avatar and voice pipeline.
+8. Verify Android-only capabilities on a physical device before packaging the stable modules as the Android app.
 
-Never put provider secrets or service-role keys in browser code. Keep credentials server-side. Do not enable real-world side effects in the test environment.
+Never put provider secrets, database service-role keys, or privileged credentials in browser JavaScript or a public repository. Do not enable real-world side effects without explicit approval and server-side enforcement.
