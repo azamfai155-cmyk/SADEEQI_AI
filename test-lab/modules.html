@@ -34,14 +34,14 @@ const $=id=>document.getElementById(id);
 // Authenticated durable-task connector. Credentials/tokens stay in page memory.
 let taskSession=null, taskTasks=[];
 const taskVal=id=>$(id).value.trim();
-const taskBase=()=>taskVal('taskWorkerUrl').replace(/\\/$/,'');
+const taskBase=()=>{const v=taskVal('taskWorkerUrl');return v.endsWith('/')?v.slice(0,-1):v};
 const taskHeaders=()=>({Authorization:'Bearer '+taskSession.access_token,'Content-Type':'application/json'});
 function taskStatus(message){$('taskAuthStatus').textContent=message}
 function taskAction(message){$('taskActionStatus').textContent=message}
 async function taskSupabaseAuth(mode){
- const base=taskVal('taskSupabaseUrl').replace(/\\/$/,'');
+ const rawBase=taskVal('taskSupabaseUrl'),base=rawBase.endsWith('/')?rawBase.slice(0,-1):rawBase;
  const key=taskVal('taskAnonKey'),email=taskVal('taskEmail'),password=$('taskPassword').value;
- if(!/^https:\\/\\//i.test(base)||!key||!email||!password)throw Error('أدخل رابط Supabase والمفتاح العام والبريد وكلمة المرور.');
+ if(!base||new URL(base).protocol!=='https:'||!key||!email||!password)throw Error('أدخل رابط Supabase https والمفتاح العام والبريد وكلمة المرور.');
  const response=await fetch(base+'/auth/v1/'+(mode==='signup'?'signup':'token?grant_type=password'),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
  const data=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(data.msg||data.message||data.error_description||data.error||'فشل تسجيل الدخول');
@@ -85,7 +85,7 @@ $('taskHealth').onclick=async()=>{try{const r=await fetch(taskBase()+'/health');
 $('taskRefresh').onclick=async()=>{try{await refreshDurableTasks()}catch(e){taskAction(e.message)}};
 $('taskCreate').onclick=async()=>{try{
  const title=taskVal('newTaskTitle'),goal=taskVal('newTaskGoal');
- const steps= $('newTaskSteps').value.split('\\n').map(x=>x.trim()).filter(Boolean).map((title,i)=>({id:'step-'+(i+1),title}));
+ const steps= $('newTaskSteps').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((title,i)=>({id:'step-'+(i+1),title}));
  const d=await taskApi('/v1/tasks',{method:'POST',body:{title,goal,steps}});
  taskTasks.unshift(d.task);renderDurableTasks();taskAction('تم حفظ المهمة في قاعدة البيانات: '+d.task.id);
 }catch(e){taskAction('لم يتم حفظ المهمة: '+e.message)}};
