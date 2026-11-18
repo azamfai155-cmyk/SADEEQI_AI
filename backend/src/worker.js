@@ -247,7 +247,7 @@ export async function handleRequest(request, env) {
   }
 
   if (url.pathname === '/v1/guest-session' && request.method === 'POST') {
-    const supabaseUrl = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+    const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
     const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_PUBLIC_KEY || '';
     if (!supabaseUrl || !anonKey) return json({ error: 'Guest sign-in is not configured on the server.' }, 503, cors);
     try {
