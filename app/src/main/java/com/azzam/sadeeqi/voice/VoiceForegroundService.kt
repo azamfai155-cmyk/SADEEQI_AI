@@ -92,7 +92,8 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message -> updateNotification(message) },
+            { speaking -> sendBroadcast(Intent(ACTION_SPEECH_STATE).setPackage(packageName).putExtra(EXTRA_SPEAKING, speaking)) }
         )
         voice?.listen()
     }
