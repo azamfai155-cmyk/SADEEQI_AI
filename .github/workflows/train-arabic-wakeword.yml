@@ -1,0 +1,78 @@
+name: Train Arabic Sadeeqi Wake Word
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - feature/wakeword-3d-avatar-foundation-2026-11-18
+    paths:
+      - 'training/arabic-wakeword/**'
+      - '.github/workflows/train-arabic-wakeword.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sadeeqi-arabic-wakeword-training
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout SADEEQI_AI
+        uses: actions/checkout@v4
+        with:
+          ref: feature/arabic-wakeword-training-2026-11-18
+          path: sadeeqi
+
+      - name: Checkout open-source trainer
+        uses: actions/checkout@v4
+        with:
+          repository: JeezLuis/wakeword-trainer
+          ref: main
+          path: trainer
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: trainer/package-lock.json
+
+      - name: Install trainer dependencies
+        working-directory: trainer
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+        run: npm install
+
+      - name: Add Arabic wake phrase configuration
+        run: cp sadeeqi/training/arabic-wakeword/sadeeqi.json trainer/configs/sadeeqi.json
+
+      - name: Download training assets
+        working-directory: trainer
+        run: npm run setup
+
+      - name: Generate Arabic training audio
+        working-directory: trainer
+        run: npm run generate -- --config configs/sadeeqi.json --pages 4
+
+      - name: Extract training features
+        working-directory: trainer
+        run: npm run features -- --config configs/sadeeqi.json
+
+      - name: Train ONNX model
+        working-directory: trainer
+        run: npm run train -- --config configs/sadeeqi.json
+
+      - name: Upload model and evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sadeeqi-arabic-wakeword-model
+          path: |
+            trainer/out/sadeeqi_ar.onnx
+            trainer/out/sadeeqi_ar.report.json
+          if-no-files-found: warn
+          retention-days: 14
