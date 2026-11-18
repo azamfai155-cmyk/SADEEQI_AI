@@ -26,7 +26,7 @@ jobs:
           node --input-type=commonjs <<'NODE'
           const fs = require('node:fs');
           const html = fs.readFileSync('test-lab/index.html', 'utf8');
-          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
           if (matches.length !== 1) {
             console.error(`Expected exactly one inline script, found ${matches.length}`);
             process.exit(1);
