@@ -30,6 +30,7 @@
 </div></div></main><footer>SADEEQI AI · لوحة الوحدات · نسخة اختبارية مستقلة</footer>
 <script>
 
+const $=id=>document.getElementById(id);
 // Authenticated durable-task connector. Credentials/tokens stay in page memory.
 let taskSession=null, taskTasks=[];
 const taskVal=id=>$(id).value.trim();
@@ -88,7 +89,7 @@ $('taskCreate').onclick=async()=>{try{
  const d=await taskApi('/v1/tasks',{method:'POST',body:{title,goal,steps}});
  taskTasks.unshift(d.task);renderDurableTasks();taskAction('تم حفظ المهمة في قاعدة البيانات: '+d.task.id);
 }catch(e){taskAction('لم يتم حفظ المهمة: '+e.message)}};
-const $=id=>document.getElementById(id);document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));$(b.dataset.page).classList.add('active');b.classList.add('active')});
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));$(b.dataset.page).classList.add('active');b.classList.add('active')});
 const modules=[['المحادثة والأوامر','تحليل النية، تخطيط الخطوات، محادثة مع الخادم','جزئي'],['الصوت','التعرف على الكلام، TTS، إعدادات اللغة والسرعة والحدة','تجريبي بالمتصفح'],['الشخصية ثلاثية الأبعاد','عارض الشخصية والوجه ومزامنة الشفاه','غير منفذ'],['التحكم بالهاتف','فتح تطبيق، كاميرا، إعدادات، صوت، منبه','Android فقط'],['الذاكرة','تخزين مشفر، بحث، نسخ احتياطي واستعادة','Android فقط'],['الموسيقى','تشغيل، بحث، طابور، مفضلة وسجل','Android جزئي'],['SOCIAL HUB','حالة 15 منصة وربط OAuth','الربط غير مكتمل'],['التداول','مكتبة دروس، مخاطرة، R:R، إحصاء Backtest','الحاسبات محلية'],['المهام والخادم','مهام مستديمة، مصادقة، موافقات وAI API','Backend جزئي']];
 $('moduleCards').innerHTML=modules.map(m=>'<div class="module"><h3>'+m[0]+'</h3><p>'+m[1]+'</p><span class="tag">'+m[2]+'</span></div>').join('');
 const norm=s=>s.trim().toLowerCase().replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[!！؟?،,.]+/g,' ').replace(/\s+/g,' ');
