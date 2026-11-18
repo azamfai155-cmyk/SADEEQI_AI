@@ -1092,7 +1092,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                                 Text(musicState.title, color = Color.White, style = MaterialTheme.typography.titleLarge, maxLines = 2)
-                                Text(if (musicState.isPlaying) "يعمل الآن" else "متوقف مؤقتاً", color = Color(0xFFC7B8E8))
+                                Text(
+                                    musicState.errorMessage ?: if (musicState.isPlaying) "يعمل الآن" else "متوقف مؤقتاً",
+                                    color = if (musicState.errorMessage != null) Color(0xFFFF8A80) else Color(0xFFC7B8E8)
+                                )
                                 val duration = musicState.durationMs.coerceAtLeast(1L)
                                 Slider(
                                     value = musicState.positionMs.coerceIn(0L, duration).toFloat(),
