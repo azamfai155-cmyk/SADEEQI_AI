@@ -42,6 +42,14 @@ class MusicCommandParserTest {
         assertEquals(MusicCommand.Search("calm relaxing instrumental music"), MusicCommandParser.parse("خلينا نروق"))
     }
 
+    @Test fun doesNotTreatEveryMoodMentionAsMusicCommand() {
+        assertEquals(null, MusicCommandParser.parse("أنا محتاج روقان اليوم"))
+    }
+
+    @Test fun parsesRelaxingMusicRequest() {
+        assertEquals(MusicCommand.Search("calm relaxing instrumental music"), MusicCommandParser.parse("شغل لي أغنية هادئة"))
+    }
+
     @Test fun ignoresUnrelatedText() {
         assertEquals(null, MusicCommandParser.parse("ما حالة الطقس اليوم"))
     }
