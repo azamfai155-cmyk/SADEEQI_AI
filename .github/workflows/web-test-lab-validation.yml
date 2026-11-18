@@ -1,0 +1,42 @@
+name: SADEEQI Web Test Lab Validation
+
+on:
+  pull_request:
+    paths:
+      - "test-lab/**"
+      - ".github/workflows/web-test-lab-validation.yml"
+  push:
+    branches:
+      - "feature/web-test-lab-2026-11-18"
+    paths:
+      - "test-lab/**"
+      - ".github/workflows/web-test-lab-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Validate embedded browser JavaScript syntax
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/index.html', 'utf8');
+          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected exactly one inline script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const requiredId of ['realChatToggle', 'connectChat', 'signIn', 'signUp', 'runTests']) {
+            if (!html.includes(`id="${requiredId}"`)) {
+              console.error(`Missing required test-lab control: ${requiredId}`);
+              process.exit(1);
+            }
+          }
+          console.log('Web Test Lab JavaScript syntax and connector controls validated.');
+          NODE
