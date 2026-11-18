@@ -21,7 +21,7 @@ Updated: 2026-11-14
 - Added Arabic text search in the SADEEQI MUSIC screen.
 - Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; the first available streamable result is queued.
 - Read-only search uses the public API mode and an app_name identifier; an Audius API key can be added later if higher rate limits are needed.
-- The catalogue is an open, creator-uploaded catalogue, not a complete catalogue of mainstream commercial releases. Each track's availability and rights are governed by its creator/platform terms. Do not describe it as every song in the world.
+- The catalogue is an open, creator-uploaded catalogue, not a complete catalogue of mainstream commercial releases. If no playable Audius result is found in a voice session, the app opens YouTube Music search results for the requested song; the user selects the licensed result there. This fallback does not autoplay or embed YouTube playback. Each track's availability and rights are governed by its creator/platform terms. Do not describe it as every song in the world.
 - Network playback requires internet access. Data-saver mode is currently a preference only; adaptive bitrate selection is not implemented.
 
 The integration uses Audius documented track search and stream endpoints. Before public release, review Audius API terms, track-level rights/availability, attribution requirements, rate limits, regional availability and background playback conditions. Do not scrape music sites, bypass DRM or bundle commercial music.
