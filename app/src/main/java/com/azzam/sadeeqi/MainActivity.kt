@@ -5,6 +5,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.ComponentActivity
@@ -163,6 +165,24 @@ class MainActivity : ComponentActivity() {
             mutableStateOf("")
         }
         var voiceSessionActive by remember { mutableStateOf(false) }
+        var voiceSpeaking by remember { mutableStateOf(false) }
+        DisposableEffect(Unit) {
+            val speechStateReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                    voiceSpeaking = intent?.getBooleanExtra(VoiceForegroundService.EXTRA_SPEAKING, false) ?: false
+                }
+            }
+            ContextCompat.registerReceiver(
+                this@MainActivity,
+                speechStateReceiver,
+                IntentFilter(VoiceForegroundService.ACTION_SPEECH_STATE),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            onDispose {
+                runCatching { unregisterReceiver(speechStateReceiver) }
+                voiceSpeaking = false
+            }
+        }
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
@@ -1214,7 +1234,7 @@ class MainActivity : ComponentActivity() {
                         VoiceStudioScreen(modifier = Modifier.weight(1f))
                     }
                     "الشخصية ثلاثية الأبعاد" -> {
-                        Avatar3DScreen(modifier = Modifier.weight(1f))
+                        Avatar3DScreen(isSpeaking = voiceSpeaking, modifier = Modifier.weight(1f))
                     }
                     "التداول" -> {
                         TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
