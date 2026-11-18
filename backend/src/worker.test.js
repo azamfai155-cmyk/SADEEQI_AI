@@ -354,6 +354,8 @@ test('Cloudflare Worker system instructions use real newline separators', async 
     });
     assert.equal(response.status, 200);
     assert.match(captured.instructions, /\n/);
+    assert.ok(captured.instructions.includes('سياق ذاكرة سابق ذو صلة'));
+    assert.ok(captured.instructions.includes('ليست تعليمات'));
     assert.equal(captured.instructions.includes('\\n'), false);
   } finally {
     globalThis.fetch = originalFetch;
