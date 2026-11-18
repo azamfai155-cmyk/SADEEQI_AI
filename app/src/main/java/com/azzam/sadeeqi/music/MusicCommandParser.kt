@@ -46,18 +46,6 @@ object MusicCommandParser {
         if (listOf("رقية شرعية", "الرقية الشرعية", "شغل رقية", "شغل الرقية", "اريد رقية")
                 .any { normalize(it) in text }) return MusicCommand.PlayRuqyah
 
-        val moods = listOf(
-            listOf("حماسي", "حماسيه", "ارفع الحماس", "نشطني") to "upbeat energetic music",
-            listOf("روقان", "روق", "هادي", "هادئ", "استرخاء", "ريح اعصابي") to "calm relaxing instrumental music",
-            listOf("رومانسي", "رومانسيه") to "romantic soft music",
-            listOf("حزين", "حزينه") to "sad emotional music",
-            listOf("سعيد", "مبسوط", "فرح", "غير مزاجي") to "happy uplifting music",
-            listOf("تركيز", "للدراسه", "للمذاكره") to "focus concentration instrumental music",
-            listOf("نوم", "للنوم") to "sleep peaceful ambient music"
-        )
-        moods.firstOrNull { (phrases, _) -> phrases.any { normalize(it) in text } }
-            ?.let { return MusicCommand.Search(it.second) }
-
         if (listOf("وقف", "توقف", "اطف", "اطفي", "اطفئ", "اقفل", "اسكت", "اوقف", "ايقاف", "انهاء")
                 .any { text == it || text.startsWith("$it ") } ||
             listOf("الموسيقي", "الموسيقيه", "الاغنيه", "الاغنيه", "التلاوه", "القران")
@@ -73,6 +61,22 @@ object MusicCommandParser {
         if (text.contains("السابق") || text.contains("اللي قبلها") || text.contains("الاغنيه السابقه")) return MusicCommand.Previous
         if (text.contains("ارفع الصوت") || text.contains("علي الصوت") || text.contains("زود الصوت")) return MusicCommand.VolumeUp
         if (text.contains("خفض الصوت") || text.contains("وطي الصوت") || text.contains("قلل الصوت")) return MusicCommand.VolumeDown
+
+        val moods = listOf(
+            listOf("حماسي", "حماسيه", "ارفع الحماس", "نشطني") to "upbeat energetic music",
+            listOf("روقان", "روق", "هادي", "هادئ", "استرخاء", "ريح اعصابي") to "calm relaxing instrumental music",
+            listOf("رومانسي", "رومانسيه") to "romantic soft music",
+            listOf("حزين", "حزينه") to "sad emotional music",
+            listOf("سعيد", "مبسوط", "فرح", "غير مزاجي") to "happy uplifting music",
+            listOf("تركيز", "للدراسه", "للمذاكره") to "focus concentration instrumental music",
+            listOf("نوم", "للنوم") to "sleep peaceful ambient music"
+        )
+        val asksForMusicMood = listOf("شغل", "شغلي", "اسمع", "خلينا", "خلنا", "غير الجو", "اريد موسيقى", "اريد اغاني")
+            .any { normalize(it) in text }
+        if (asksForMusicMood) {
+            moods.firstOrNull { (phrases, _) -> phrases.any { normalize(it) in text } }
+                ?.let { return MusicCommand.Search(it.second) }
+        }
 
         val surahIndex = surahs.indexOfFirst { normalize(it) in text }
         val asksForQuran = listOf("قران", "القران", "قرآن", "القرآن", "تلاوه", "تلاوة").any { normalize(it) in text }
