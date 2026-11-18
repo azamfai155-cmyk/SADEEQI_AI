@@ -39,6 +39,8 @@ class VoiceForegroundService : Service() {
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
     private var started = false
+    // Explicitly user-started; visible microphone foreground session only.
+    private var wakeWordArmed = false
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -47,18 +49,25 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                wakeWordArmed = false
                 stopSession()
                 return START_NOT_STICKY
             }
+            ACTION_WAKE_WORD -> {
+                wakeWordArmed = true
+                startSession()
+                updateNotification("وضع نداء صديقي نشط — قل: صديقي")
+            }
             ACTION_INTERRUPT -> {
+                wakeWordArmed = false
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
             ACTION_MUTE -> {
                 voice?.setMicrophoneMuted(intent.getBooleanExtra(EXTRA_MUTED, true))
             }
-            ACTION_DICTATE -> startDictationSession()
-            ACTION_START, null -> startSession()
+            ACTION_DICTATE -> { wakeWordArmed = false; startDictationSession() }
+            ACTION_START, null -> { wakeWordArmed = false; startSession() }
         }
         return START_NOT_STICKY
     }
@@ -149,6 +158,19 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+
+        if (wakeWordArmed) {
+            if (WakeWordMatcher.matches(spoken)) {
+                wakeWordArmed = false
+                updateNotification("تم التعرف على كلمة صديقي — يمكنك التحدث الآن")
+                voice?.speak("نعم عزام، أنا معك. تفضل.")
+            } else {
+                // SpeechRecognizer is only used inside this user-started foreground session.
+                // It is not an offline hotword engine and stops when the session is stopped.
+                voice?.resumeAfterTurnFailure()
+            }
+            return
+        }
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -345,6 +367,7 @@ class VoiceForegroundService : Service() {
     }
 
     private fun stopSession() {
+        wakeWordArmed = false
         started = false
         pendingPhoneCommand = null
         voice?.stopConversation()
@@ -371,6 +394,7 @@ class VoiceForegroundService : Service() {
 
     companion object {
         const val ACTION_START = "com.azzam.sadeeqi.voice.START"
+        const val ACTION_WAKE_WORD = "com.azzam.sadeeqi.voice.WAKE_WORD"
         const val ACTION_DICTATE = "com.azzam.sadeeqi.voice.DICTATE"
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
