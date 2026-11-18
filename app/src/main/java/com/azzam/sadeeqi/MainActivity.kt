@@ -35,6 +35,7 @@ import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
+import com.azzam.sadeeqi.memory.MemoryRecall
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
 import com.azzam.sadeeqi.music.MusicPlayerManager
@@ -331,7 +332,13 @@ class MainActivity : ComponentActivity() {
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        val recalledMemories = runCatching { memory.recent(200) }.getOrDefault(emptyList())
+                        val relevantMemories = MemoryRecall.select(
+                            records = recalledMemories,
+                            query = effectiveQuestion
+                        )
+                        val contextualTurns = MemoryRecall.attachToLatestUserTurn(turns, relevantMemories)
+                        gateway.reply(contextualTurns, imageForRequest)
                     }
                     messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
