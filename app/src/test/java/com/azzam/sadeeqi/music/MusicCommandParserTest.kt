@@ -31,6 +31,8 @@ class MusicCommandParserTest {
 
     @Test fun opensQuranPickerWithoutSurah() {
         assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("شغل لي القرآن الكريم"))
+        assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("افتح القرآن الكريم"))
+        assertEquals(MusicCommand.OpenQuran, MusicCommandParser.parse("افتح المصحف"))
     }
 
     @Test fun parsesRuqyahRequest() {
