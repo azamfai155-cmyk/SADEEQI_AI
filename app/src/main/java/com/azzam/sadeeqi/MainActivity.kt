@@ -71,6 +71,18 @@ private fun formatDiagnosticBytes(value: Long?): String {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_OPEN_VOICE_ORB = "com.azzam.sadeeqi.OPEN_VOICE_ORB"
+    }
+
+    private val openVoiceOrbRequested = mutableStateOf(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_VOICE_ORB, false)) openVoiceOrbRequested.value = true
+    }
+
     private var requestedVoiceAction: String = VoiceForegroundService.ACTION_START
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
@@ -89,6 +101,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openVoiceOrbRequested.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE_ORB, false)
+        if (openVoiceOrbRequested.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
 
         if (EncryptedSessionStore.accessToken(this).isNullOrBlank()) {
             startActivity(Intent(this, AuthActivity::class.java))
@@ -193,7 +210,13 @@ class MainActivity : ComponentActivity() {
             onDispose { messageReader.stop(); messageReader.shutdown() }
         }
         var microphoneMuted by remember { mutableStateOf(false) }
-        var selectedTab by remember { mutableStateOf("الرئيسية") }
+        var selectedTab by remember { mutableStateOf(if (openVoiceOrbRequested.value) "الشخصية ثلاثية الأبعاد" else "الرئيسية") }
+        LaunchedEffect(openVoiceOrbRequested.value) {
+            if (openVoiceOrbRequested.value) {
+                selectedTab = "الشخصية ثلاثية الأبعاد"
+                openVoiceOrbRequested.value = false
+            }
+        }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
         val navigationItems = listOf("الرئيسية", "استوديو الصوت", "الشخصية ثلاثية الأبعاد", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
