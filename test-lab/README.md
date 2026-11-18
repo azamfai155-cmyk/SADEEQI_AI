@@ -10,6 +10,7 @@ An isolated Arabic RTL browser console for developing and testing the SADEEQI AI
 - Animated placeholder avatar and local display settings (not a 3D human avatar).
 - Simulated task lifecycle and cancellation.
 - Server health URL checker using GET only; subject to network and CORS restrictions.
+- Optional Supabase Auth sign-in/sign-up and direct authenticated chat with the existing Cloudflare Worker (`POST /v1/chat`); disabled until explicitly configured and enabled.
 - Tool-category launchers for research, files, vision, reminders, maps, coding, trading, media, Android, and social integrations. These are test placeholders, not connected adapters.
 - Approval gates for messages, deletion, purchases, trading, publishing, and calls.
 - 15 local regression checks and downloadable JSON report.
@@ -30,16 +31,13 @@ Open `index.html` in a modern browser, or serve this directory with a static web
 ## Important limitations
 - Conversation classification is local heuristic logic, not a real model response.
 - Voice uses browser-native Web Speech APIs; availability and Arabic voice quality vary by browser/device.
-- Server check is a basic GET health probe only. It does not authenticate, call the model, or connect a database.
-- No backend API, persistent database, provider key, Android bridge, or external tool adapter is currently wired into this static lab.
+- The standalone server checker is a GET health probe. The separate optional Worker connector authenticates through Supabase and can call the configured model through the existing Worker when server credentials, CORS, and provider settings are valid.
+- No provider key or privileged database key is exposed to browser code. The optional chat connector does not add durable task storage, Android access, or external tool adapters.
 - The avatar is a CSS animated placeholder, not a human 3D model, facial rig, or lip-synced character.
 - No real messages, calls, purchases, trades, publishing, deletion, or phone operations are performed.
 
 ## Integration roadmap
-1. Inspect the repository's actual backend routes and document the API contract.
-2. Add a same-origin server-side proxy with server-only secrets and explicit authentication.
-3. Connect real conversation streaming and backend health diagnostics.
-4. Add durable task API integration and contract tests.
+1. Add durable task API integration and contract tests.
 5. Add allow-listed tool adapters in dry-run mode, then approval-gated execution.
 6. Add secure user/session management, persistence, audit logs, and failure recovery.
 7. Build the 3D human avatar and voice pipeline.
@@ -47,7 +45,7 @@ Open `index.html` in a modern browser, or serve this directory with a static web
 
 Never put provider secrets, database service-role keys, or privileged credentials in browser JavaScript or a public repository. Do not enable real-world side effects without explicit approval and server-side enforcement.
 
-## Live backend connection (new)
+## Live backend connection
 The lab now includes an optional direct connector to the existing Cloudflare Worker:
 - Configure the Supabase project URL and public anon/publishable key in the browser.
 - Sign in or sign up through Supabase Auth REST endpoints. The password is cleared after successful sign-in; the access token is kept in page memory only and is not written to localStorage.
