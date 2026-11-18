@@ -13,10 +13,10 @@ Updated: 2026-11-14
 - Arabic voice-command parsing for pause/resume, next/previous, volume up/down and music-search requests. Search phrases are detected but are not falsely reported as successful catalogue searches.
 - Unit tests for the Arabic command parser, included in the Android CI test task.
 
-## Free music catalogue aggregation — Audius + Openverse adapters added
+## Free music catalogue aggregation — Audius + Openverse + Wikimedia Commons adapters added
 
 - Added an Audius read-only catalogue adapter using the documented REST API.
-- Added an Openverse audio-search adapter for openly licensed recordings. It retains creator, source, landing page, license and attribution metadata, and currently accepts CC0, CC BY, CC BY-SA and Public Domain Mark records.
+- Added an Openverse audio-search adapter for openly licensed recordings. Openverse indexes multiple third-party providers (including Jamendo records where indexed), so this broadens discovery without separately embedding each provider SDK.\n- Added a Wikimedia Commons audio adapter using the official MediaWiki API; it filters for audio media and excludes non-commercial/no-derivatives licenses. It retains creator, source, landing page, license and attribution metadata, and currently accepts CC0, CC BY, CC BY-SA and Public Domain Mark records.
 - Added a catalogue aggregator that isolates provider failures, combines results and removes duplicate title/artist pairs. Voice and in-app text searches now use the aggregator.
 - Added remote track search, artist/title metadata, artwork metadata and stream URL resolution.
 - Added remote Media3 queue playback alongside local file playback.
@@ -24,7 +24,7 @@ Updated: 2026-11-14
 - Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; results from the integrated free catalogues are queued.
 - Added basic mood intents such as energetic, relaxing, romantic, sad, happy, focus and sleep; these are translated into catalogue search terms, not inferred from biometric or emotion analysis.
 - Read-only search uses the public API mode and an app_name identifier; an Audius API key can be added later if higher rate limits are needed.
-- The combined catalogues are not a complete catalogue of mainstream commercial releases, global trends or every remix. Openverse results are filtered to supported reuse-friendly license identifiers and retain attribution/landing-page data. Audius tracks remain subject to creator/platform terms and regional availability. Do not describe the app as containing every song in the world. The YouTube Music fallback was removed from the voice search path.
+- The combined catalogues (Audius, Openverse-indexed providers and Wikimedia Commons) are not a complete catalogue of mainstream commercial releases, global trends or every remix. Openverse results are filtered to supported reuse-friendly license identifiers and retain attribution/landing-page data. Audius tracks remain subject to creator/platform terms and regional availability. Do not describe the app as containing every song in the world. The YouTube Music fallback was removed from the voice search path.
 - Network playback requires internet access. Data-saver mode is currently a preference only; adaptive bitrate selection is not implemented.
 
 The integration uses Audius documented track search and stream endpoints. Before public release, review Audius API terms, track-level rights/availability, attribution requirements, rate limits, regional availability and background playback conditions. Do not scrape music sites, bypass DRM or bundle commercial music.
@@ -77,7 +77,7 @@ No verified before/after APK artifact measurement or physical-device memory prof
 ## Known gaps and next integrations
 
 - Jamendo requires a developer client ID and its free API terms distinguish non-commercial from commercial use; it is not enabled until credentials and the app's distribution/monetization model are reviewed.
-- Internet Archive, Wikimedia Commons, Freesound and other catalogues require source-specific playback/redistribution and license validation before enabling direct playback.
+- Internet Archive, Freesound and other catalogues require source-specific playback/redistribution and license validation before enabling direct playback. Wikimedia Commons audio search is now enabled with conservative license filtering.
 - Openverse indexes openly licensed media, not a complete trending chart or a substitute for licensed commercial streaming services.
 - No global all-songs guarantee is technically or legally possible with free-only sources.
 - Music results now display provider and license identifiers; detailed attribution and license links remain retained in the track model and should be added to a dedicated details view before public release.
