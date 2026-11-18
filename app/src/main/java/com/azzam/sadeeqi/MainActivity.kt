@@ -993,7 +993,7 @@ class MainActivity : ComponentActivity() {
                     }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
-                        Text("بحث موحد في Audius وOpenverse وWikimedia Commons + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
+                        Text("بحث موحد في Audius وOpenverse وWikimedia Commons وInternet Archive + ملفاتك المحلية", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         Text(musicNotice, color = Color(0xFFE6C77A), style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(
                             value = remoteSearchQuery,
