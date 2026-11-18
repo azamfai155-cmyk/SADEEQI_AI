@@ -177,6 +177,7 @@ class MainActivity : ComponentActivity() {
         var diagnosticsBaseline by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
         var diagnosticsLatest by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
         var diagnosticsBusy by remember { mutableStateOf(false) }
+        var diagnosticsError by remember { mutableStateOf<String?>(null) }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -216,7 +217,7 @@ class MainActivity : ComponentActivity() {
                     diagnosticsLatest = snapshot
                     if (asBaseline) diagnosticsBaseline = snapshot
                 }.onFailure { error ->
-                    status = "تعذر التقاط القياسات: ${error.message ?: "خطأ غير معروف"}"
+                    diagnosticsError = "تعذر التقاط القياسات: ${error.message ?: "خطأ غير معروف"}"
                 }
                 diagnosticsBusy = false
             }
@@ -902,6 +903,7 @@ class MainActivity : ComponentActivity() {
                             Button(enabled = !diagnosticsBusy, onClick = { captureDiagnostics(false) }, modifier = Modifier.weight(1f)) { Text("قراءة حالية") }
                         }
                         if (diagnosticsBusy) Text("جارٍ التقاط القياسات…", color = Color(0xFFE6C77A))
+                        diagnosticsError?.let { Text(it, color = Color(0xFFFFB4AB)) }
                         val snapshot = diagnosticsLatest
                         if (snapshot != null) {
                             Text("وقت القياس: ${snapshot.capturedAtEpochMs}", color = Color(0xFFB9B4C7))
