@@ -6,6 +6,14 @@ Arabic RTL browser workspace for prototyping, testing, and reviewing SADEEQI AI 
 - `index.html`: main test console — chat UI, optional authenticated Worker chat, browser voice, simulated tasks, server health, approvals, event log, and local regression tests.
 - `modules.html`: consolidated Android feature dashboard — command parsing, voice settings, phone command previews, encrypted-memory architecture, music parser, SOCIAL HUB status, trading calculators, durable task API, and code architecture.
 - `dev-studio.html`: isolated feature workbench — HTML/CSS/JavaScript editor, sandboxed live preview, syntax checks, local drafts, JSON import/export, and standalone HTML export.
+- `android-parity.html`: browser recreation of the Android 1.5.1 navigation and testable workflows — chat UI, browser voice, device-command parser, local memory demo, music player, SMC/trading calculators, SOCIAL HUB readiness, search, and settings.
+
+## Android parity boundaries
+- The parity lab is rebuilt from the Android Kotlin source; the APK is a compiled artifact and is not a source-code bundle.
+- Android-only features (Room + Keystore encryption, foreground voice service, Media3 background playback, Android Intents, and authenticated device session storage) are represented as explicit web test boundaries, not falsely claimed as browser implementations.
+- Browser memory uses LocalStorage and is not encrypted. Do not store secrets or sensitive data in it.
+- Device commands are parsed and confirmation-tested only; the web page does not execute phone actions.
+- Social provider status is informational. OAuth and publishing remain disabled until provider credentials, secure token storage, and user sessions are implemented.
 
 ## Development and release workflow
 1. Prototype a browser feature in `dev-studio.html`.
