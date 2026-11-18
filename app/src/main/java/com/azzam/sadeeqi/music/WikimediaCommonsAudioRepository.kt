@@ -16,11 +16,11 @@ class WikimediaCommonsAudioRepository {
         val url = Uri.parse(API).buildUpon()
             .appendQueryParameter("action", "query")
             .appendQueryParameter("generator", "search")
-            .appendQueryParameter("gsrsearch", "${query.trim()} filemime:audio")
+            .appendQueryParameter("gsrsearch", query.trim())
             .appendQueryParameter("gsrnamespace", "6")
             .appendQueryParameter("gsrlimit", limit.coerceIn(1, 30).toString())
             .appendQueryParameter("prop", "imageinfo")
-            .appendQueryParameter("iiprop", "url|extmetadata")
+            .appendQueryParameter("iiprop", "url|mediatype|extmetadata")
             .appendQueryParameter("iiextmetadatafilter", "LicenseShortName|LicenseUrl|UsageTerms|Artist|Credit")
             .appendQueryParameter("format", "json")
             .appendQueryParameter("formatversion", "2")
@@ -37,6 +37,7 @@ class WikimediaCommonsAudioRepository {
                 for (index in 0 until pages.length()) {
                     val page = pages.optJSONObject(index) ?: continue
                     val info = page.optJSONArray("imageinfo")?.optJSONObject(0) ?: continue
+                    if (info.optString("mediatype") != "AUDIO") continue
                     val mediaUrl = info.optString("url").takeIf { it.startsWith("https://") } ?: continue
                     val metadata = info.optJSONObject("extmetadata") ?: continue
                     fun field(name: String): String? = metadata.optJSONObject(name)?.optString("value")
