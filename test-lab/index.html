@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101522"><title>SADEEQI AI — مختبر التجارب</title>
+<style>
+:root{color-scheme:dark;--bg:#0c111b;--panel:#151e2d;--line:#28364a;--muted:#9aa9bc;--gold:#e7b85c;--green:#5bd6a0;--red:#ff7777}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% -20%,#26334b 0,transparent 45%),var(--bg);color:#eef3fa;font:15px system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:22px max(18px,calc((100% - 1120px)/2));border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px}.orb{width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff0b8,#e7b85c 35%,#8b5b20 72%);box-shadow:0 0 28px #e7b85c55}
+h1{font-size:19px;margin:0}small,.muted{color:var(--muted)}main{max-width:1120px;margin:24px auto;padding:0 16px}
+.notice{border:1px solid #80652e;background:#302817;color:#f5d99b;padding:12px 15px;border-radius:12px;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}.panel{background:#131c2a;border:1px solid var(--line);border-radius:16px;padding:18px;min-width:0}
+h2{font-size:16px;margin:0 0 14px}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.status{font-size:12px;padding:5px 9px;border-radius:20px;background:#273246;color:#c6d3e3}
+button,input,textarea{font:inherit}button{border:1px solid var(--line);background:#202c3e;color:#edf3fa;border-radius:10px;padding:10px 13px;cursor:pointer}button.primary{background:#b88735;color:#15110a;border-color:#d4a44d;font-weight:700}button:disabled{opacity:.45;cursor:not-allowed}
+.chat{height:290px;overflow:auto;background:#0e1622;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 12px;border-radius:12px;line-height:1.65;white-space:pre-wrap}.user{align-self:flex-start;background:#27364c}.assistant{align-self:flex-end;background:#263a34;border:1px solid #35594b}
+textarea,input{width:100%;background:#0d1520;border:1px solid var(--line);color:#fff;border-radius:10px;padding:11px;outline:none}textarea{min-height:70px;resize:vertical}
+.task{padding:12px;border:1px solid var(--line);border-radius:12px;margin:9px 0}.task strong{display:block;margin-bottom:5px}.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.steps span{font-size:11px;background:#202c3e;padding:5px 8px;border-radius:8px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metric{background:#0e1622;border:1px solid var(--line);padding:12px;border-radius:11px}.metric b{display:block;font-size:21px;color:var(--gold)}
+.log{font:12px/1.7 ui-monospace,monospace;color:#a9c5b6;white-space:pre-wrap;max-height:190px;overflow:auto;background:#0a111a;border-radius:10px;padding:10px}
+footer{text-align:center;padding:24px;color:var(--muted);font-size:12px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start}.metrics{grid-template-columns:repeat(3,1fr)}}
+</style></head>
+<body>
+<header><div class="brand"><div class="orb"></div><div><h1>SADEEQI AI</h1><small>مختبر التطوير والاختبار</small></div></div><span class="status">بيئة محاكاة آمنة</span></header>
+<main>
+<div class="notice"><b>تنبيه:</b> هذه نسخة اختبار أولية. الأوامر والمهام هنا محاكاة داخل المتصفح فقط؛ لا تتحكم بالهاتف ولا ترسل رسائل ولا تنفّذ عمليات حقيقية.</div>
+<div class="grid">
+<section class="panel"><h2>اختبار المحادثة وفهم الأوامر</h2><div class="row"><span class="status">المحرك: محاكاة محلية</span><span class="status">لا توجد مفاتيح API</span></div>
+<div class="chat" id="chat" aria-live="polite"><div class="msg assistant">أهلاً عزام، أنا صديقي. هذا مختبر تجريبي؛ اكتب أمراً لنختبر تصنيف النية وخطة التنفيذ.</div></div>
+<textarea id="prompt" placeholder="مثال: ابحث عن معلومات حول الذكاء الاصطناعي، ثم لخّصها لي..." aria-label="اكتب أمر الاختبار"></textarea>
+<div class="row" style="margin-top:9px"><button class="primary" id="send">حلّل الأمر</button><button id="clear">مسح المحادثة</button></div>
+</section>
+<section class="panel"><h2>حالة نظام المهام</h2><div class="metrics"><div class="metric"><b id="total">0</b><small>إجمالي</small></div><div class="metric"><b id="done">0</b><small>مكتملة</small></div><div class="metric"><b id="failed">0</b><small>فاشلة</small></div></div>
+<div class="row"><button class="primary" id="newTask">إنشاء مهمة تجريبية</button><button id="runAll">تشغيل المحاكاة</button></div><div id="tasks"><p class="muted">لا توجد مهام بعد.</p></div></section>
+<section class="panel"><h2>اختبارات السلامة</h2><p class="muted">اختبر هل يطلب صديقي الموافقة قبل الإجراءات الحساسة.</p><div class="row"><button data-safety="send">إرسال رسالة</button><button data-safety="delete">حذف ملف</button><button data-safety="buy">شراء منتج</button></div><div id="safetyResult" class="task muted">اختر اختباراً لعرض النتيجة.</div></section>
+<section class="panel"><h2>سجل الأحداث</h2><div class="log" id="log">[جاهز] تم تشغيل مختبر المحاكاة محلياً.\n[أمان] لا يوجد اتصال بالخادم أو الهاتف.</div><div class="row" style="margin-top:10px"><button id="clearLog">مسح السجل</button><span class="muted">البيانات مؤقتة داخل الصفحة</span></div></section>
+</div></main><footer>SADEEQI AI · Web Test Lab · نسخة تطوير غير إنتاجية</footer>
+<script>
+const $=id=>document.getElementById(id);let tasks=[],counter=0;
+function log(s){$('log').textContent+='\n'+new Date().toLocaleTimeString('ar')+' '+s;$('log').scrollTop=$('log').scrollHeight}
+function bubble(text,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=text;$('chat').append(d);$('chat').scrollTop=$('chat').scrollHeight}
+function render(){ $('total').textContent=tasks.length;$('done').textContent=tasks.filter(t=>t.state==='completed').length;$('failed').textContent=tasks.filter(t=>t.state==='failed').length;
+$('tasks').replaceChildren();if(!tasks.length){$('tasks').innerHTML='<p class="muted">لا توجد مهام بعد.</p>';return}
+tasks.forEach(t=>{const d=document.createElement('div');d.className='task';const title=document.createElement('strong');title.textContent=t.title;const st=document.createElement('span');st.className='status';st.textContent=t.state;const steps=document.createElement('div');steps.className='steps';t.steps.forEach(x=>{const s=document.createElement('span');s.textContent=x;steps.append(s)});d.append(title,st,steps);$('tasks').append(d)})}
+function createTask(title='مهمة اختبار دورة الحياة'){counter++;tasks.unshift({id:counter,title,state:'queued',steps:['queued','running','completed']});render();log('إنشاء مهمة تجريبية #'+counter)}
+function analyse(){const v=$('prompt').value.trim();if(!v)return;bubble(v,'user');$('prompt').value='';let intent='general_question',risk='low',plan=['تحليل الطلب','تحديد الأداة المطلوبة','التحقق من النتيجة'];if(/ارسل|أرسل|رسالة|واتساب|اتصل/.test(v)){intent='send_message';risk='approval_required';plan=['صياغة الرسالة','عرضها للمراجعة','طلب موافقة صريحة قبل الإرسال']}else if(/احذف|حذف|امسح/.test(v)){intent='delete_data';risk='approval_required';plan=['تحديد العنصر','عرض أثر الحذف','طلب موافقة صريحة']}else if(/اشتر|شراء|ادفع|دفع/.test(v)){intent='purchase';risk='approval_required';plan=['تحديد المنتج','مراجعة السعر','طلب موافقة صريحة قبل الدفع']}else if(/ابحث|بحث|معلومات/.test(v)){intent='web_research';plan=['تحديد موضوع البحث','جمع المصادر (محاكاة)','تلخيص النتائج']};bubble('تصنيف النية: '+intent+'\nمستوى الأمان: '+risk+'\nخطة مقترحة:\n• '+plan.join('\n• ')+'\n\nملاحظة: هذا تحليل تجريبي محلي وليس تنفيذاً حقيقياً.','assistant');log('تحليل أمر: '+intent+' | '+risk)}
+$('send').onclick=analyse;$('prompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();analyse()}});
+$('clear').onclick=()=>{$('chat').replaceChildren();bubble('تم بدء جلسة اختبار جديدة.','assistant')};
+$('newTask').onclick=()=>createTask();$('runAll').onclick=()=>{if(!tasks.length)createTask();tasks.forEach(t=>{t.state='running';render();log('تشغيل المهمة التجريبية #'+t.id);t.state='completed'});render();log('اكتملت المحاكاة؛ لم يحدث أي إجراء خارجي')};
+document.querySelectorAll('[data-safety]').forEach(b=>b.onclick=()=>{$('safetyResult').textContent='النتيجة: موافقة مطلوبة. يجب إيقاف التنفيذ وعرض التفاصيل للمستخدم قبل '+({send:'إرسال الرسالة',delete:'حذف الملف',buy:'إتمام الشراء'}[b.dataset.safety])+'.';log('اختبار سلامة: '+b.dataset.safety+' => approval_required')});
+$('clearLog').onclick=()=>$('log').textContent='[تم مسح السجل]';
+</script></body></html>
