@@ -16,7 +16,8 @@ import java.util.Locale
 class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val onSpeakingChanged: (Boolean) -> Unit = {}
 ) : RecognitionListener, TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -51,6 +52,7 @@ class VoiceController(
         listening = false
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
     }
 
     fun interruptAndListen() {
@@ -60,6 +62,7 @@ class VoiceController(
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
         runCatching { recognizer?.cancel() }
         listening = false
         startListeningInternal()
@@ -147,6 +150,7 @@ class VoiceController(
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
         speaking = true
+        onSpeakingChanged(true)
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
@@ -176,6 +180,7 @@ class VoiceController(
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        onSpeakingChanged(false)
                         if (conversationActive && !microphoneMuted) scheduleListening(250)
                     }
                 }
@@ -183,6 +188,7 @@ class VoiceController(
                 override fun onError(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        onSpeakingChanged(false)
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
@@ -261,6 +267,7 @@ class VoiceController(
         recognizer = null
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
         tts?.shutdown()
         tts = null
         ttsReady = false
