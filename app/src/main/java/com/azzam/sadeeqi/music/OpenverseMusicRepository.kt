@@ -15,7 +15,8 @@ class OpenverseMusicRepository {
         require(query.isNotBlank()) { "اكتب عبارة للبحث." }
         val url = Uri.parse(BASE_URL).buildUpon().appendQueryParameter("q", query.trim())
             .appendQueryParameter("page_size", limit.coerceIn(1, 30).toString())
-            .appendQueryParameter("mature", "false").build().toString()
+            .appendQueryParameter("mature", "false")
+            .appendQueryParameter("category", "music").build().toString()
         val request = Request.Builder().url(url).header("Accept", "application/json").build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("Openverse أعاد خطأ HTTP ${response.code}")
