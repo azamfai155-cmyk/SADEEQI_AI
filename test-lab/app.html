@@ -16,13 +16,10 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;padding-top:14px}.sc
 <body>
 <section id="auth">
  <div class="authbox">
-  <div class="brand">✦ صديقي</div><h2>حسابك الآمن</h2>
-  <div class="field"><label>البريد الإلكتروني</label><input id="email" type="email" placeholder="name@example.com" autocomplete="email"></div>
-  <div class="field"><label>كلمة المرور</label><input id="password" type="password" placeholder="••••••••" autocomplete="current-password"></div>
-  <button class="primary wide" id="login">تسجيل الدخول</button>
-  <button class="secondary wide" id="signup" style="margin-top:8px">إنشاء حساب</button>
-  <button class="ghost wide" id="demo" style="margin-top:8px">الدخول إلى وضع التجربة</button>
-  <p class="tiny" id="authMessage">تسجيل الدخول الفعلي يتطلب إعداد Supabase على الخادم. وضع التجربة لا يرسل بيانات ولا ينشئ حساباً.</p>
+  <div class="brand">✦ صديقي</div><h2>مختبر صديقي التجريبي</h2>
+  <div class="warning" role="alert">هذه نسخة معاينة وليست صفحة تسجيل دخول حقيقية. لا تدخل بريدك أو كلمة مرورك أو أي بيانات حساب هنا. تسجيل الدخول وإنشاء الحساب غير متاحين في المختبر.</div>
+  <button class="primary wide" id="demo" style="margin-top:16px">الدخول إلى وضع التجربة</button>
+  <p class="tiny">وضع التجربة يعمل محلياً في المتصفح ولا يطلب بيانات اعتماد.</p>
  </div>
 </section>
 <div id="app" hidden>
@@ -101,8 +98,6 @@ let messages=read('sadeeqi-chat',[{who:'صديقي',body:'أهلاً! أنا ص�
 function showAuth(){ $('auth').hidden=false;$('app').hidden=true }
 function showApp(){ $('auth').hidden=true;$('app').hidden=false;drawMessages() }
 $('demo').onclick=()=>{sessionStorage.setItem(KEY,'demo');showApp()};
-$('login').onclick=()=>{$('authMessage').textContent='تسجيل الدخول الحقيقي غير موصول بعد. لا تدخل كلمة مرورك هنا؛ استخدم وضع التجربة حتى يتم إعداد Supabase على الخادم.'};
-$('signup').onclick=()=>{$('authMessage').textContent='إنشاء الحساب يتطلب إعداد Supabase Auth واتصالاً آمناً بالخادم. هذه الصفحة لا تنشئ حسابات.'};
 $('logout').onclick=()=>{sessionStorage.removeItem(KEY);showAuth()};
 if(sessionStorage.getItem(KEY)==='demo')showApp();
 function go(name){selectedScreen=name;document.querySelectorAll('.screen').forEach(x=>x.classList.toggle('active',x.id==='screen-'+name));document.querySelectorAll('.navitem').forEach(x=>x.classList.toggle('active',x.dataset.screen===name));$('drawerBack').classList.remove('open');if(name==='search')searchMessages();if(name==='memory')drawMemory();if(name==='music')drawMusic();if(name==='social')drawSocial()}
