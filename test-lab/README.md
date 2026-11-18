@@ -55,3 +55,5 @@ Serve this directory over localhost or HTTPS. Microphone permissions and some br
 - A green browser test does not prove backend, provider, Android, or physical-device readiness.
 - The sandboxed preview is for web UI prototypes. Android/Kotlin code must be built and tested in the Android project and emulator.
 - Drafts are saved in the current browser only. Exported code must be reviewed and committed through the normal Git workflow.
+
+- Public test-lab pages are demo-only: no email/password fields, no sign-up, and no password-based login. Server checks use unauthenticated GET `/health` only; authenticated chat and durable tasks remain disabled until a safer non-password test authorization flow is implemented.
