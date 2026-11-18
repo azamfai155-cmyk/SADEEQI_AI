@@ -21,24 +21,29 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-      - name: Validate embedded browser JavaScript syntax
+      - name: Validate Android-style app homepage
         run: |
           node --input-type=commonjs <<'NODE'
           const fs = require('node:fs');
-          const html = fs.readFileSync('test-lab/index.html', 'utf8');
-          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          const landing = fs.readFileSync('test-lab/index.html', 'utf8');
+          if (!landing.includes('app.html')) {
+            console.error('Homepage must route visitors to the Android-style app.');
+            process.exit(1);
+          }
+          const html = fs.readFileSync('test-lab/app.html', 'utf8');
+          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
           if (matches.length !== 1) {
-            console.error(`Expected exactly one inline script, found ${matches.length}`);
+            console.error(`Expected one app script, found ${matches.length}`);
             process.exit(1);
           }
           new Function(matches[0][1]);
-          for (const requiredId of ['realChatToggle', 'connectChat', 'signIn', 'signUp', 'runTests']) {
-            if (!html.includes(`id="${requiredId}"`)) {
-              console.error(`Missing required test-lab control: ${requiredId}`);
+          for (const id of ['auth', 'app', 'messages', 'chatInput', 'voiceSelect', 'calcRisk', 'calcBacktest', 'audioFiles', 'socialList', 'memoryRows', 'parseDevice']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing Android app control: ${id}`);
               process.exit(1);
             }
           }
-          console.log('Web Test Lab JavaScript syntax and connector controls validated.');
+          console.log('Android-style app JavaScript and core screens validated.');
           NODE
 
       - name: Validate unified modules dashboard JavaScript
