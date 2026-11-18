@@ -5,6 +5,7 @@ Arabic RTL browser workspace for prototyping, testing, and reviewing SADEEQI AI 
 ## Entry points
 - `index.html`: redirects the site root to the Android-style app experience.
 - `app.html`: mobile-first browser recreation of the Android 1.5.1 app shell and its nine navigation destinations — sign-in preview, chat, voice studio, trading, music, SOCIAL HUB, search, memory, device tools, and settings. Local-only interactions are labelled as demos.
+  - Music now mirrors the Android `MusicCommandParser` command set (pause/resume/next/previous/volume/search), supports seek/time display and the three repeat modes, and lists the same 15 SOCIAL HUB providers with truthful setup status.
 - `modules.html`: consolidated Android feature dashboard — command parsing, voice settings, phone command previews, encrypted-memory architecture, music parser, SOCIAL HUB status, trading calculators, durable task API, and code architecture.
 - `dev-studio.html`: isolated feature workbench — HTML/CSS/JavaScript editor, sandboxed live preview, syntax checks, local drafts, JSON import/export, and standalone HTML export.
 - `android-parity.html`: earlier parity test page retained for comparison.
