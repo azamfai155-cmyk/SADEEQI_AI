@@ -1,4 +1,5 @@
 import { isSafeImageInput } from '../../security/input-validation.js';
+import { handleTaskRequest } from './task-store.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const IDENTITY_POLICY = [
@@ -245,17 +246,31 @@ export async function handleRequest(request, env) {
     return json({ name: 'SADEEQI AI', status: 'running', version: env.SADEEQI_VERSION || '1.5.1' }, 200, cors);
   }
 
-  if (url.pathname !== '/v1/chat' && url.pathname !== '/v1/social/providers') {
+  const isSocial = url.pathname === '/v1/social/providers';
+  const isTasks = url.pathname === '/v1/tasks' || /^\\/v1\\/tasks\\/[0-9a-f-]{36}$/i.test(url.pathname);
+  if (!isSocial && !isTasks && url.pathname !== '/v1/chat') {
     return json({ error: 'Not found.' }, 404, cors);
   }
 
-  const isSocial = url.pathname === '/v1/social/providers';
-  if ((isSocial && request.method !== 'GET') || (!isSocial && request.method !== 'POST')) {
-    return json({ error: 'Method not allowed.' }, 405, { ...cors, allow: isSocial ? 'GET, OPTIONS' : 'POST, OPTIONS' });
+  const methodAllowed = isSocial ? request.method === 'GET'
+    : isTasks ? ['GET', 'POST', 'PATCH'].includes(request.method)
+      : request.method === 'POST';
+  if (!methodAllowed) {
+    return json({ error: 'Method not allowed.' }, 405, {
+      ...cors,
+      allow: isSocial ? 'GET, OPTIONS' : isTasks ? 'GET, POST, PATCH, OPTIONS' : 'POST, OPTIONS'
+    });
   }
 
   const auth = await authenticate(request, env);
   if (!auth.ok) return json(auth.body, auth.status, cors);
+
+  if (isTasks) {
+    const result = await handleTaskRequest(request, env, auth);
+    const headers = new Headers(result.headers);
+    for (const [key, value] of Object.entries(cors)) headers.set(key, value);
+    return new Response(result.body, { status: result.status, headers });
+  }
 
   if (isSocial) {
     return json({

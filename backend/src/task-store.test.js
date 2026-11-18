@@ -1,0 +1,109 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { handleTaskRequest } from './task-store.js';
+
+const env = {
+  SUPABASE_URL: 'https://project.example.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'server-only-service-role-key'
+};
+const auth = { ok: true, userId: 'user-123' };
+const request = (path, method = 'GET', body) => new Request('https://worker.example' + path, {
+  method,
+  headers: body === undefined ? {} : { 'content-type': 'application/json' },
+  body: body === undefined ? undefined : JSON.stringify(body)
+});
+
+test('task API requires verified per-user identity and configured persistence', async () => {
+  const noUser = await handleTaskRequest(request('/v1/tasks'), env, { ok: true, userId: null });
+  assert.equal(noUser.status, 401);
+  const noDb = await handleTaskRequest(request('/v1/tasks'), {}, auth);
+  assert.equal(noDb.status, 503);
+});
+
+test('creates task and stores verified owner id on Supabase', async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = '';
+  let sent;
+  globalThis.fetch = async (url, init) => {
+    calledUrl = String(url);
+    sent = JSON.parse(init.body);
+    return new Response(JSON.stringify([sent]), { status: 201 });
+  };
+  try {
+    const result = await handleTaskRequest(request('/v1/tasks', 'POST', {
+      title: 'Research options', goal: 'Compare sources',
+      steps: [{ id: 'search', title: 'Search the web' }]
+    }), env, auth);
+    const body = await result.json();
+    assert.equal(result.status, 201);
+    assert.match(calledUrl, /\/rest\/v1\/sadeeqi_tasks$/);
+    assert.equal(sent.owner_id, 'user-123');
+    assert.equal(body.task.state, 'queued');
+    assert.equal(body.task.steps[0].state, 'pending');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('lists only rows filtered to the authenticated owner', async () => {
+  const originalFetch = globalThis.fetch;
+  let calledUrl = '';
+  globalThis.fetch = async url => {
+    calledUrl = String(url);
+    return new Response(JSON.stringify([]), { status: 200 });
+  };
+  try {
+    const result = await handleTaskRequest(request('/v1/tasks'), env, auth);
+    assert.equal(result.status, 200);
+    assert.match(calledUrl, /owner_id=eq\.user-123/);
+    assert.deepEqual((await result.json()).tasks, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('task updates fetch and mutate only the authenticated owner task', async () => {
+  const originalFetch = globalThis.fetch;
+  const id = '8c95c1ae-8e43-4ec6-84c7-c8ac1b74b33a';
+  const task = {
+    id, ownerId: 'user-123', title: 'Research', goal: 'Find sources',
+    state: 'queued', steps: [], approval: null,
+    createdAt: '2026-11-18T00:00:00.000Z',
+    updatedAt: '2026-11-18T00:00:00.000Z', lastError: null
+  };
+  const urls = [];
+  globalThis.fetch = async (url, init) => {
+    urls.push(String(url));
+    if (init.method === 'PATCH') {
+      const update = JSON.parse(init.body);
+      return new Response(JSON.stringify([{ task_data: update.task_data, ...update }]), { status: 200 });
+    }
+    return new Response(JSON.stringify([{ task_data: task }]), { status: 200 });
+  };
+  try {
+    const result = await handleTaskRequest(request('/v1/tasks/' + id, 'PATCH', { operation: 'start' }), env, auth);
+    assert.equal(result.status, 200);
+    assert.match(urls[0], /owner_id=eq\.user-123/);
+    assert.match(urls[1], /owner_id=eq\.user-123/);
+    assert.equal(urls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('unknown task operations are rejected without database mutation', async () => {
+  const originalFetch = globalThis.fetch;
+  const id = '8c95c1ae-8e43-4ec6-84c7-c8ac1b74b33a';
+  globalThis.fetch = async () => new Response(JSON.stringify([{
+    task_data: {
+      id, ownerId: 'user-123', title: 'Research', goal: 'Find sources',
+      state: 'queued', steps: [], approval: null, createdAt: 'x', updatedAt: 'x', lastError: null
+    }
+  }]), { status: 200 });
+  try {
+    const result = await handleTaskRequest(request('/v1/tasks/' + id, 'PATCH', { operation: 'delete_everything' }), env, auth);
+    assert.equal(result.status, 400);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
