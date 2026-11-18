@@ -247,7 +247,7 @@ export async function handleRequest(request, env) {
   }
 
   const isSocial = url.pathname === '/v1/social/providers';
-  const isTasks = url.pathname === '/v1/tasks' || /^\\/v1\\/tasks\\/[0-9a-f-]{36}$/i.test(url.pathname);
+  const isTasks = url.pathname === '/v1/tasks' || /^\/v1\/tasks\/[0-9a-f-]{36}$/i.test(url.pathname);
   if (!isSocial && !isTasks && url.pathname !== '/v1/chat') {
     return json({ error: 'Not found.' }, 404, cors);
   }
