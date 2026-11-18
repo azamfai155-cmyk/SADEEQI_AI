@@ -31,15 +31,15 @@ jobs:
             process.exit(1);
           }
           const html = fs.readFileSync('test-lab/app.html', 'utf8');
-          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
           if (matches.length !== 1) {
-            console.error(`Expected one app script, found ${matches.length}`);
+            console.error(\`Expected one app script, found \${matches.length}\`);
             process.exit(1);
           }
           new Function(matches[0][1]);
           for (const id of ['auth', 'app', 'messages', 'chatInput', 'voiceSelect', 'calcRisk', 'calcBacktest', 'audioFiles', 'socialList', 'memoryRows', 'parseDevice']) {
-            if (!html.includes(`id="${id}"`)) {
-              console.error(`Missing Android app control: ${id}`);
+            if (!html.includes(\`id="\${id}"\`)) {
+              console.error(\`Missing Android app control: \${id}\`);
               process.exit(1);
             }
           }
