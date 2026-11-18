@@ -37,6 +37,10 @@ class MusicPlayerManager(
         override fun onIsPlayingChanged(isPlaying: Boolean) = publish()
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = publish()
         override fun onPlaybackStateChanged(playbackState: Int) = publish()
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            lastErrorMessage = error.message ?: "تعذر تشغيل المقطع الصوتي."
+            publish()
+        }
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
@@ -69,8 +73,13 @@ class MusicPlayerManager(
     }
 
     fun playQueue(tracks: List<Pair<Uri, String>>, startIndex: Int = 0) {
-        val player = controller ?: return
         if (tracks.isEmpty()) return
+        val player = controller
+        if (player == null) {
+            pendingLocalQueue = tracks to startIndex
+            return
+        }
+        lastErrorMessage = null
         val items = tracks.map { (uri, title) ->
             MediaItem.Builder().setUri(uri)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
@@ -89,6 +98,7 @@ class MusicPlayerManager(
             pendingRemoteQueue = tracks to startIndex
             return
         }
+        lastErrorMessage = null
         val items = tracks.map { track ->
             MediaItem.Builder()
                 .setUri(track.streamUrl)
@@ -159,7 +169,8 @@ class MusicPlayerManager(
                 positionMs = p.currentPosition.coerceAtLeast(0L),
                 repeatMode = p.repeatMode,
                 shuffleEnabled = p.shuffleModeEnabled,
-                volume = p.volume
+                volume = p.volume,
+                errorMessage = lastErrorMessage
             )
         )
     }
@@ -170,5 +181,6 @@ class MusicPlayerManager(
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         pendingRemoteQueue = null
+        pendingLocalQueue = null
     }
 }
