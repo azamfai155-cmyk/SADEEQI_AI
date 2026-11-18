@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
 import com.azzam.sadeeqi.R
@@ -41,6 +42,7 @@ class VoiceForegroundService : Service() {
     private var started = false
     // Explicitly user-started; visible microphone foreground session only.
     private var wakeWordArmed = false
+    private var wakeWordWakeLock: PowerManager.WakeLock? = null
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -50,16 +52,19 @@ class VoiceForegroundService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 wakeWordArmed = false
+                releaseWakeWordWakeLock()
                 stopSession()
                 return START_NOT_STICKY
             }
             ACTION_WAKE_WORD -> {
                 wakeWordArmed = true
                 startSession()
+                acquireWakeWordWakeLock()
                 updateNotification("وضع نداء صديقي نشط — قل: صديقي")
             }
             ACTION_INTERRUPT -> {
                 wakeWordArmed = false
+                releaseWakeWordWakeLock()
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
@@ -164,6 +169,7 @@ class VoiceForegroundService : Service() {
         if (wakeWordArmed) {
             if (WakeWordMatcher.matches(spoken)) {
                 wakeWordArmed = false
+                releaseWakeWordWakeLock()
                 updateNotification("تم التعرف على كلمة صديقي — يمكنك التحدث الآن")
                 // Best-effort: bring the golden-orb conversation screen forward after the
                 // user explicitly enabled wake-word listening. Android may defer this while locked.
@@ -174,7 +180,7 @@ class VoiceForegroundService : Service() {
                         ).putExtra(MainActivity.EXTRA_OPEN_VOICE_ORB, true)
                     )
                 }
-                voice?.speak("نعم عزام، أنا معك. تفضل.")
+                voice?.beginConversationWithGreeting("نعم عزام، أنا معك. تفضل.")
             } else {
                 // SpeechRecognizer is only used inside this user-started foreground session.
                 // It is not an offline hotword engine and stops when the session is stopped.
@@ -377,8 +383,28 @@ class VoiceForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
+    private fun acquireWakeWordWakeLock() {
+        if (wakeWordWakeLock?.isHeld == true) return
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        wakeWordWakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "SadeeqiAI:WakeWord"
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeWordWakeLock() {
+        runCatching {
+            wakeWordWakeLock?.takeIf { it.isHeld }?.release()
+        }
+        wakeWordWakeLock = null
+    }
+
     private fun stopSession() {
         wakeWordArmed = false
+        releaseWakeWordWakeLock()
         started = false
         pendingPhoneCommand = null
         voice?.stopConversation()
@@ -393,6 +419,8 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        wakeWordArmed = false
+        releaseWakeWordWakeLock()
         started = false
         pendingPhoneCommand = null
         voice?.close()
