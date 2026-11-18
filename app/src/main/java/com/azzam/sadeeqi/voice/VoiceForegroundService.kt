@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.net.Uri
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -23,7 +22,8 @@ import com.azzam.sadeeqi.phone.DeviceCommand
 import com.azzam.sadeeqi.phone.DeviceCommandParser
 import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.music.MusicPlayerManager
-import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.MusicCatalogRepository
+import com.azzam.sadeeqi.music.RuqyahRepository
 import com.azzam.sadeeqi.music.QuranAudioRepository
 import java.util.concurrent.Executors
 
@@ -218,37 +218,42 @@ class VoiceForegroundService : Service() {
                 }
                 return
             }
-            is MusicCommand.Search -> {
-                updateNotification("جاري البحث عن ${command.query} في مكتبة الموسيقى…")
+            MusicCommand.PlayRuqyah -> {
+                updateNotification("جاري تجهيز الرقية من آيات القرآن الكريم…")
                 executor.execute {
                     try {
-                        val tracks = AudiusMusicRepository().search(command.query)
+                        val tracks = RuqyahRepository().loadPlaylist()
                         mainHandler.post {
                             if (!started) return@post
                             if (tracks.isEmpty()) {
-                                val opened = runCatching {
-                                    val searchUri = Uri.parse("https://music.youtube.com/search?q=${Uri.encode(command.query)}")
-                                    startActivity(Intent(Intent.ACTION_VIEW, searchUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                    true
-                                }.getOrDefault(false)
-                                if (opened) {
-                                    updateNotification("لم تتوفر الأغنية في Audius — تم فتح نتائج YouTube Music")
-                                    voice?.speak("لم أجد الأغنية في مكتبة البث المفتوحة. فتحت نتائج YouTube Music؛ اختر النسخة التي تريد تشغيلها.")
-                                } else {
-                                    voice?.speak("لم أجد نتائج قابلة للبث، وتعذر فتح YouTube Music. جرّب اسماً آخر.")
-                                }
+                                voice?.speak("تعذر تجهيز مقاطع الرقية حالياً. تحقق من الإنترنت.")
                             } else {
                                 musicManager?.playRemoteQueue(tracks, 0)
-                                updateNotification("يتم تشغيل ${tracks.first().title} من Audius")
-                                voice?.speak("وجدت ${tracks.size} مقطعاً. بدأت تشغيل ${tracks.first().title} للفنان ${tracks.first().artist}")
+                                updateNotification("تشغيل رقية شرعية من القرآن الكريم")
+                                voice?.speak("بدأت تشغيل آيات الرقية من القرآن الكريم. يمكنك قول التالي أو أوقف.")
                             }
                         }
                     } catch (error: Exception) {
                         mainHandler.post {
-                            if (started) {
-                                updateNotification("تعذر البحث عن الموسيقى")
-                                voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
-                            }
+                            if (started) voice?.speak("تعذر تحميل آيات الرقية. تحقق من اتصال الإنترنت.")
+                        }
+                    }
+                }
+                return
+            }
+            is MusicCommand.Search -> {
+                updateNotification("جاري البحث في المكتبات الموسيقية المجانية…")
+                executor.execute {
+                    val tracks = MusicCatalogRepository().search(command.query, 40)
+                    mainHandler.post {
+                        if (!started) return@post
+                        if (tracks.isEmpty()) {
+                            updateNotification("لم نعثر على نتيجة مجانية قابلة للتشغيل")
+                            voice?.speak("لم أجد نتيجة مجانية قابلة للتشغيل في المصادر المتاحة. جرّب اسم الفنان أو الأغنية بطريقة أخرى.")
+                        } else {
+                            musicManager?.playRemoteQueue(tracks, 0)
+                            updateNotification("تشغيل ${tracks.first().title} — ${tracks.first().sourceName}")
+                            voice?.speak("وجدت ${tracks.size} نتيجة من مصادر مجانية. بدأت تشغيل ${tracks.first().title}.")
                         }
                     }
                 }
