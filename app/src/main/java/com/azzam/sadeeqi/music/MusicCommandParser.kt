@@ -71,7 +71,7 @@ object MusicCommandParser {
         val prefix = searchPrefixes.firstOrNull { text.startsWith(normalize(it) + " ") || text == normalize(it) }
         if (prefix != null) {
             var query = raw.trim().drop(prefix.length).trim().trimStart(':', '،', ' ')
-            query = query.replace(Regex("^(أغنية|الأغنية|اغنية|الاغنية|اغنيه|الاغنيه|موسيقى|مقطع)\\s+"), "")
+            query = query.replace(Regex("^(أغنية|الأغنية|اغنية|الاغنية|اغنيه|الاغنيه|مقطع)\\s+"), "")
                 .replace(Regex("\\s+(لو سمحت|من فضلك)$"), "")
                 .trim()
             if (query.isNotBlank()) return MusicCommand.Search(query)
