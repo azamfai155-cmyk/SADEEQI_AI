@@ -44,7 +44,11 @@ class WikimediaCommonsAudioRepository {
                         ?.takeIf { it.isNotBlank() && it != "undefined" }
                     val license = field("LicenseShortName") ?: field("UsageTerms") ?: continue
                     val normalized = license.lowercase()
-                    if (ALLOWED_LICENSES.none { normalized.contains(it) }) continue
+                    val hasAllowedLicense = normalized == "cc0" ||
+                        normalized.contains("public domain") ||
+                        (normalized.startsWith("cc by") &&
+                            !normalized.contains("nc") && !normalized.contains("nd"))
+                    if (!hasAllowedLicense) continue
                     val title = page.optString("title").removePrefix("File:")
                     val artist = field("Artist") ?: field("Credit") ?: "مساهم في ويكيميديا"
                     add(RemoteMusicTrack(
@@ -67,6 +71,5 @@ class WikimediaCommonsAudioRepository {
 
     companion object {
         private const val API = "https://commons.wikimedia.org/w/api.php"
-        private val ALLOWED_LICENSES = listOf("cc0", "cc by", "cc-by", "cc by-sa", "cc-by-sa", "public domain")
     }
 }
