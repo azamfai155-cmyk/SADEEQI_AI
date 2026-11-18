@@ -165,6 +165,15 @@ class VoiceForegroundService : Service() {
             if (WakeWordMatcher.matches(spoken)) {
                 wakeWordArmed = false
                 updateNotification("تم التعرف على كلمة صديقي — يمكنك التحدث الآن")
+                // Best-effort: bring the golden-orb conversation screen forward after the
+                // user explicitly enabled wake-word listening. Android may defer this while locked.
+                runCatching {
+                    startActivity(
+                        Intent(this, MainActivity::class.java).addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        ).putExtra(MainActivity.EXTRA_OPEN_VOICE_ORB, true)
+                    )
+                }
                 voice?.speak("نعم عزام، أنا معك. تفضل.")
             } else {
                 // SpeechRecognizer is only used inside this user-started foreground session.
