@@ -43,6 +43,14 @@ object MusicCommandParser {
     fun parse(raw: String): MusicCommand? {
         val text = normalize(raw)
         if (text.isBlank()) return null
+
+        // Treat explicit requests for the complete Quran as opening the surah picker,
+        // not as a generic music search.
+        val quranPickerPhrases = listOf(
+            "شغل لي القران الكريم", "شغل القران الكريم",
+            "افتح القران الكريم", "افتح المصحف", "افتح القران"
+        )
+        if (quranPickerPhrases.any { normalize(it) in text }) return MusicCommand.OpenQuran
         if (listOf("رقية شرعية", "الرقية الشرعية", "شغل رقية", "شغل الرقية", "اريد رقية", "اقرا الرقية", "اسمع الرقية", "شغل لي الرقية")
                 .any { normalize(it) in text }) return MusicCommand.PlayRuqyah
 
