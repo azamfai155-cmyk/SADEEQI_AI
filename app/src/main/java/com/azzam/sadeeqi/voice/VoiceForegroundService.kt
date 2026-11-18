@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.azzam.sadeeqi.MainActivity
 import com.azzam.sadeeqi.R
@@ -39,6 +40,9 @@ class VoiceForegroundService : Service() {
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
     private var started = false
+    // Explicitly user-started; visible microphone foreground session only.
+    private var wakeWordArmed = false
+    private var wakeWordWakeLock: PowerManager.WakeLock? = null
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -47,18 +51,28 @@ class VoiceForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                wakeWordArmed = false
+                releaseWakeWordWakeLock()
                 stopSession()
                 return START_NOT_STICKY
             }
+            ACTION_WAKE_WORD -> {
+                wakeWordArmed = true
+                startSession()
+                acquireWakeWordWakeLock()
+                updateNotification("وضع نداء صديقي نشط — قل: صديقي")
+            }
             ACTION_INTERRUPT -> {
+                wakeWordArmed = false
+                releaseWakeWordWakeLock()
                 if (!started) startSession()
                 voice?.interruptAndListen()
             }
             ACTION_MUTE -> {
                 voice?.setMicrophoneMuted(intent.getBooleanExtra(EXTRA_MUTED, true))
             }
-            ACTION_DICTATE -> startDictationSession()
-            ACTION_START, null -> startSession()
+            ACTION_DICTATE -> { wakeWordArmed = false; startDictationSession() }
+            ACTION_START, null -> { wakeWordArmed = false; startSession() }
         }
         return START_NOT_STICKY
     }
@@ -83,7 +97,8 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message -> updateNotification(message) },
+            { speaking -> sendBroadcast(Intent(ACTION_SPEECH_STATE).setPackage(packageName).putExtra(EXTRA_SPEAKING, speaking)) }
         )
         voice?.listen()
     }
@@ -116,7 +131,8 @@ class VoiceForegroundService : Service() {
         voice = VoiceController(
             applicationContext,
             { spoken -> handleRecognizedSpeech(spoken) },
-            { message -> updateNotification(message) }
+            { message -> updateNotification(message) },
+            { speaking -> sendBroadcast(Intent(ACTION_SPEECH_STATE).setPackage(packageName).putExtra(EXTRA_SPEAKING, speaking)) }
         )
         voice?.startConversation()
     }
@@ -149,6 +165,29 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+
+        if (wakeWordArmed) {
+            if (WakeWordMatcher.matches(spoken)) {
+                wakeWordArmed = false
+                releaseWakeWordWakeLock()
+                updateNotification("تم التعرف على كلمة صديقي — يمكنك التحدث الآن")
+                // Best-effort: bring the golden-orb conversation screen forward after the
+                // user explicitly enabled wake-word listening. Android may defer this while locked.
+                runCatching {
+                    startActivity(
+                        Intent(this, MainActivity::class.java).addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        ).putExtra(MainActivity.EXTRA_OPEN_VOICE_ORB, true)
+                    )
+                }
+                voice?.beginConversationWithGreeting("نعم عزام، أنا معك. تفضل.")
+            } else {
+                // SpeechRecognizer is only used inside this user-started foreground session.
+                // It is not an offline hotword engine and stops when the session is stopped.
+                voice?.resumeAfterTurnFailure()
+            }
+            return
+        }
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -344,7 +383,28 @@ class VoiceForegroundService : Service() {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
+    private fun acquireWakeWordWakeLock() {
+        if (wakeWordWakeLock?.isHeld == true) return
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        wakeWordWakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "SadeeqiAI:WakeWord"
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeWordWakeLock() {
+        runCatching {
+            wakeWordWakeLock?.takeIf { it.isHeld }?.release()
+        }
+        wakeWordWakeLock = null
+    }
+
     private fun stopSession() {
+        wakeWordArmed = false
+        releaseWakeWordWakeLock()
         started = false
         pendingPhoneCommand = null
         voice?.stopConversation()
@@ -359,6 +419,8 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        wakeWordArmed = false
+        releaseWakeWordWakeLock()
         started = false
         pendingPhoneCommand = null
         voice?.close()
@@ -371,10 +433,13 @@ class VoiceForegroundService : Service() {
 
     companion object {
         const val ACTION_START = "com.azzam.sadeeqi.voice.START"
+        const val ACTION_WAKE_WORD = "com.azzam.sadeeqi.voice.WAKE_WORD"
         const val ACTION_DICTATE = "com.azzam.sadeeqi.voice.DICTATE"
         const val ACTION_STOP = "com.azzam.sadeeqi.voice.STOP"
         const val ACTION_INTERRUPT = "com.azzam.sadeeqi.voice.INTERRUPT"
         const val ACTION_MUTE = "com.azzam.sadeeqi.voice.MUTE"
+        const val ACTION_SPEECH_STATE = "com.azzam.sadeeqi.voice.SPEECH_STATE"
+        const val EXTRA_SPEAKING = "is_speaking"
         const val EXTRA_MUTED = "microphone_muted"
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407

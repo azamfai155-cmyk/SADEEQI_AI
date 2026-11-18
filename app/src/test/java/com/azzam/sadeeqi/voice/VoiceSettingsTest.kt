@@ -28,9 +28,9 @@ class VoiceSettingsTest {
             volume = Float.NEGATIVE_INFINITY
         ).normalized()
 
-        assertEquals("ar", result.languageTag)
-        assertEquals(0.96f, result.speechRate)
-        assertEquals(0.98f, result.pitch)
+        assertEquals("ar-YE", result.languageTag)
+        assertEquals(0.92f, result.speechRate)
+        assertEquals(0.90f, result.pitch)
         assertEquals(1.0f, result.volume)
     }
 

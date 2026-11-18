@@ -4,7 +4,10 @@ package com.azzam.sadeeqi
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.activity.ComponentActivity
@@ -33,6 +36,7 @@ import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
+import com.azzam.sadeeqi.avatar.Avatar3DScreen
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.diagnostics.DeviceDiagnosticsSnapshot
@@ -68,6 +72,18 @@ private fun formatDiagnosticBytes(value: Long?): String {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_OPEN_VOICE_ORB = "com.azzam.sadeeqi.OPEN_VOICE_ORB"
+    }
+
+    private val openVoiceOrbRequested = mutableStateOf(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_VOICE_ORB, false)) openVoiceOrbRequested.value = true
+    }
+
     private var requestedVoiceAction: String = VoiceForegroundService.ACTION_START
     private var onVoiceText: ((String) -> Unit)? = null
     private var onVoiceError: ((String) -> Unit)? = null
@@ -86,6 +102,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openVoiceOrbRequested.value = intent.getBooleanExtra(EXTRA_OPEN_VOICE_ORB, false)
+        if (openVoiceOrbRequested.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
 
         if (EncryptedSessionStore.accessToken(this).isNullOrBlank()) {
             startActivity(Intent(this, AuthActivity::class.java))
@@ -162,6 +183,24 @@ class MainActivity : ComponentActivity() {
             mutableStateOf("")
         }
         var voiceSessionActive by remember { mutableStateOf(false) }
+        var voiceSpeaking by remember { mutableStateOf(false) }
+        DisposableEffect(Unit) {
+            val speechStateReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                    voiceSpeaking = intent?.getBooleanExtra(VoiceForegroundService.EXTRA_SPEAKING, false) ?: false
+                }
+            }
+            ContextCompat.registerReceiver(
+                this@MainActivity,
+                speechStateReceiver,
+                IntentFilter(VoiceForegroundService.ACTION_SPEECH_STATE),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            onDispose {
+                runCatching { unregisterReceiver(speechStateReceiver) }
+                voiceSpeaking = false
+            }
+        }
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
         var attachmentMenuExpanded by remember { mutableStateOf(false) }
@@ -172,9 +211,15 @@ class MainActivity : ComponentActivity() {
             onDispose { messageReader.stop(); messageReader.shutdown() }
         }
         var microphoneMuted by remember { mutableStateOf(false) }
-        var selectedTab by remember { mutableStateOf("الرئيسية") }
+        var selectedTab by remember { mutableStateOf(if (openVoiceOrbRequested.value) "الشخصية ثلاثية الأبعاد" else "الرئيسية") }
+        LaunchedEffect(openVoiceOrbRequested.value) {
+            if (openVoiceOrbRequested.value) {
+                selectedTab = "الشخصية ثلاثية الأبعاد"
+                openVoiceOrbRequested.value = false
+            }
+        }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "الشخصية ثلاثية الأبعاد", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var diagnosticsBaseline by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
         var diagnosticsLatest by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
@@ -1212,6 +1257,9 @@ class MainActivity : ComponentActivity() {
                     "استوديو الصوت" -> {
                         VoiceStudioScreen(modifier = Modifier.weight(1f))
                     }
+                    "الشخصية ثلاثية الأبعاد" -> {
+                        Avatar3DScreen(isSpeaking = voiceSpeaking, modifier = Modifier.weight(1f))
+                    }
                     "التداول" -> {
                         TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
                     }
@@ -1225,6 +1273,19 @@ class MainActivity : ComponentActivity() {
                                 Text("🎙 المساعد الصوتي", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("تحدث إلى صديقي باستخدام الميكروفون.", color = Color(0xFFD2D0DC))
                                 Button(onClick = onStartVoice) { Text("ابدأ المحادثة الصوتية") }
+                                OutlinedButton(
+                                    onClick = {
+                                        requestedVoiceAction = VoiceForegroundService.ACTION_WAKE_WORD
+                                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                            ContextCompat.startForegroundService(
+                                                this@MainActivity,
+                                                Intent(this@MainActivity, VoiceForegroundService::class.java)
+                                                    .setAction(VoiceForegroundService.ACTION_WAKE_WORD)
+                                            )
+                                            onVoiceSession?.invoke(true)
+                                        } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                ) { Text("انتظر نداء «صديقي»") }
                             }
                         }
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {

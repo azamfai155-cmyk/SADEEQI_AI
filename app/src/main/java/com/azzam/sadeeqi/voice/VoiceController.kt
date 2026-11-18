@@ -16,7 +16,8 @@ import java.util.Locale
 class VoiceController(
     context: Context,
     private val onText: (String) -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val onSpeakingChanged: (Boolean) -> Unit = {}
 ) : RecognitionListener, TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -51,6 +52,7 @@ class VoiceController(
         listening = false
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
     }
 
     fun interruptAndListen() {
@@ -60,6 +62,7 @@ class VoiceController(
         mainHandler.removeCallbacksAndMessages(null)
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
         runCatching { recognizer?.cancel() }
         listening = false
         startListeningInternal()
@@ -69,6 +72,23 @@ class VoiceController(
         microphoneMuted = false
         conversationActive = false
         startListeningInternal()
+    }
+
+    /**
+     * Promote a wake-word-only session into a normal two-way conversation.
+     * The greeting is spoken first; onDone then resumes microphone capture.
+     */
+    fun beginConversationWithGreeting(greeting: String) {
+        conversationActive = true
+        microphoneMuted = false
+        lastUtteranceId = null
+        mainHandler.removeCallbacksAndMessages(null)
+        runCatching { recognizer?.cancel() }
+        listening = false
+        runCatching { tts?.stop() }
+        speaking = false
+        onSpeakingChanged(false)
+        speak(greeting)
     }
 
     fun setMicrophoneMuted(muted: Boolean) {
@@ -133,10 +153,21 @@ class VoiceController(
             return
         }
         val settings = settingsStore.load()
+        // Apply current preferences for every utterance, not only when the TTS engine initializes.
+        val requestedLocale = Locale.forLanguageTag(settings.languageTag)
+        val languageResult = tts?.setLanguage(requestedLocale)
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+            languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts?.setLanguage(Locale.forLanguageTag("ar"))
+        }
+        tts?.voices?.firstOrNull { it.name == settings.voiceName }?.let { tts?.voice = it }
+        tts?.setSpeechRate(settings.speechRate)
+        tts?.setPitch(settings.pitch)
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
         val utteranceId = "sadeeqi-" + System.currentTimeMillis()
         lastUtteranceId = utteranceId
         speaking = true
+        onSpeakingChanged(true)
         tts?.speak(cleanText, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
     }
 
@@ -145,9 +176,17 @@ class VoiceController(
             val settings = settingsStore.load()
             val locale = Locale.forLanguageTag(settings.languageTag)
             val result = tts?.setLanguage(locale)
-            ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
-                result != TextToSpeech.LANG_NOT_SUPPORTED
+            val fallbackResult = if (result == TextToSpeech.LANG_MISSING_DATA ||
+                result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts?.setLanguage(Locale.forLanguageTag("ar"))
+            } else result
+            ttsReady = fallbackResult != TextToSpeech.LANG_MISSING_DATA &&
+                fallbackResult != TextToSpeech.LANG_NOT_SUPPORTED
             val selectedVoice = tts?.voices?.firstOrNull { it.name == settings.voiceName }
+                ?: tts?.voices?.firstOrNull {
+                    it.locale.language == "ar" && !it.isNetworkConnectionRequired
+                }
+                ?: tts?.voices?.firstOrNull { it.locale.language == "ar" }
             if (selectedVoice != null) tts?.voice = selectedVoice
             tts?.setSpeechRate(settings.speechRate)
             tts?.setPitch(settings.pitch)
@@ -158,6 +197,7 @@ class VoiceController(
                 override fun onDone(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        onSpeakingChanged(false)
                         if (conversationActive && !microphoneMuted) scheduleListening(250)
                     }
                 }
@@ -165,6 +205,7 @@ class VoiceController(
                 override fun onError(utteranceId: String?) {
                     if (utteranceId == lastUtteranceId) {
                         speaking = false
+                        onSpeakingChanged(false)
                         if (conversationActive && !microphoneMuted) scheduleListening(700)
                     }
                 }
@@ -243,6 +284,7 @@ class VoiceController(
         recognizer = null
         runCatching { tts?.stop() }
         speaking = false
+        onSpeakingChanged(false)
         tts?.shutdown()
         tts = null
         ttsReady = false
