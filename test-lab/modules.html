@@ -66,7 +66,8 @@ function renderDurableTasks(){
   const steps=document.createElement('p');steps.textContent=(task.steps||[]).map((s,i)=>(i+1)+'. '+s.title+' ['+s.state+']').join(' | ');card.append(steps);
   const actions=document.createElement('div');actions.className='row';
   const add=(label,operation,body={})=>{const b=document.createElement('button');b.textContent=label;b.onclick=async()=>{try{const d=await taskApi('/v1/tasks/'+task.id,{method:'PATCH',body:{operation,...body}});taskTasks=taskTasks.map(x=>x.id===task.id?d.task:x);renderDurableTasks();taskAction('تم تحديث حالة المهمة.')}catch(e){taskAction('تعذر تحديث المهمة: '+e.message)}};actions.append(b)};
-  if(task.state==='queued')add('بدء','start');\n  if(task.state==='failed')add('إعادة إلى قائمة الانتظار','resume');
+  if(task.state==='queued')add('بدء','start');
+  if(task.state==='failed')add('إعادة إلى قائمة الانتظار','resume');
   if(task.state==='running')add('إيقاف مؤقت','pause');
   if(task.state==='paused')add('استئناف','resume');
   if(task.state==='running')add('إكمال','complete');
