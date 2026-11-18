@@ -33,6 +33,7 @@ import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
+import com.azzam.sadeeqi.avatar.Avatar3DScreen
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
 import com.azzam.sadeeqi.diagnostics.DeviceDiagnosticsSnapshot
@@ -174,7 +175,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "الشخصية ثلاثية الأبعاد", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var diagnosticsBaseline by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
         var diagnosticsLatest by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
@@ -1212,6 +1213,9 @@ class MainActivity : ComponentActivity() {
                     "استوديو الصوت" -> {
                         VoiceStudioScreen(modifier = Modifier.weight(1f))
                     }
+                    "الشخصية ثلاثية الأبعاد" -> {
+                        Avatar3DScreen(modifier = Modifier.weight(1f))
+                    }
                     "التداول" -> {
                         TradingIntelligenceScreen(memory = memory, modifier = Modifier.weight(1f))
                     }
@@ -1225,6 +1229,19 @@ class MainActivity : ComponentActivity() {
                                 Text("🎙 المساعد الصوتي", color = Color.White, style = MaterialTheme.typography.titleMedium)
                                 Text("تحدث إلى صديقي باستخدام الميكروفون.", color = Color(0xFFD2D0DC))
                                 Button(onClick = onStartVoice) { Text("ابدأ المحادثة الصوتية") }
+                                OutlinedButton(
+                                    onClick = {
+                                        requestedVoiceAction = VoiceForegroundService.ACTION_WAKE_WORD
+                                        if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                            ContextCompat.startForegroundService(
+                                                this@MainActivity,
+                                                Intent(this@MainActivity, VoiceForegroundService::class.java)
+                                                    .setAction(VoiceForegroundService.ACTION_WAKE_WORD)
+                                            )
+                                            onVoiceSession?.invoke(true)
+                                        } else requestMic.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                ) { Text("انتظر نداء «صديقي»") }
                             }
                         }
                         Card(modifier = Modifier.padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = Color(0xE626293A))) {
