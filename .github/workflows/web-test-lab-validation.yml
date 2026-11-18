@@ -40,3 +40,23 @@ jobs:
           }
           console.log('Web Test Lab JavaScript syntax and connector controls validated.');
           NODE
+
+      - name: Validate unified modules dashboard JavaScript
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/modules.html', 'utf8');
+          const matches = [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected exactly one modules dashboard script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['moduleCards', 'classify', 'musicParse', 'riskCalc', 'rrCalc', 'backtest']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing modules dashboard control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Unified modules dashboard JavaScript and controls validated.');
+          NODE
