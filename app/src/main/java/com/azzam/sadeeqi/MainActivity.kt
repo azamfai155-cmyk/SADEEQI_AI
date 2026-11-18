@@ -35,6 +35,7 @@ import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
+import com.azzam.sadeeqi.diagnostics.DeviceDiagnosticsSnapshot
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
 import com.azzam.sadeeqi.music.MusicPlayerManager
@@ -57,6 +58,11 @@ import android.speech.tts.TextToSpeech
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+private fun formatDiagnosticBytes(value: Long?): String {
+    if (value == null || value < 0) return "غير متاح"
+    return String.format(Locale.US, "%.2f MB", value / 1_048_576.0)
+}
 
 class MainActivity : ComponentActivity() {
 
@@ -166,8 +172,12 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "التشخيصات", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
+        var diagnosticsBaseline by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
+        var diagnosticsLatest by remember { mutableStateOf<DeviceDiagnosticsSnapshot?>(null) }
+        var diagnosticsBusy by remember { mutableStateOf(false) }
+        var diagnosticsError by remember { mutableStateOf<String?>(null) }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -194,6 +204,25 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(saveDataMode) {
             musicManager.setDataSaver(saveDataMode)
         }
+        fun captureDiagnostics(asBaseline: Boolean) {
+            if (diagnosticsBusy) return
+            diagnosticsBusy = true
+            scope.launch {
+                val result = runCatching {
+                    withContext(Dispatchers.IO) {
+                        DeviceDiagnosticsSnapshot.capture(this@MainActivity)
+                    }
+                }
+                result.onSuccess { snapshot ->
+                    diagnosticsLatest = snapshot
+                    if (asBaseline) diagnosticsBaseline = snapshot
+                }.onFailure { error ->
+                    diagnosticsError = "تعذر التقاط القياسات: ${error.message ?: "خطأ غير معروف"}"
+                }
+                diagnosticsBusy = false
+            }
+        }
+
         var status by remember {
             mutableStateOf("الإصدار 1.5.1 — المحادثة والصوت والموسيقى")
         }
@@ -865,6 +894,39 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
+                    }
+                    "التشخيصات" -> {
+                        Text("تشخيص الجهاز", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
+                        Text("قياسات لحظية للبطارية والذاكرة واستهلاك شبكة التطبيق. التقط خط البداية ثم أعد القياس بعد تنفيذ المهمة.", color = Color(0xFFD2D0DC))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(enabled = !diagnosticsBusy, onClick = { captureDiagnostics(true) }, modifier = Modifier.weight(1f)) { Text("حفظ خط البداية") }
+                            Button(enabled = !diagnosticsBusy, onClick = { captureDiagnostics(false) }, modifier = Modifier.weight(1f)) { Text("قراءة حالية") }
+                        }
+                        if (diagnosticsBusy) Text("جارٍ التقاط القياسات…", color = Color(0xFFE6C77A))
+                        diagnosticsError?.let { Text(it, color = Color(0xFFFFB4AB)) }
+                        val snapshot = diagnosticsLatest
+                        if (snapshot != null) {
+                            Text("وقت القياس: ${snapshot.capturedAtEpochMs}", color = Color(0xFFB9B4C7))
+                            Text("البطارية: ${snapshot.batteryPercent?.let { "$it%" } ?: "غير متاح"}")
+                            Text("حرارة البطارية: ${snapshot.batteryTemperatureC?.let { "$it °C" } ?: "غير متاح"}")
+                            Text("ذاكرة العملية PSS: ${snapshot.processPssKb} KB")
+                            Text("Java Heap: ${snapshot.javaHeapUsedBytes / 1_048_576} / ${snapshot.javaHeapMaxBytes / 1_048_576} MB")
+                            Text("RAM المتاحة: ${snapshot.availableDeviceMemoryBytes / 1_048_576} MB من ${snapshot.totalDeviceMemoryBytes / 1_048_576} MB")
+                            Text("استقبال التطبيق RX: ${formatDiagnosticBytes(snapshot.appRxBytes)}")
+                            Text("إرسال التطبيق TX: ${formatDiagnosticBytes(snapshot.appTxBytes)}")
+                            Text(if (snapshot.lowMemory) "تحذير: النظام يعلن انخفاض الذاكرة." else "حالة الذاكرة: لا يوجد تحذير انخفاض ذاكرة من النظام.")
+                            diagnosticsBaseline?.let { baseline ->
+                                val delta = snapshot.deltaSince(baseline)
+                                Text("الفرق منذ خط البداية (${delta.elapsedMs / 1000} ثانية):", color = Color(0xFFE6C77A))
+                                Text("تغير البطارية: ${delta.batteryPercentagePoints?.let { "$it نقطة مئوية" } ?: "غير متاح"}")
+                                Text("تغير PSS: ${delta.processPssDeltaKb} KB")
+                                Text("بيانات RX: ${formatDiagnosticBytes(delta.appRxDeltaBytes)}")
+                                Text("بيانات TX: ${formatDiagnosticBytes(delta.appTxDeltaBytes)}")
+                            }
+                        } else {
+                            Text("لم تُلتقط قياسات بعد.", color = Color(0xFFD2D0DC))
+                        }
+                        Text("ملاحظة: عدادات الشبكة تخص التطبيق وتتراكم منذ الإقلاع أو بدء استخدام UID؛ وليست قياساً حصرياً للميزة التي تختبرها.", color = Color(0xFFB9B4C7))
                     }
                     "موسيقى" -> {
                         Text("SADEEQI MUSIC", color = Color(0xFFE6C77A), style = MaterialTheme.typography.headlineSmall)
