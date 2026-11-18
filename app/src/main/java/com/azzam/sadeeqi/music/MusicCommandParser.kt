@@ -37,6 +37,8 @@ object MusicCommandParser {
         .replace(Regex("[؟?!،,.؛:]+"), " ")
         .replace(Regex("\\s+"), " ")
 
+    fun allSurahs(): List<Pair<Int, String>> = surahs.mapIndexed { index, name -> (index + 1) to name }
+
     fun parse(raw: String): MusicCommand? {
         val text = normalize(raw)
         if (text.isBlank()) return null
