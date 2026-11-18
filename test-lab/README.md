@@ -2,7 +2,7 @@
 
 An isolated Arabic RTL browser console for developing and testing the SADEEQI AI experience before porting stable modules to Android.
 
-## Current browser modules
+## Unified Android modules dashboard\n- Open `modules.html` from the main lab using the **وحدات التطبيق كاملة** link.\n- Consolidates the Android app areas: conversation/command classification, browser voice input/output and voice settings, phone command parser preview, encrypted-memory architecture notes, music command parser preview, SOCIAL HUB integration status, trading risk/R:R/backtest calculators, and code architecture map.\n- Includes local previews of the existing `DeviceCommandParser` and `MusicCommandParser` command patterns, plus trading calculations aligned with `TradingMath`.\n- Phone operations are deliberately preview-only in the browser. Android Keystore keys and encrypted device memory are not copied into browser storage.\n\n## Current browser modules
 - Home dashboard and quick-command launcher.
 - Local intent analysis and conversation UI (heuristics only; not an LLM).
 - Browser speech recognition where supported by the browser, microphone permission, and installed language packs.
