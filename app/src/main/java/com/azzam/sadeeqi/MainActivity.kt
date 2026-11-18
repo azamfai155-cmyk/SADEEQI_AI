@@ -1042,6 +1042,7 @@ class MainActivity : ComponentActivity() {
                                     Column(Modifier.fillMaxWidth()) {
                                         Text("♫  ${track.title}", color = Color.White, maxLines = 1)
                                         Text(track.artist, color = Color(0xFFB9B4C7), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                        Text("${track.sourceName}${track.license?.let { " · ترخيص $it" } ?: ""}", color = Color(0xFF8F9AA8), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                     }
                                 }
                             }
