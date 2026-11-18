@@ -42,7 +42,8 @@ import com.azzam.sadeeqi.music.MusicPlayerManager
 import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.music.MusicLibraryStore
-import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.MusicCatalogRepository
+import com.azzam.sadeeqi.music.RuqyahRepository
 import com.azzam.sadeeqi.music.QuranAudioRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
@@ -184,7 +185,7 @@ class MainActivity : ComponentActivity() {
         var musicHistory by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         var musicFavorites by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         val musicLibrary = remember { MusicLibraryStore(this@MainActivity) }
-        val audiusRepository = remember { AudiusMusicRepository() }
+        val musicCatalogRepository = remember { MusicCatalogRepository() }
         val quranRepository = remember { QuranAudioRepository() }
         var quranMenuExpanded by remember { mutableStateOf(false) }
         var selectedQuranReciter by remember { mutableStateOf(QuranAudioRepository.DEFAULT_RECITER) }
@@ -442,11 +443,11 @@ class MainActivity : ComponentActivity() {
             remoteSearchQuery = cleanQuery
             selectedTab = "موسيقى"
             isSearchingMusic = true
-            musicNotice = "جاري البحث في مكتبة Audius العالمية…"
+            musicNotice = "جاري البحث في المكتبات الموسيقية المجانية…"
             scope.launch {
                 try {
                     val results = withContext(Dispatchers.IO) {
-                        audiusRepository.search(cleanQuery, limit = if (saveDataMode) 8 else 20)
+                        musicCatalogRepository.search(cleanQuery, limit = if (saveDataMode) 20 else 40)
                     }
                     remoteMusicResults = results
                     musicNotice = if (results.isEmpty()) {
@@ -506,6 +507,21 @@ class MainActivity : ComponentActivity() {
                         selectedTab = "موسيقى"
                         quranMenuExpanded = true
                         musicNotice = "اختر السورة التي تريد الاستماع إليها."
+                    }
+                    MusicCommand.PlayRuqyah -> {
+                        selectedTab = "موسيقى"
+                        musicNotice = "جاري تجهيز الرقية من آيات القرآن الكريم…"
+                        scope.launch {
+                            try {
+                                val tracks = withContext(Dispatchers.IO) { RuqyahRepository(quranRepository).loadPlaylist(selectedQuranReciter) }
+                                check(tracks.isNotEmpty()) { "لم تتوفر روابط الرقية حالياً." }
+                                ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                                musicManager.playRemoteQueue(tracks)
+                                musicNotice = "بدأ تشغيل آيات الرقية الشرعية من القرآن الكريم."
+                            } catch (error: Exception) {
+                                musicNotice = "تعذر تجهيز الرقية: ${error.message ?: "تحقق من الإنترنت."}"
+                            }
+                        }
                     }
                     is MusicCommand.PlayQuran -> {
                         playQuranSurah(command.surahNumber, command.surahName)
