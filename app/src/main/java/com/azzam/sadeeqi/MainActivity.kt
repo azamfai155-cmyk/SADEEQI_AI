@@ -43,6 +43,7 @@ import com.azzam.sadeeqi.music.MusicCommand
 import com.azzam.sadeeqi.music.MusicCommandParser
 import com.azzam.sadeeqi.music.MusicLibraryStore
 import com.azzam.sadeeqi.music.AudiusMusicRepository
+import com.azzam.sadeeqi.music.QuranAudioRepository
 import com.azzam.sadeeqi.music.RemoteMusicTrack
 import com.azzam.sadeeqi.social.SocialHubScreen
 import com.azzam.sadeeqi.phone.DeviceCommand
@@ -184,6 +185,10 @@ class MainActivity : ComponentActivity() {
         var musicFavorites by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
         val musicLibrary = remember { MusicLibraryStore(this@MainActivity) }
         val audiusRepository = remember { AudiusMusicRepository() }
+        val quranRepository = remember { QuranAudioRepository() }
+        var quranMenuExpanded by remember { mutableStateOf(false) }
+        var selectedQuranReciter by remember { mutableStateOf(QuranAudioRepository.DEFAULT_RECITER) }
+        var reciterMenuExpanded by remember { mutableStateOf(false) }
         var remoteSearchQuery by remember { mutableStateOf("") }
         var remoteMusicResults by remember { mutableStateOf(emptyList<RemoteMusicTrack>()) }
         var isSearchingMusic by remember { mutableStateOf(false) }
@@ -411,6 +416,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        fun playQuranSurah(surahNumber: Int, surahName: String) {
+            selectedTab = "موسيقى"
+            musicNotice = "جاري تجهيز سورة $surahName بصوت القارئ المحدد…"
+            scope.launch {
+                try {
+                    val tracks = withContext(Dispatchers.IO) {
+                        quranRepository.loadSurah(surahNumber, selectedQuranReciter)
+                    }
+                    check(tracks.isNotEmpty()) { "لم تتوفر روابط صوتية لهذه السورة حالياً." }
+                    ContextCompat.startForegroundService(this@MainActivity, Intent(this@MainActivity, MusicPlaybackService::class.java))
+                    musicManager.playRemoteQueue(tracks)
+                    musicNotice = "بدأت تلاوة سورة $surahName — ${tracks.first().artist}"
+                } catch (error: Exception) {
+                    musicNotice = "تعذر تشغيل التلاوة: ${error.message ?: "تحقق من الإنترنت."}"
+                }
+            }
+        }
         fun searchOnlineMusic(query: String) {
             val cleanQuery = query.trim()
             if (cleanQuery.isBlank()) {
@@ -479,6 +501,14 @@ class MainActivity : ComponentActivity() {
                         musicManager.adjustVolume(-0.1f)
                         musicNotice = "تم خفض مستوى صوت المشغل."
                         selectedTab = "موسيقى"
+                    }
+                    MusicCommand.OpenQuran -> {
+                        selectedTab = "موسيقى"
+                        quranMenuExpanded = true
+                        musicNotice = "اختر السورة التي تريد الاستماع إليها."
+                    }
+                    is MusicCommand.PlayQuran -> {
+                        playQuranSurah(command.surahNumber, command.surahName)
                     }
                     is MusicCommand.Search -> {
                         searchOnlineMusic(command.query)
@@ -939,6 +969,38 @@ class MainActivity : ComponentActivity() {
                             singleLine = true,
                             label = { Text("ابحث عن أغنية أو فنان عالمياً") }
                         )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                OutlinedButton(onClick = { quranMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text("📖 القرآن الكريم • اختر سورة")
+                                }
+                                DropdownMenu(expanded = quranMenuExpanded, onDismissRequest = { quranMenuExpanded = false }) {
+                                    MusicCommandParser.allSurahs().forEach { (number, name) ->
+                                        DropdownMenuItem(
+                                            text = { Text("$number. $name") },
+                                            onClick = { quranMenuExpanded = false; playQuranSurah(number, name) }
+                                        )
+                                    }
+                                }
+                            }
+                            Box {
+                                OutlinedButton(onClick = { reciterMenuExpanded = true }) { Text("القارئ") }
+                                DropdownMenu(expanded = reciterMenuExpanded, onDismissRequest = { reciterMenuExpanded = false }) {
+                                    listOf(
+                                        "ar.alafasy" to "مشاري العفاسي",
+                                        "ar.abdurrahmaansudais" to "عبدالرحمن السديس",
+                                        "ar.husary" to "محمود خليل الحصري",
+                                        "ar.minshawi" to "محمد صديق المنشاوي"
+                                    ).forEach { (edition, label) ->
+                                        DropdownMenuItem(text = { Text(label) }, onClick = { selectedQuranReciter = edition; reciterMenuExpanded = false })
+                                    }
+                                }
+                            }
+                        }
                         Button(
                             onClick = { searchOnlineMusic(remoteSearchQuery) },
                             enabled = !isSearchingMusic && remoteSearchQuery.isNotBlank(),
