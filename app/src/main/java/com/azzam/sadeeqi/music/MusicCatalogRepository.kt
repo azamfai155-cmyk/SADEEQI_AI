@@ -9,7 +9,7 @@ class MusicCatalogRepository(
         require(query.isNotBlank()) { "اكتب اسم أغنية أو فنان للبحث." }
         val perProvider = limit.coerceIn(1, 30)
         val results = mutableListOf<RemoteMusicTrack>()
-        runCatching { audius.search(query, perProvider) }.onSuccess(results::addAll)
+        runCatching { audius.search(query, perProvider) }.onSuccess { results.addAll(it) }
         runCatching { openverse.search(query, perProvider) }.onSuccess(results::addAll)
         return results.distinctBy {
             "${it.title.trim().lowercase()}|${it.artist.trim().lowercase()}".replace(Regex("\\s+"), " ")
