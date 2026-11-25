@@ -10,6 +10,18 @@ async function withServer(run) {
   finally { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 }
 
+test('root endpoint identifies the public API service', async () => {
+  await withServer(async port => {
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.service, 'sadeeqi-ai');
+    assert.equal(data.status, 'online');
+    assert.equal(data.health, '/health');
+    assert.equal(data.endpoints.chat.path, '/v1/chat');
+  });
+});
+
 test('health endpoint exposes service metadata without secrets', async () => {
   await withServer(async port => {
     const response = await fetch(`http://127.0.0.1:${port}/health`);
