@@ -30,13 +30,13 @@ class OpenAiGatewaySourcesTest {
             {"title":"Valid","url":"https://example.org/path"}
         ]}"""
 
-        val sources = OpenAiGateway.parseSources(body)
+        val sources = gateway.parseSources(body)
 
         assertEquals(listOf("https://example.org/path"), sources.map { it.url })
     }
 
     @Test
     fun missingSourcesProducesEmptyList() {
-        assertTrue(OpenAiGateway.parseSources("""{"output_text":"hello"}""").isEmpty())
+        assertTrue(gateway.parseSources("""{"output_text":"hello"}""").isEmpty())
     }
 }
