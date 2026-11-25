@@ -46,6 +46,10 @@
             android:name=".auth.AuthActivity"
             android:exported="false" />
 
+        <!-- nosemgrep: java.android.security.exported_activity.exported_activity
+             Android requires the launcher entry point to be exported. MainActivity has only the
+             standard MAIN/LAUNCHER filter (no browsable/deep links) and gates its UI on a stored
+             authenticated session before rendering privileged app functionality. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
