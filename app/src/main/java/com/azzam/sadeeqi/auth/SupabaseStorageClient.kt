@@ -31,7 +31,7 @@ class SupabaseStorageClient(context: Context) {
         require(file.length() in 1..MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB وألا يكون فارغاً." }
         require(contentType in ALLOWED_TYPES) { "نوع الملف غير مسموح." }
         val userId = currentUserId()
-        val safeName = originalFileName.substringAfterLast('/').substringAfterLast('\\\\')
+        val safeName = originalFileName.substringAfterLast('/')
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
             .take(100)
             .ifBlank { "file" }
