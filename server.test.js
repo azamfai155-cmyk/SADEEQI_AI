@@ -44,6 +44,20 @@ test('chat and social endpoints require authentication', async () => {
   });
 });
 
+test('explicit memory requests extract test name and regular user name', async () => {
+  const { parseExplicitMemoryRequest } = await import('./server.js');
+  assert.deepEqual(parseExplicitMemoryRequest([{ role: 'user', content: 'تذكر أن اسمي في الاختبارات هو أحمد' }]), { key: 'اسم الاختبار', value: 'أحمد' });
+  assert.deepEqual(parseExplicitMemoryRequest([{ role: 'user', content: 'احفظ أن اسمي هو خالد' }]), { key: 'اسم المستخدم', value: 'خالد' });
+  assert.equal(parseExplicitMemoryRequest([{ role: 'user', content: 'ما اسمي؟' }]), null);
+});
+
+test('explicit preference memory requests are isolated as facts', async () => {
+  const { parseExplicitMemoryRequest } = await import('./server.js');
+  const memory = parseExplicitMemoryRequest([{ role: 'user', content: 'تذكر أنني أفضل الإجابات المختصرة' }]);
+  assert.equal(memory.value, 'أفضل الإجابات المختصرة');
+  assert.match(memory.key, /^تفضيل:/);
+});
+
 test('bearer token parser strips the authorization scheme', () => {
   assert.equal(extractBearerToken('Bearer test-token'), 'test-token');
   assert.equal(extractBearerToken('bearer test-token'), 'test-token');
