@@ -190,7 +190,7 @@ import { isSafeImageInput } from './security/input-validation.js';
 
 test('image input guard allows bounded supported image data and rejects unsafe references', () => {
   assert.equal(isSafeImageInput('data:image/png;base64,iVBORw0KGgoAAAANSUhE'), true);
-  assert.equal(isSafeImageInput('https://cdn.example.com/photo.jpg'), true);
+  assert.equal(isSafeImageInput('https://cdn.example.com/photo.jpg'), false);
   for (const value of [
     'data:text/html;base64,SGVsbG8=',
     'data:image/svg+xml;base64,PHN2Zz4=',
