@@ -381,7 +381,7 @@ export async function handleRequest(request, env) {
     const limited = await enforceDistributedRateLimit(request, env, auth, ratePolicy.scope, ratePolicy.limit, cors);
     if (limited) return limited;
     if (isTasks && ['POST', 'PATCH'].includes(request.method)) {
-      const taskId = url.pathname.match(/^\\/v1\\/tasks\\/([0-9a-f-]{36})$/i)?.[1] || null;
+      const taskId = url.pathname.match(/^\/v1\/tasks\/([0-9a-f-]{36})$/i)?.[1] || null;
       await writeAuditEvent(env, auth, 'task.mutation_requested', 'task', taskId, {
         method: request.method,
         operation: request.method === 'POST' ? 'create' : 'update'
