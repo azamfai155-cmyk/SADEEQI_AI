@@ -280,7 +280,7 @@ async function enforceDistributedRateLimit(request, env, auth, scope, limit, cor
     if (!row.allowed) blockedFor = Math.max(blockedFor, Number(row.retry_after_seconds) || 1);
   }
   return blockedFor > 0
-    ? json({ error: 'Too many requests. Please retry later.' }, 429, { 'retry-after': String(blockedFor) })
+    ? json({ error: 'Too many requests. Please retry later.' }, 429, { ...cors, 'retry-after': String(blockedFor) })
     : null;
 }
 
