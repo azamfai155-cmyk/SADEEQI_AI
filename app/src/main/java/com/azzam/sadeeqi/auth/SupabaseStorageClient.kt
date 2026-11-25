@@ -133,10 +133,9 @@ class SupabaseStorageClient(context: Context) {
         http.newCall(request).execute().use(block)
 
     private fun validateOwnedPath(path: String, userId: String) {
-        require(path.startsWith("$userId/") && path.length > userId.length + 1) {
-            "لا يمكنك الوصول إلى ملف لا يخص حسابك."
+        require(path.matches(Regex(Regex.escape(userId) + "/[A-Za-z0-9_-][A-Za-z0-9._-]{0,180}"))) {
+            "مسار الملف غير صالح أو لا يخص حسابك."
         }
-        require(!path.split('/').any { it == "." || it == ".." }) { "مسار الملف غير صالح." }
     }
 
     private fun errorMessage(code: Int, raw: String): String {
