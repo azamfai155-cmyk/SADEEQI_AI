@@ -32,22 +32,25 @@ class OpenAiGateway(
     data class ChatReply(val text: String, val sources: List<Source>)
 
     internal fun parseSources(body: String): List<Source> {
-        val sourceArray = runCatching { JSONObject(body).optJSONArray("sources") }.getOrNull()
+        val sourceArray = runCatching { JSONObject(body).getJSONArray("sources") }.getOrNull()
             ?: return emptyList()
         val seen = mutableSetOf<String>()
         val result = mutableListOf<Source>()
         for (index in 0 until minOf(sourceArray.length(), 48)) {
-            val item = sourceArray.optJSONObject(index) ?: continue
-            val rawUrl = item.optString("url").trim()
+            val item = runCatching { sourceArray.getJSONObject(index) }.getOrNull() ?: continue
+            val rawUrl = runCatching { item.getString("url").trim() }.getOrNull()
+                ?.takeIf { it.isNotBlank() } ?: continue
             val uri = runCatching { URI(rawUrl) }.getOrNull() ?: continue
-            if (!uri.scheme.equals("https", ignoreCase = true) ||
-                uri.host.isNullOrBlank() || uri.userInfo != null) continue
+            val scheme = uri.scheme ?: continue
+            val host = uri.host ?: continue
+            if (!scheme.equals("https", ignoreCase = true) || host.isBlank() ||
+                uri.userInfo != null) continue
             val normalized = runCatching { uri.toASCIIString() }.getOrNull() ?: continue
             if (!seen.add(normalized)) continue
-            val title = item.optString("title").trim()
-                .takeIf { it.isNotBlank() }?.take(240) ?: uri.host
+            val title = runCatching { item.getString("title").trim() }.getOrNull()
+                ?.takeIf { it.isNotBlank() }?.take(240) ?: host
             result += Source(title, normalized)
-            if (result.size == 12) break
+            if (result.size >= 12) break
         }
         return result
     }
