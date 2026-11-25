@@ -48,6 +48,7 @@ import com.azzam.sadeeqi.phone.DeviceCommand
 import com.azzam.sadeeqi.phone.DeviceCommandParser
 import com.azzam.sadeeqi.phone.PhoneControl
 import com.azzam.sadeeqi.trading.TradingIntelligenceScreen
+import com.azzam.sadeeqi.reminders.ReminderScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -168,7 +169,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "التذكيرات", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -872,6 +873,9 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (selectedImageDataUrl != null) Text("تم اختيار صورة — أرسل سؤالك لتحليلها", color = Color(0xFFE6C77A))
+                    }
+                    "التذكيرات" -> {
+                        ReminderScreen(modifier = Modifier.weight(1f))
                     }
                     "البحث" -> {
                         Text("البحث في محادثاتك", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleLarge)
