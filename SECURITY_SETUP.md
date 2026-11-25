@@ -10,7 +10,7 @@ Configure these as server-only Environment Variables in the Vercel project `sade
 
 - `SUPABASE_URL`: the project URL.
 - `SUPABASE_SERVICE_ROLE_KEY`: the Supabase service-role secret. Server-side only; never expose it to clients.
-- `RATE_LIMIT_HASH_KEY`: a randomly generated secret with at least 32 characters. Keep stable across Worker instances and deployments so limits are globally consistent.
+- `RATE_LIMIT_HASH_KEY`: a randomly generated secret with at least 32 characters. Keep stable across Vercel function instances and deployments so limits are globally consistent.
 - `SOCIAL_TOKEN_ENCRYPTION_KEY`: base64 encoding of exactly 32 cryptographically random bytes for OAuth/access/refresh tokens.
 - `TASK_DATA_ENCRYPTION_KEY`: a separate base64 encoding of exactly 32 cryptographically random bytes for task titles, goals, steps and results. Task payloads are AES-256-GCM encrypted before storage; plaintext title/goal columns contain generic placeholders. Losing this key makes encrypted tasks unrecoverable.
 
@@ -23,7 +23,7 @@ After the secrets are present in Vercel and the database migrations are applied 
 - `ENFORCE_DISTRIBUTED_RATE_LIMIT=true`
 - `ENFORCE_AUDIT_LOGGING=true`
 
-The Express/Vercel API fails closed (HTTP 503) for protected requests if an enabled control cannot reach Supabase. The Worker entrypoint has the same server-side checks for a future Cloudflare deployment. Rate limits use an atomic Postgres upsert shared across Worker instances: chat 30/minute, social provider API 30/minute, task API 60/minute, with both trusted Cloudflare client-IP and authenticated-user buckets where available. Exceeded requests receive HTTP 429 and `Retry-After`.
+The Express/Vercel API fails closed (HTTP 503) for protected requests if an enabled control cannot reach Supabase. The Worker entrypoint has the same server-side checks for a future Cloudflare deployment. Rate limits use an atomic Postgres upsert shared across Vercel serverless instances: chat 30/minute, social provider API 30/minute, task API 60/minute, with both the trusted edge-proxy client IP and authenticated-user buckets. Exceeded requests receive HTTP 429 and `Retry-After`.
 
 ## Token encryption
 
@@ -33,7 +33,7 @@ At present, the social endpoints only report provider readiness; no OAuth tokens
 
 ## SSRF boundary
 
-Remote image URLs are rejected. The Worker forwards only bounded, signature-checked base64 JPEG/PNG/WebP/GIF data URLs to the model provider. This deliberately avoids having a third-party model provider dereference attacker-controlled URLs, including redirect and DNS-rebinding paths.
+Remote image URLs are rejected. The API accepts only bounded, signature-checked base64 JPEG/PNG/WebP/GIF data URLs for model input. This deliberately avoids having a third-party model provider dereference attacker-controlled URLs, including redirect and DNS-rebinding paths.
 
 ## Audit review
 
