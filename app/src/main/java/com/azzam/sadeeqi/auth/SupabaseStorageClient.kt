@@ -41,7 +41,7 @@ class SupabaseStorageClient(context: Context) {
             .header("x-upsert", "false")
             .post(file.readBytes().toRequestBody(contentType.toMediaType()))
             .build()
-        execute(request) { response ->
+        return execute(request) { response ->
             require(response.isSuccessful) { errorMessage(response.code, response.body?.string().orEmpty()) }
             objectPath
         }
@@ -58,7 +58,7 @@ class SupabaseStorageClient(context: Context) {
             .header("x-upsert", "true")
             .put(file.readBytes().toRequestBody(contentType.toMediaType()))
             .build()
-        execute(request) { response ->
+        return execute(request) { response ->
             require(response.isSuccessful) { errorMessage(response.code, response.body?.string().orEmpty()) }
             objectPath
         }
