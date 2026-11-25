@@ -1,0 +1,55 @@
+version: 2.1
+
+jobs:
+  backend-checks:
+    docker:
+      - image: cimg/node:22.11
+    working_directory: ~/project
+    environment:
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      npm_config_cache: /tmp/npm-cache
+    steps:
+      - checkout
+      - run:
+          name: Prepare isolated npm cache
+          command: |
+            mkdir -p /tmp/npm-cache
+            chmod -R u+rwX /tmp/npm-cache
+            npm config get cache
+      - run:
+          name: Install backend dependencies
+          command: npm install --no-audit --no-fund
+      - run:
+          name: Run backend tests
+          command: npm test
+
+  backend-dependency-audit:
+    docker:
+      - image: cimg/node:22.11
+    working_directory: ~/project
+    environment:
+      NPM_CONFIG_CACHE: /tmp/npm-cache
+      npm_config_cache: /tmp/npm-cache
+    steps:
+      - checkout
+      - run:
+          name: Prepare isolated npm cache
+          command: |
+            mkdir -p /tmp/npm-cache
+            chmod -R u+rwX /tmp/npm-cache
+            npm config get cache
+      - run:
+          name: Generate temporary lockfile
+          command: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Install locked production dependencies
+          command: npm ci --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Audit production dependencies
+          command: npm audit --omit=dev --audit-level=high
+
+workflows:
+  backend-ci:
+    jobs:
+      - backend-checks
+      - backend-dependency-audit
