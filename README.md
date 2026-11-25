@@ -76,4 +76,4 @@ Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user 
 - Added `SupabaseStorageClient` for authenticated per-user private file upload, replacement, download, listing and deletion.
 - Object paths are generated under the authenticated user's UUID; caller-supplied paths are validated and Supabase RLS remains the final authorization boundary.
 - The bucket is expected to remain private with the four user-folder policies documented in [docs/SUPABASE_STORAGE_SETUP_AR.md](docs/SUPABASE_STORAGE_SETUP_AR.md).
-- This is a storage-layer integration only; no file-management UI or two-account Android acceptance test is claimed yet.
+- Added the Android **ملفاتي** screen for upload, listing, replacement, in-app download and deletion. Two-account network acceptance testing is still required before production.
