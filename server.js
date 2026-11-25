@@ -1,5 +1,5 @@
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -245,18 +245,17 @@ export function validateInput(input) {
   return null;
 }
 
-// Public landing/diagnostic route: this project is an API backend, not a hosted web frontend.
-app.get('/', (_req, res) => {
+// Browser-first web app. The Supabase anon key is public by design; never expose service-role keys.
+app.get('/web-config', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
-    service: 'sadeeqi-ai',
-    status: 'online',
-    description: 'SADEEQI AI backend API',
-    health: '/health',
-    endpoints: {
-      chat: { method: 'POST', path: '/v1/chat', authentication: 'Bearer Supabase access token' },
-      socialProviders: { method: 'GET', path: '/v1/social/providers', authentication: 'Bearer Supabase access token' }
-    }
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
   });
+});
+
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.sendFile(fileURLToPath(new URL('./web/index.html', import.meta.url)));
 });
 
 app.get('/health', (_req, res) => {
