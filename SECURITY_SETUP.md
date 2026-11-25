@@ -11,7 +11,8 @@ Configure these in the Cloudflare Worker environment used by `backend/src/worker
 - `SUPABASE_URL`: the project URL.
 - `SUPABASE_SERVICE_ROLE_KEY`: the Supabase service-role secret. Server-side only; never expose it to clients.
 - `RATE_LIMIT_HASH_KEY`: a randomly generated secret with at least 32 characters. Keep stable across Worker instances and deployments so limits are globally consistent.
-- `SOCIAL_TOKEN_ENCRYPTION_KEY`: base64 encoding of exactly 32 cryptographically random bytes. Store this separately from the Supabase service key and retain a secure backup; losing it makes encrypted OAuth tokens unrecoverable.
+- `SOCIAL_TOKEN_ENCRYPTION_KEY`: base64 encoding of exactly 32 cryptographically random bytes for OAuth/access/refresh tokens.
+- `TASK_DATA_ENCRYPTION_KEY`: a separate base64 encoding of exactly 32 cryptographically random bytes for task titles, goals, steps and results. Task payloads are AES-256-GCM encrypted before storage; plaintext title/goal columns contain generic placeholders. Losing this key makes encrypted tasks unrecoverable.
 
 Generate independent keys with a cryptographically secure random generator. Do not commit them, paste them into issues, or add them to Android build configuration.
 
@@ -26,9 +27,9 @@ The Worker fails closed (HTTP 503) for protected requests if an enabled control 
 
 ## Token encryption
 
-Use `security/token-vault.js` for OAuth/access/refresh tokens before any token is persisted. It uses AES-256-GCM with a fresh 96-bit nonce per encryption and binds ciphertext to both provider and user ID using authenticated additional data. The ciphertext envelope includes a version and algorithm identifier. Never log plaintext tokens. Key rotation must decrypt with the old key and re-encrypt with the new key in a controlled migration.
+Use `security/token-vault.js` for OAuth/access/refresh tokens and task payloads before any sensitive data is persisted. It uses AES-256-GCM with a fresh 96-bit nonce per encryption and binds ciphertext to both provider and user ID using authenticated additional data. The ciphertext envelope includes a version and algorithm identifier. Never log plaintext tokens. Key rotation must decrypt with the old key and re-encrypt with the new key in a controlled migration.
 
-At present, the social endpoints only report provider readiness; no OAuth tokens are stored or connected. The vault utility is implemented and tested, but it is not evidence that a social account is connected.
+At present, the social endpoints only report provider readiness; no OAuth tokens are stored or connected. The vault utility is implemented and tested, but it is not evidence that a social account is connected. Task persistence requires `TASK_DATA_ENCRYPTION_KEY` and refuses plaintext task payloads.
 
 ## SSRF boundary
 
