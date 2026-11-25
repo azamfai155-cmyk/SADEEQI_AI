@@ -10,15 +10,14 @@ async function withServer(run) {
   finally { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 }
 
-test('root endpoint identifies the public API service', async () => {
+test('root endpoint serves the Arabic web application', async () => {
   await withServer(async port => {
     const response = await fetch(`http://127.0.0.1:${port}/`);
-    const data = await response.json();
+    const html = await response.text();
     assert.equal(response.status, 200);
-    assert.equal(data.service, 'sadeeqi-ai');
-    assert.equal(data.status, 'online');
-    assert.equal(data.health, '/health');
-    assert.equal(data.endpoints.chat.path, '/v1/chat');
+    assert.match(response.headers.get('content-type') || '', /text\\/html/);
+    assert.match(html, /<!doctype html>/i);
+    assert.match(html, /صديقي AI/);
   });
 });
 
