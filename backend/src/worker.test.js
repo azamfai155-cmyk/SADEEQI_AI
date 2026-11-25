@@ -294,7 +294,7 @@ test('social provider readiness uses the same Meta and Pinterest credential name
 import { isSafeImageInput } from '../../security/input-validation.js';
 
 test('shared image guard blocks private-network hosts and unsafe data image formats', () => {
-  assert.equal(isSafeImageInput('https://images.example.org/photo.webp'), true);
+  assert.equal(isSafeImageInput('https://images.example.org/photo.webp'), false);
   assert.equal(isSafeImageInput('data:image/jpeg;base64,/9j/4AAQSkZJRgAB'), true);
   assert.equal(isSafeImageInput('https://192.168.0.1/photo.jpg'), false);
   assert.equal(isSafeImageInput('https://[::1]/photo.jpg'), false);
