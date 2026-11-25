@@ -87,6 +87,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
+          # GitHub's Linux runners may not expose KVM. Explicitly allow the
+          # emulator's TCG software CPU backend instead of launching an AVD
+          # that immediately exits with "Software CPU emulation is not supported".
+          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 34
           arch: x86_64
@@ -97,12 +101,10 @@ jobs:
           disk-size: 4096M
           emulator-boot-timeout: 1200
           disable-animations: true
-          # Cold boot a clean AVD; RAM and disk are configured through the
-          # action's supported inputs rather than emulator command-line flags.
+          disable-linux-hw-accel: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -no-snapshot-load -wipe-data
-          # The action splits script input on newlines and runs each line in a
-          # separate shell. Keep this as one folded command so status + diagnostics
-          # execute in the same shell after the emulator action has booted the device.
+          # Keep this folded command on one shell line: the action splits
+          # multiline scripts into separate shells.
           script: >-
             set -e; adb wait-for-device; echo "Waiting for Android framework and Package Manager readiness"; ready=0; for attempt in $(seq 1 60); do boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"; if [ "$boot" = "1" ] && adb shell cmd package list packages >/dev/null 2>&1 && adb shell cmd activity get-config >/dev/null 2>&1; then ready=1; break; fi; echo "Android services not ready yet (attempt $attempt/60; boot=$boot)"; sleep 5; done; if [ "$ready" -ne 1 ]; then echo "::error::Android framework services did not become ready; refusing to start instrumentation while Package Manager or Activity Manager is unavailable"; adb shell getprop > android-emulator-properties.txt 2>&1 || true; adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true; adb devices -l > android-adb-devices.txt 2>&1 || true; exit 1; fi; echo "Android framework ready; running instrumentation tests"; set +e; gradle :app:connectedDebugAndroidTest --stacktrace --console=plain --no-daemon --max-workers=2 -PsadeeqiApiBaseUrl="https://sadeeqi-ai-pdrk.vercel.app" -PsadeeqiSupabaseUrl="$SUPABASE_URL" -PsadeeqiSupabaseAnonKey="$SUPABASE_ANON_KEY"; test_status=$?; adb logcat -d -v threadtime > android-instrumentation-logcat.txt 2>&1 || true; adb shell dumpsys activity exit-info com.azzam.sadeeqi > android-process-exit-info.txt 2>&1 || true; adb devices -l > android-adb-devices.txt 2>&1 || true; exit "$test_status"
 
@@ -114,5 +116,7 @@ jobs:
           path: |
             android-instrumentation-logcat.txt
             android-process-exit-info.txt
+            android-adb-devices.txt
+            android-emulator-properties.txt
           if-no-files-found: ignore
           retention-days: 7
