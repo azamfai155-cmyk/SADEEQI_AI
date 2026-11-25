@@ -15,7 +15,7 @@ test('root endpoint serves the Arabic web application', async () => {
     const response = await fetch(`http://127.0.0.1:${port}/`);
     const html = await response.text();
     assert.equal(response.status, 200);
-    assert.match(response.headers.get('content-type') || '', /text\\/html/);
+    assert.ok((response.headers.get('content-type') || '').includes('text/html'));
     assert.match(html, /<!doctype html>/i);
     assert.match(html, /صديقي AI/);
   });
