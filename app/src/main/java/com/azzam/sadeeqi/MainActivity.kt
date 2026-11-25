@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
         var input by remember {
             mutableStateOf("")
         }
+        var webSearchEnabled by remember { mutableStateOf(false) }
         var voiceSessionActive by remember { mutableStateOf(false) }
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
@@ -332,7 +333,7 @@ class MainActivity : ComponentActivity() {
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
                     val reply = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(turns, imageForRequest, webSearchEnabled)
                     }
                     val answer = reply.text
                     if (reply.sources.isNotEmpty()) messageSources[answer] = reply.sources
@@ -732,6 +733,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = webSearchEnabled,
+                                onCheckedChange = { webSearchEnabled = it },
+                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFFE6C77A))
+                            )
+                            Text("بحث مباشر بالإنترنت وإظهار المصادر", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         }
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
