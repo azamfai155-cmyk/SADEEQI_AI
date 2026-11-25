@@ -324,6 +324,7 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            val useWebSearch = webSearchEnabled
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             isGenerating = true
@@ -333,7 +334,7 @@ class MainActivity : ComponentActivity() {
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
                     val reply = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest, webSearchEnabled)
+                        gateway.reply(turns, imageForRequest, useWebSearch)
                     }
                     val answer = reply.text
                     if (reply.sources.isNotEmpty()) messageSources[answer] = reply.sources
