@@ -6,7 +6,7 @@ Migration `supabase/migrations/202611250001_sadeeqi_security_controls.sql` creat
 
 ## Required server-side secrets
 
-Configure these in the Cloudflare Worker environment used by `backend/src/worker.js` (not in the Android app, browser bundle, or public Vercel variables):
+Configure these as server-only Environment Variables in the Vercel project `sadeeqi-ai-pdrk` (Settings → Environment Variables; select the intended Production and Preview environments). The deployed Vercel API entrypoint is `server.js`. Never put these values in Android, browser bundles, or public client variables. The separate Cloudflare Worker build check currently reports that the Worker service `sadeeqi-ai` does not exist on the account; its deployment is not active.
 
 - `SUPABASE_URL`: the project URL.
 - `SUPABASE_SERVICE_ROLE_KEY`: the Supabase service-role secret. Server-side only; never expose it to clients.
@@ -18,12 +18,12 @@ Generate independent keys with a cryptographically secure random generator. Do n
 
 ## Enable enforcement
 
-After the secrets are present and the migration is applied and verified, set:
+After the secrets are present in Vercel and the database migrations are applied and verified, set:
 
 - `ENFORCE_DISTRIBUTED_RATE_LIMIT=true`
 - `ENFORCE_AUDIT_LOGGING=true`
 
-The Worker fails closed (HTTP 503) for protected requests if an enabled control cannot reach Supabase. Rate limits use an atomic Postgres upsert shared across Worker instances: chat 30/minute, social provider API 30/minute, task API 60/minute, with both trusted Cloudflare client-IP and authenticated-user buckets where available. Exceeded requests receive HTTP 429 and `Retry-After`.
+The Express/Vercel API fails closed (HTTP 503) for protected requests if an enabled control cannot reach Supabase. The Worker entrypoint has the same server-side checks for a future Cloudflare deployment. Rate limits use an atomic Postgres upsert shared across Worker instances: chat 30/minute, social provider API 30/minute, task API 60/minute, with both trusted Cloudflare client-IP and authenticated-user buckets where available. Exceeded requests receive HTTP 429 and `Retry-After`.
 
 ## Token encryption
 
@@ -47,6 +47,11 @@ limit 200;
 ```
 
 The event log is metadata-only. Do not add prompt text, file contents, credentials, access tokens, or other secrets to `metadata`.
+
+## Remaining deployment and dashboard hardening
+
+- The connected Supabase/Vercel tools do not expose the Supabase `service_role` secret, so it must be copied from the Supabase project dashboard into Vercel as `SUPABASE_SERVICE_ROLE_KEY`. Do not paste it into chat or GitHub. Generate independent 32-byte keys for the encryption and HMAC variables, save secure offline backups, then add them to Vercel before enabling the enforcement flags.
+- The Vercel previews are building, but Cloudflare's GitHub integration reports `This Worker does not exist on your account` for the configured `sadeeqi-ai` Worker. Either create/configure that Worker in Cloudflare or remove the stale Cloudflare preview integration if Vercel is the only intended runtime.
 
 ## Remaining dashboard hardening
 
