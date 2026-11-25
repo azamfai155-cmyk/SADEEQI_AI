@@ -226,7 +226,7 @@ class VoiceForegroundService : Service() {
         val snapshot = history.takeLast(24).toList()
         executor.execute {
             try {
-                val answer = gateway.reply(snapshot)
+                val answer = gateway.reply(snapshot).text
                 history.add(OpenAiGateway.Turn("assistant", answer))
                 mainHandler.post {
                     if (started) {
