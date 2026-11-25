@@ -38,8 +38,8 @@ function additionalData(provider, userId) {
 }
 
 export async function encryptSocialToken(plaintext, key, { provider, userId }) {
-  if (typeof plaintext !== 'string' || !plaintext || plaintext.length > 16384) {
-    throw new TypeError('Token must contain 1 to 16384 characters.');
+  if (typeof plaintext !== 'string' || !plaintext || plaintext.length > 262144) {
+    throw new TypeError('Sensitive value must contain 1 to 262144 characters.');
   }
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await importKey(key, ['encrypt']);
@@ -65,7 +65,7 @@ export async function decryptSocialToken(envelope, key, { provider, userId }) {
   }
   const iv = fromBase64(record.iv);
   const ciphertext = fromBase64(record.ciphertext);
-  if (iv.length !== 12 || ciphertext.length < 17 || ciphertext.length > 16400) {
+  if (iv.length !== 12 || ciphertext.length < 17 || ciphertext.length > 262160) {
     throw new TypeError('Invalid encrypted token payload.');
   }
   const cryptoKey = await importKey(key, ['decrypt']);
