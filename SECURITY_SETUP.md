@@ -50,4 +50,5 @@ The event log is metadata-only. Do not add prompt text, file contents, credentia
 
 ## Remaining dashboard hardening
 
-Supabase Auth's leaked-password protection is currently disabled according to the Security Advisor. Enable it in Supabase Dashboard → Authentication → Security and rerun the Security Advisor. The project-level API does not expose this setting through the available connection.
+- Supabase Auth's leaked-password protection is currently disabled according to the Security Advisor. Enable it in Supabase Dashboard → Authentication → Security and rerun the Security Advisor. The project-level API does not expose this setting through the available connection.
+- The private file bucket and per-user object policies are prepared in `supabase/migrations/202611250002_sadeeqi_private_files.sql`, but the connected database role is not the owner of `storage.objects`, so the migration could not be applied through this connection. Apply it with a database owner/admin role before enabling uploads. The bucket does not exist yet and no files are stored.
