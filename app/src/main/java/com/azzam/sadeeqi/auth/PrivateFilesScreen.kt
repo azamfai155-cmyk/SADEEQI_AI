@@ -40,6 +40,7 @@ fun PrivateFilesScreen() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("ملفاتك خاصة ولا يستطيع مستخدم آخر الوصول إليها.") }
     var downloadedFile by remember { mutableStateOf<File?>(null) }
+    var replacingPath by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         if (busy) return
@@ -59,6 +60,8 @@ fun PrivateFilesScreen() {
         }
     }
 
+    LaunchedEffect(Unit) { refresh() }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null && !busy) {
             busy = true
@@ -77,17 +80,19 @@ fun PrivateFilesScreen() {
                                 temp.outputStream().use { output -> input.copyTo(output) }
                             } ?: error("تعذر قراءة الملف.")
                             require(temp.length() in 1..SupabaseStorageClient.MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB." }
-                            storage.upload(temp, mime)
+                            val target = replacingPath
+                            replacingPath = null
+                            if (target == null) storage.upload(temp, mime) else storage.update(target, temp, mime)
                         } finally {
                             temp.delete()
                         }
                     }
                 }
                 result.onSuccess {
-                    message = "تم رفع الملف بنجاح."
-                    refresh()
+                    message = if (replacingPath == null) "تم حفظ الملف بنجاح." else "تم استبدال الملف بنجاح."
                 }.onFailure { message = it.message ?: "فشل رفع الملف." }
                 busy = false
+                if (result.isSuccess) refresh()
             }
         }
     }
@@ -115,9 +120,12 @@ fun PrivateFilesScreen() {
                 Card(colors = CardDefaults.cardColors()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(fileName, style = MaterialTheme.typography.titleMedium)
-                        val size = item.optLong("metadata. size", -1L)
                         Text(path, style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(enabled = !busy, onClick = {
+                                replacingPath = path
+                                picker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain"))
+                            }) { Text("استبدال") }
                             OutlinedButton(enabled = !busy, onClick = {
                                 busy = true
                                 scope.launch {
