@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val messageSources = remember { mutableStateMapOf<String, List<OpenAiGateway.Source>>() }
         var input by remember {
             mutableStateOf("")
         }
@@ -330,9 +331,11 @@ class MainActivity : ComponentActivity() {
                     val turns = messages.takeLast(24).map { (who, body) ->
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
-                    val answer = withContext(Dispatchers.IO) {
+                    val reply = withContext(Dispatchers.IO) {
                         gateway.reply(turns, imageForRequest)
                     }
+                    val answer = reply.text
+                    if (reply.sources.isNotEmpty()) messageSources[answer] = reply.sources
                     messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
                     if (voiceSettings.autoRead) {
@@ -707,6 +710,20 @@ class MainActivity : ComponentActivity() {
                                         }
                                         Text(body, color = Color.White)
                                         if (who == "صديقي") {
+                                            val sources = messageSources[body].orEmpty()
+                                            if (sources.isNotEmpty()) {
+                                                Spacer(Modifier.height(4.dp))
+                                                Text("المصادر", color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                                sources.forEachIndexed { sourceIndex, source ->
+                                                    TextButton(onClick = {
+                                                        runCatching {
+                                                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(source.url)))
+                                                        }.onFailure { status = "تعذر فتح رابط المصدر." }
+                                                    }) {
+                                                        Text("${sourceIndex + 1}. ${source.title}", color = Color(0xFFB8D7FF))
+                                                    }
+                                                }
+                                            }
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 TextButton(onClick = { status = "شكراً على تقييمك 👍" }) { Text("👍", color = Color(0xFFB9B4C7)) }
                                                 TextButton(onClick = { status = "شكراً على ملاحظتك 👎" }) { Text("👎", color = Color(0xFFB9B4C7)) }
