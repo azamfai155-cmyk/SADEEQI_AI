@@ -41,6 +41,38 @@ function extractBearerToken(value) {
   return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
 }
 
+async function readRequestBodyLimited(request) {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => {});
+        const error = new Error('Request body too large.');
+        error.code = 'BODY_TOO_LARGE';
+        throw error;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
 function getJwks(supabaseUrl) {
   let jwks = jwksCache.get(supabaseUrl);
   if (!jwks) {
@@ -271,10 +303,13 @@ export async function handleRequest(request, env) {
   if (declaredLength > MAX_BODY_BYTES) return json({ error: 'Request body too large.' }, 413, cors);
 
   let rawBody;
-  try { rawBody = await request.text(); }
-  catch { return json({ error: 'Unable to read request body.' }, 400, cors); }
-  if (new TextEncoder().encode(rawBody).length > MAX_BODY_BYTES) {
-    return json({ error: 'Request body too large.' }, 413, cors);
+  try {
+    rawBody = await readRequestBodyLimited(request);
+  } catch (error) {
+    if (error?.code === 'BODY_TOO_LARGE') {
+      return json({ error: 'Request body too large.' }, 413, cors);
+    }
+    return json({ error: 'Unable to read request body.' }, 400, cors);
   }
 
   let body;
