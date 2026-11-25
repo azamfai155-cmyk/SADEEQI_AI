@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OpenAiGatewaySourcesTest {
+    private val gateway = OpenAiGateway(accessTokenProvider = { "test-token" })
     @Test
     fun parsesOnlyUniqueHttpsSourcesAndCapsAtTwelve() {
         val entries = (1..14).joinToString(",") { index ->
@@ -12,7 +13,7 @@ class OpenAiGatewaySourcesTest {
         }
         val body = """{"sources":[$entries,{"title":"Duplicate","url":"https://example.org/1"},{"title":"Unsafe","url":"http://unsafe.example.org"}]}"""
 
-        val sources = OpenAiGateway.parseSources(body)
+        val sources = gateway.parseSources(body)
 
         assertEquals(12, sources.size)
         assertEquals("https://example.org/1", sources.first().url)
