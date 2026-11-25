@@ -55,7 +55,7 @@ test('social provider readiness exposes all 15 providers without leaking credent
   const providers = buildSocialProviders({
     META_CLIENT_ID: 'test-id',
     META_CLIENT_SECRET: 'test-secret',
-    SOCIAL_TOKEN_ENCRYPTION_KEY: 'test-encryption-key',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 4).toString('base64'),
     WHATSAPP_TOKEN: 'test-whatsapp-token',
     WHATSAPP_PHONE_NUMBER_ID: '12345',
     TWITCH_CLIENT_ID: 'test-twitch-id',
@@ -252,4 +252,97 @@ test('default system and identity instructions use real newline separators', asy
   assert.match(instructions, /\n/);
   assert.equal(instructions.includes('\\n'), false);
   assert.match(instructions, /صديقي/);
+});
+
+
+test('distributed rate limiter uses shared Supabase counters and blocks over-limit requests', async () => {
+  const { createDistributedRateLimiter } = await import('./server.js');
+  const calls = [];
+  const env = {
+    ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true',
+    SUPABASE_URL: 'https://project.example.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'server-only-key',
+    RATE_LIMIT_HASH_KEY: 'a'.repeat(48)
+  };
+  const middleware = createDistributedRateLimiter({
+    scope: 'chat', limit: 1, env,
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), body: JSON.parse(init.body) });
+      return new Response(JSON.stringify([{ allowed: false, retry_after_seconds: 19, current_hits: 2 }]), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+  });
+  const res = {
+    headers: {}, statusCode: 200, body: null,
+    set(name, value) { this.headers[name] = value; return this; },
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return this; }
+  };
+  let nextCalls = 0;
+  await middleware({ ip: '203.0.113.20', auth: { userId: 'user-1' } }, res, () => { nextCalls += 1; });
+  assert.equal(res.statusCode, 429);
+  assert.equal(res.headers['Retry-After'], '19');
+  assert.equal(nextCalls, 0);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.url.endsWith('/rpc/consume_sadeeqi_rate_limit')));
+  assert.ok(calls.every(call => /^[a-f0-9]{64}$/.test(call.body.p_key_hash)));
+  assert.ok(calls.every(call => !JSON.stringify(call.body).includes('203.0.113.20')));
+});
+
+test('distributed rate limiter fails closed if required secrets or Supabase are unavailable', async () => {
+  const { createDistributedRateLimiter } = await import('./server.js');
+  const env = { ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true', RATE_LIMIT_HASH_KEY: 'short' };
+  const middleware = createDistributedRateLimiter({ scope: 'chat', limit: 30, env });
+  const res = {
+    statusCode: 200, body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return this; }
+  };
+  await middleware({ ip: '203.0.113.20', auth: { userId: 'user-1' } }, res, () => {});
+  assert.equal(res.statusCode, 503);
+});
+
+test('task audit middleware records metadata before mutation and fails closed on RPC failure', async () => {
+  const { createTaskAuditMiddleware } = await import('./server.js');
+  let sent;
+  const env = {
+    ENFORCE_AUDIT_LOGGING: 'true',
+    SUPABASE_URL: 'https://project.example.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'server-only-key'
+  };
+  const middleware = createTaskAuditMiddleware({
+    env,
+    fetchImpl: async (_url, init) => {
+      sent = JSON.parse(init.body);
+      return new Response(JSON.stringify('audit-event-id'), { status: 200 });
+    }
+  });
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+  let nextCalls = 0;
+  await middleware({ auth: { userId: 'user-1' }, params: { id: 'task-1' }, method: 'PATCH' }, res, () => { nextCalls += 1; });
+  assert.equal(nextCalls, 1);
+  assert.equal(sent.p_actor_id, 'user-1');
+  assert.equal(sent.p_event_type, 'task.mutation_requested');
+  assert.equal(sent.p_resource_id, 'task-1');
+  assert.deepEqual(sent.p_metadata, { method: 'PATCH', operation: 'update' });
+  assert.equal(JSON.stringify(sent).includes('secret'), false);
+
+  const failing = createTaskAuditMiddleware({
+    env,
+    fetchImpl: async () => new Response('{}', { status: 500 })
+  });
+  const failedRes = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+  await failing({ auth: { userId: 'user-1' }, params: {}, method: 'POST' }, failedRes, () => {});
+  assert.equal(failedRes.statusCode, 503);
+});
+
+test('social provider readiness rejects malformed AES keys', () => {
+  const providers = buildSocialProviders({
+    META_CLIENT_ID: 'test-id',
+    META_CLIENT_SECRET: 'test-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'weak-key'
+  });
+  assert.ok(providers.filter(provider => ['facebook', 'instagram', 'messenger', 'threads'].includes(provider.id))
+    .every(provider => provider.configured === false));
 });
