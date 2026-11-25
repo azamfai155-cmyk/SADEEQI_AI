@@ -38,15 +38,15 @@ function additionalData(provider, userId) {
 }
 
 export async function encryptSocialToken(plaintext, key, { provider, userId }) {
-  if (typeof plaintext !== 'string' || !plaintext || plaintext.length > 262144) {
-    throw new TypeError('Sensitive value must contain 1 to 262144 characters.');
-  }
+  if (typeof plaintext !== 'string' || !plaintext) throw new TypeError('Sensitive value is required.');
+  const plaintextBytes = encoder.encode(plaintext);
+  if (plaintextBytes.length > 262144) throw new TypeError('Sensitive value exceeds 262144 UTF-8 bytes.');
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await importKey(key, ['encrypt']);
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: additionalData(provider, userId), tagLength: 128 },
     cryptoKey,
-    encoder.encode(plaintext)
+    plaintextBytes
   );
   return JSON.stringify({
     version: 1,
