@@ -28,6 +28,10 @@ create index if not exists sadeeqi_audit_events_actor_idx
 
 alter table private.sadeeqi_rate_limits enable row level security;
 alter table private.sadeeqi_audit_events enable row level security;
+drop policy if exists sadeeqi_rate_limits_service_role on private.sadeeqi_rate_limits;
+create policy sadeeqi_rate_limits_service_role on private.sadeeqi_rate_limits for all to service_role using (true) with check (true);
+drop policy if exists sadeeqi_audit_events_service_role on private.sadeeqi_audit_events;
+create policy sadeeqi_audit_events_service_role on private.sadeeqi_audit_events for all to service_role using (true) with check (true);
 revoke all on schema private from public, anon, authenticated;
 revoke all on all tables in schema private from public, anon, authenticated;
 grant usage on schema private to service_role;
