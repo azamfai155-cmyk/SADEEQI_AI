@@ -373,6 +373,12 @@ app.get('/health', (_req, res) => {
   });
 });
 
+function hasValidAes256Key(value) {
+  if (typeof value !== 'string') return false;
+  const decoded = Buffer.from(value, 'base64');
+  return decoded.length === 32 && decoded.toString('base64') === value;
+}
+
 export function buildSocialProviders(env = process.env) {
   const definitions = [
     { id: 'facebook', name: 'Facebook', family: 'Meta', auth: 'Meta OAuth 2.0', env: ['META_CLIENT_ID', 'META_CLIENT_SECRET'], note: 'تتطلب صلاحيات Meta ومراجعة التطبيق حسب نوع البيانات.' },
@@ -394,7 +400,7 @@ export function buildSocialProviders(env = process.env) {
 
   return definitions.map(({ env: required, ...provider }) => {
     const credentialsPresent = required.every((name) => Boolean(env[name]));
-    const encryptionReady = Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY);
+    const encryptionReady = hasValidAes256Key(env.SOCIAL_TOKEN_ENCRYPTION_KEY);
     const configured = provider.id === 'telegram'
       ? credentialsPresent
       : credentialsPresent && encryptionReady;
