@@ -142,12 +142,17 @@ const SOCIAL_ENV = {
   twitch: ['TWITCH_CLIENT_ID', 'TWITCH_CLIENT_SECRET']
 };
 
+function hasValidTokenEncryptionKey(value) {
+  if (typeof value !== 'string') return false;
+  try { return atob(value).length === 32; } catch { return false; }
+}
+
 function socialProviders(env) {
   return SOCIAL_PROVIDERS.map(provider => {
     const keys = SOCIAL_ENV[provider.id];
     const configured = provider.id === 'telegram'
       ? Boolean(env.TELEGRAM_BOT_TOKEN)
-      : Boolean(keys && env[keys[0]] && env[keys[1]] && env.SOCIAL_TOKEN_ENCRYPTION_KEY);
+      : Boolean(keys && env[keys[0]] && env[keys[1]] && hasValidTokenEncryptionKey(env.SOCIAL_TOKEN_ENCRYPTION_KEY));
     return {
       ...provider,
       configured,
