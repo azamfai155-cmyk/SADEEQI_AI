@@ -234,6 +234,62 @@ export function extractWebSources(output) {
   return sources;
 }
 
+
+async function securityRpc(env, functionName, payload) {
+  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!supabaseUrl || !serviceKey) throw new Error('Security controls require server-side Supabase credentials.');
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+    method: 'POST',
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000)
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(`Security RPC failed: ${response.status}`);
+  return body;
+}
+
+async function hashRateLimitKey(value, secret) {
+  if (typeof secret !== 'string' || secret.length < 32) throw new Error('RATE_LIMIT_HASH_KEY must contain at least 32 characters.');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value)));
+  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function enforceDistributedRateLimit(request, env, auth, scope, limit) {
+  if (env.ENFORCE_DISTRIBUTED_RATE_LIMIT !== 'true') return null;
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (!ip || ip.length > 128) throw new Error('Trusted client IP is unavailable.');
+  const identities = [`ip:${ip}`];
+  if (auth.userId) identities.push(`user:${auth.userId}`);
+  let blockedFor = 0;
+  for (const identity of identities) {
+    const keyHash = await hashRateLimitKey(`${scope}:${identity}`, env.RATE_LIMIT_HASH_KEY);
+    const result = await securityRpc(env, 'consume_sadeeqi_rate_limit', {
+      p_key_hash: keyHash, p_limit: limit, p_window_seconds: 60
+    });
+    const row = Array.isArray(result) ? result[0] : result;
+    if (!row || typeof row.allowed !== 'boolean') throw new Error('Invalid rate limit response.');
+    if (!row.allowed) blockedFor = Math.max(blockedFor, Number(row.retry_after_seconds) || 1);
+  }
+  return blockedFor > 0
+    ? json({ error: 'Too many requests. Please retry later.' }, 429, { 'retry-after': String(blockedFor) })
+    : null;
+}
+
+async function writeAuditEvent(env, auth, eventType, resourceType, resourceId, metadata = {}) {
+  if (env.ENFORCE_AUDIT_LOGGING !== 'true') return;
+  await securityRpc(env, 'write_sadeeqi_audit_event', {
+    p_actor_id: auth.userId || null,
+    p_event_type: eventType,
+    p_resource_type: resourceType,
+    p_resource_id: resourceId || null,
+    p_metadata: metadata
+  });
+}
+
 export async function handleRequest(request, env) {
   const cors = corsHeaders(request, env);
   const url = new URL(request.url);
@@ -312,6 +368,26 @@ export async function handleRequest(request, env) {
 
   const auth = await authenticate(request, env);
   if (!auth.ok) return json(auth.body, auth.status, cors);
+
+  const ratePolicy = isTasks ? { scope: 'tasks', limit: 60 }
+    : isSocial ? { scope: 'social', limit: 30 }
+      : { scope: 'chat', limit: 30 };
+  try {
+    const limited = await enforceDistributedRateLimit(request, env, auth, ratePolicy.scope, ratePolicy.limit);
+    if (limited) return limited;
+    if (isTasks && ['POST', 'PATCH'].includes(request.method)) {
+      const taskId = url.pathname.match(/^\\/v1\\/tasks\\/([0-9a-f-]{36})$/i)?.[1] || null;
+      await writeAuditEvent(env, auth, 'task.mutation_requested', 'task', taskId, {
+        method: request.method,
+        operation: request.method === 'POST' ? 'create' : 'update'
+      });
+    }
+  } catch {
+    if (env.ENFORCE_DISTRIBUTED_RATE_LIMIT === 'true' ||
+        (isTasks && ['POST', 'PATCH'].includes(request.method) && env.ENFORCE_AUDIT_LOGGING === 'true')) {
+      return json({ error: 'Security controls are temporarily unavailable. Request was not processed.' }, 503, cors);
+    }
+  }
 
   if (isTasks) {
     const result = await handleTaskRequest(request, env, auth);
