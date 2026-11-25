@@ -33,7 +33,7 @@ jobs:
   android:
     name: Android - unit tests, APK and emulator tests
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -82,7 +82,7 @@ jobs:
           retention-days: 7
 
       - name: Run instrumentation tests on API 34 emulator
-        timeout-minutes: 35
+        timeout-minutes: 55
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}

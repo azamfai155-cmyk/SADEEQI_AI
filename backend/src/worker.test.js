@@ -279,7 +279,7 @@ test('social provider readiness uses the same Meta and Pinterest credential name
     META_CLIENT_SECRET: 'meta-secret',
     PINTEREST_APP_ID: 'pinterest-id',
     PINTEREST_APP_SECRET: 'pinterest-secret',
-    SOCIAL_TOKEN_ENCRYPTION_KEY: 'encryption-key'
+    SOCIAL_TOKEN_ENCRYPTION_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(3)))
   });
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -294,7 +294,7 @@ test('social provider readiness uses the same Meta and Pinterest credential name
 import { isSafeImageInput } from '../../security/input-validation.js';
 
 test('shared image guard blocks private-network hosts and unsafe data image formats', () => {
-  assert.equal(isSafeImageInput('https://images.example.org/photo.webp'), true);
+  assert.equal(isSafeImageInput('https://images.example.org/photo.webp'), false);
   assert.equal(isSafeImageInput('data:image/jpeg;base64,/9j/4AAQSkZJRgAB'), true);
   assert.equal(isSafeImageInput('https://192.168.0.1/photo.jpg'), false);
   assert.equal(isSafeImageInput('https://[::1]/photo.jpg'), false);
@@ -378,4 +378,60 @@ test('Cloudflare Worker system instructions use real newline separators', async 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+
+test('distributed rate limiting blocks over-limit traffic with Retry-After', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (url, init) => {
+    calls += 1;
+    assert.equal(String(url), 'https://project.example.supabase.co/rest/v1/rpc/consume_sadeeqi_rate_limit');
+    assert.equal(init.method, 'POST');
+    return new Response(JSON.stringify([{ allowed: false, retry_after_seconds: 23, current_hits: 31 }]), {
+      status: 200, headers: { 'content-type': 'application/json' }
+    });
+  };
+  try {
+    const response = await handleRequest(request('/v1/social/providers', {
+      headers: { Authorization: 'Bearer expected-token', 'CF-Connecting-IP': '203.0.113.10' }
+    }), {
+      AUTH_MODE: 'legacy',
+      SADEEQI_APP_TOKEN: 'expected-token',
+      ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true',
+      SUPABASE_URL: 'https://project.example.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'server-only-service-key',
+      RATE_LIMIT_HASH_KEY: 'a'.repeat(48)
+    });
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get('retry-after'), '23');
+    assert.equal(calls, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('distributed rate limiting fails closed when server credentials are missing', async () => {
+  const response = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token', 'CF-Connecting-IP': '203.0.113.10' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true',
+    RATE_LIMIT_HASH_KEY: 'a'.repeat(48)
+  });
+  assert.equal(response.status, 503);
+});
+
+test('social readiness rejects weak or non-base64 token encryption keys', async () => {
+  const response = await handleRequest(request('/v1/social/providers', {
+    headers: { Authorization: 'Bearer expected-token' }
+  }), {
+    AUTH_MODE: 'legacy',
+    SADEEQI_APP_TOKEN: 'expected-token',
+    META_CLIENT_ID: 'meta-id',
+    META_CLIENT_SECRET: 'meta-secret',
+    SOCIAL_TOKEN_ENCRYPTION_KEY: 'not-a-32-byte-key'
+  });
+  const body = await response.json();
+  const meta = body.providers.find(provider => provider.id === 'instagram');
+  assert.equal(meta.configured, false);
 });
