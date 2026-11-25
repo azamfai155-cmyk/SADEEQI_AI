@@ -90,8 +90,14 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
       id: 'resp_test',
       model: 'openai/gpt-oss-20b',
       output: [
-        { content: [{ type: 'output_text', text: 'الرد الأول' }] },
-        { content: [{ type: 'output_text', text: 'الرد الثاني' }] }
+        { content: [{ type: 'output_text', text: 'الرد الأول', annotations: [
+          { type: 'url_citation', url: 'https://docs.example.org/search-result', title: 'مصدر موثوق' },
+          { type: 'url_citation', url: 'http://insecure.example.org/no', title: 'مصدر غير آمن' }
+        ] }] },
+        { content: [{ type: 'output_text', text: 'الرد الثاني', annotations: [
+          { type: 'url_citation', url: 'https://docs.example.org/search-result', title: 'مكرر' },
+          { type: 'url_citation', url: 'https://news.example.org/story', title: 'خبر' }
+        ] }] }
       ],
       usage: { total_tokens: 12 }
     }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -118,6 +124,10 @@ test('Groq Responses API output is newline-joined and provider metadata is retur
     assert.equal(calledPayload.tools[0].type, 'browser_search');
     assert.equal(body.provider, 'groq');
     assert.equal(body.output_text, 'الرد الأول\nالرد الثاني');
+    assert.deepEqual(body.sources, [
+      { title: 'مصدر موثوق', url: 'https://docs.example.org/search-result' },
+      { title: 'خبر', url: 'https://news.example.org/story' }
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
   }

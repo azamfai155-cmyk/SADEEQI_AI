@@ -211,6 +211,29 @@ export function providerConfig(env) {
   };
 }
 
+export function extractWebSources(output) {
+  const seen = new Set();
+  const sources = [];
+  for (const item of Array.isArray(output) ? output : []) {
+    for (const part of Array.isArray(item?.content) ? item.content : []) {
+      for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+        if (annotation?.type !== 'url_citation') continue;
+        let parsed;
+        try { parsed = new URL(annotation.url); } catch { continue; }
+        if (parsed.protocol !== 'https:' || seen.has(parsed.href)) continue;
+        seen.add(parsed.href);
+        sources.push({
+          title: typeof annotation.title === 'string' && annotation.title.trim()
+            ? annotation.title.trim().slice(0, 240) : parsed.hostname,
+          url: parsed.href
+        });
+        if (sources.length >= 12) return sources;
+      }
+    }
+  }
+  return sources;
+}
+
 export async function handleRequest(request, env) {
   const cors = corsHeaders(request, env);
   const url = new URL(request.url);
@@ -375,6 +398,7 @@ export async function handleRequest(request, env) {
       model: result.model || config.model,
       provider: config.provider,
       output_text: output,
+      sources: body.enable_web_search === true ? extractWebSources(result.output) : [],
       usage: result.usage || null
     }, 200, cors);
   } catch {
