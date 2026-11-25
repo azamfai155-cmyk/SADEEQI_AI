@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 class OpenAiGateway(
@@ -27,8 +28,31 @@ class OpenAiGateway(
         .build()
 
     data class Turn(val role: String, val content: String)
+    data class Source(val title: String, val url: String)
+    data class ChatReply(val text: String, val sources: List<Source>)
 
-    fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
+    internal fun parseSources(body: String): List<Source> {
+        val sourceArray = runCatching { JSONObject(body).optJSONArray("sources") }.getOrNull()
+            ?: return emptyList()
+        val seen = mutableSetOf<String>()
+        val result = mutableListOf<Source>()
+        for (index in 0 until minOf(sourceArray.length(), 48)) {
+            val item = sourceArray.optJSONObject(index) ?: continue
+            val rawUrl = item.optString("url").trim()
+            val uri = runCatching { URI(rawUrl) }.getOrNull() ?: continue
+            if (!uri.scheme.equals("https", ignoreCase = true) ||
+                uri.host.isNullOrBlank() || uri.userInfo != null) continue
+            val normalized = runCatching { uri.toASCIIString() }.getOrNull() ?: continue
+            if (!seen.add(normalized)) continue
+            val title = item.optString("title").trim()
+                .takeIf { it.isNotBlank() }?.take(240) ?: uri.host
+            result += Source(title, normalized)
+            if (result.size == 12) break
+        }
+        return result
+    }
+
+    fun reply(history: List<Turn>, imageDataUrl: String? = null): ChatReply {
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
@@ -98,12 +122,12 @@ class OpenAiGateway(
                     )
                 }
 
-                return JSONObject(body)
-                    .optString("output_text")
+                val answer = JSONObject(body).optString("output_text")
                     .takeIf { it.isNotBlank() }
                     ?: throw IllegalStateException(
                         "وصل رد فارغ من محرك الذكاء الاصطناعي."
                     )
+                return ChatReply(answer, parseSources(body))
             }
         } finally {
             if (activeCall === call) activeCall = null
