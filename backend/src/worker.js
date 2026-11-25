@@ -263,7 +263,7 @@ async function hashRateLimitKey(value, secret) {
   return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function enforceDistributedRateLimit(request, env, auth, scope, limit) {
+async function enforceDistributedRateLimit(request, env, auth, scope, limit, cors = {}) {
   if (env.ENFORCE_DISTRIBUTED_RATE_LIMIT !== 'true') return null;
   const ip = request.headers.get('CF-Connecting-IP');
   if (!ip || ip.length > 128) throw new Error('Trusted client IP is unavailable.');
@@ -378,7 +378,7 @@ export async function handleRequest(request, env) {
     : isSocial ? { scope: 'social', limit: 30 }
       : { scope: 'chat', limit: 30 };
   try {
-    const limited = await enforceDistributedRateLimit(request, env, auth, ratePolicy.scope, ratePolicy.limit);
+    const limited = await enforceDistributedRateLimit(request, env, auth, ratePolicy.scope, ratePolicy.limit, cors);
     if (limited) return limited;
     if (isTasks && ['POST', 'PATCH'].includes(request.method)) {
       const taskId = url.pathname.match(/^\\/v1\\/tasks\\/([0-9a-f-]{36})$/i)?.[1] || null;
