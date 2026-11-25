@@ -141,6 +141,16 @@ test('OPTIONS respects configured origin and unknown routes return 404', async (
 });
 
 
+test('guest session endpoint is disabled by default', async () => {
+  const response = await handleRequest(request('/v1/guest-session', { method: 'POST' }), {
+    SUPABASE_URL: 'https://project.example.supabase.co',
+    SUPABASE_ANON_KEY: 'public-test-key',
+    AUTH_MODE: 'supabase'
+  });
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { error: 'Guest sessions are disabled.' });
+});
+
 test('Supabase JWT accepts a valid JWKS-backed authenticated session', async () => {
   const { generateKeyPair, exportJWK, SignJWT } = await import('jose');
   const { publicKey, privateKey } = await generateKeyPair('ES256');
