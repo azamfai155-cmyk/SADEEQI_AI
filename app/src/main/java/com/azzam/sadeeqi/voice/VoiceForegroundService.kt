@@ -34,9 +34,12 @@ class VoiceForegroundService : Service() {
     private val executor = Executors.newSingleThreadExecutor()
     private val gateway by lazy { OpenAiGateway { SupabaseAuthClient(this@VoiceForegroundService).accessToken() } }
     private val history = mutableListOf<OpenAiGateway.Turn>()
+    private val historyLock = Any()
+    private val turnGate = VoiceTurnGate()
     private var voice: VoiceController? = null
     private var musicManager: MusicPlayerManager? = null
-    private var started = false
+    @Volatile private var started = false
+    @Volatile private var microphoneMuted = false
     private var pendingPhoneCommand: DeviceCommand? = null
     private val phoneControl by lazy(LazyThreadSafetyMode.NONE) { PhoneControl(this) }
 
@@ -49,8 +52,18 @@ class VoiceForegroundService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_INTERRUPT -> {
-                if (!started) startSession()
-                voice?.interruptAndListen()
+                if (!started) {
+                    startSession()
+                } else {
+                    invalidateCurrentTurn()
+                    voice?.interruptAndListen()
+                }
+            }
+            ACTION_MUTE -> {
+                val muted = intent.getBooleanExtra(EXTRA_MUTED, !microphoneMuted)
+                microphoneMuted = muted
+                voice?.setMicrophoneMuted(muted)
+                updateNotification(if (muted) "الميكروفون مكتوم" else "الميكروفون نشط")
             }
             ACTION_MUTE -> {
                 voice?.setMicrophoneMuted(intent.getBooleanExtra(EXTRA_MUTED, true))
@@ -63,6 +76,7 @@ class VoiceForegroundService : Service() {
 
     private fun startDictationSession() {
         if (started) stopSession()
+        invalidateCurrentTurn()
         createNotificationChannel()
         val notification = buildNotification("استمع صديقي إلى رسالتك الصوتية")
         try {
@@ -76,7 +90,8 @@ class VoiceForegroundService : Service() {
             return
         }
         started = true
-        history.clear()
+        microphoneMuted = false
+        synchronized(historyLock) { history.clear() }
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
@@ -88,9 +103,11 @@ class VoiceForegroundService : Service() {
 
     private fun startSession() {
         if (started) {
+            invalidateCurrentTurn()
             voice?.interruptAndListen()
             return
         }
+        invalidateCurrentTurn()
         createNotificationChannel()
         val notification = buildNotification("جلسة الاستماع نشطة — اضغط إيقاف لإنهائها")
         try {
@@ -109,7 +126,8 @@ class VoiceForegroundService : Service() {
         }
 
         started = true
-        history.clear()
+        microphoneMuted = false
+        synchronized(historyLock) { history.clear() }
         if (musicManager == null) musicManager = MusicPlayerManager(this) { }
         voice = VoiceController(
             applicationContext,
@@ -147,6 +165,8 @@ class VoiceForegroundService : Service() {
 
     private fun handleRecognizedSpeech(spoken: String) {
         if (!started || spoken.isBlank()) return
+        val requestId = turnGate.begin()
+        runCatching { gateway.cancelCurrentRequest() }
 
         // Voice phone actions require a separate spoken confirmation before execution.
         val pending = pendingPhoneCommand
@@ -192,7 +212,7 @@ class VoiceForegroundService : Service() {
                     try {
                         val tracks = AudiusMusicRepository().search(command.query)
                         mainHandler.post {
-                            if (!started) return@post
+                            if (!started || !turnGate.isCurrent(requestId)) return@post
                             if (tracks.isEmpty()) {
                                 voice?.speak("لم أجد نتائج قابلة للبث. جرّب اسم فنان أو أغنية أخرى.")
                             } else {
@@ -203,7 +223,7 @@ class VoiceForegroundService : Service() {
                         }
                     } catch (error: Exception) {
                         mainHandler.post {
-                            if (started) {
+                            if (started && turnGate.isCurrent(requestId)) {
                                 updateNotification("تعذر البحث عن الموسيقى")
                                 voice?.speak("تعذر البحث عن الموسيقى. تحقق من اتصال الإنترنت.")
                             }
@@ -221,22 +241,32 @@ class VoiceForegroundService : Service() {
             return
         }
 
-        history.add(OpenAiGateway.Turn("user", spoken))
+        val snapshot = synchronized(historyLock) {
+            history.add(OpenAiGateway.Turn("user", spoken))
+            history.takeLast(24).toList()
+        }
         updateNotification("صديقي يعالج كلامك…")
-        val snapshot = history.takeLast(24).toList()
         executor.execute {
+            if (!started || !turnGate.isCurrent(requestId)) return@execute
             try {
-                val answer = gateway.reply(snapshot)
-                history.add(OpenAiGateway.Turn("assistant", answer))
-                mainHandler.post {
-                    if (started) {
+                val answer = gateway.reply(snapshot, shouldContinue = {
+                    started && turnGate.isCurrent(requestId)
+                })
+                val accepted = synchronized(historyLock) {
+                    if (started && turnGate.isCurrent(requestId)) {
+                        history.add(OpenAiGateway.Turn("assistant", answer))
+                        true
+                    } else false
+                }
+                if (accepted) mainHandler.post {
+                    if (started && turnGate.isCurrent(requestId)) {
                         updateNotification("صديقي يرد عليك — الميكروفون نشط")
                         voice?.speak(answer)
                     }
                 }
             } catch (error: Exception) {
                 mainHandler.post {
-                    if (started) {
+                    if (started && turnGate.isCurrent(requestId)) {
                         updateNotification("تعذر الرد: ${error.message ?: "خطأ اتصال"}")
                         voice?.resumeAfterTurnFailure()
                     }
@@ -270,6 +300,13 @@ class VoiceForegroundService : Service() {
             Intent(this, VoiceForegroundService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val muteIntent = PendingIntent.getService(
+            this, 12,
+            Intent(this, VoiceForegroundService::class.java)
+                .setAction(ACTION_MUTE)
+                .putExtra(EXTRA_MUTED, !microphoneMuted),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("صديقي — الاستماع الصوتي")
@@ -278,8 +315,18 @@ class VoiceForegroundService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                if (microphoneMuted) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                if (microphoneMuted) "تشغيل الميكروفون" else "كتم الميكروفون",
+                muteIntent
+            )
             .addAction(android.R.drawable.ic_media_pause, "إيقاف الاستماع", stopIntent)
             .build()
+    }
+
+    private fun invalidateCurrentTurn() {
+        turnGate.invalidate()
+        runCatching { gateway.cancelCurrentRequest() }
     }
 
     private fun updateNotification(message: String) {
@@ -289,7 +336,10 @@ class VoiceForegroundService : Service() {
     }
 
     private fun stopSession() {
+        invalidateCurrentTurn()
         started = false
+        microphoneMuted = false
+        synchronized(historyLock) { history.clear() }
         pendingPhoneCommand = null
         voice?.stopConversation()
         voice?.close()
@@ -303,7 +353,10 @@ class VoiceForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        invalidateCurrentTurn()
         started = false
+        microphoneMuted = false
+        synchronized(historyLock) { history.clear() }
         pendingPhoneCommand = null
         voice?.close()
         voice = null
@@ -323,4 +376,13 @@ class VoiceForegroundService : Service() {
         private const val CHANNEL_ID = "sadeeqi_voice_session"
         private const val NOTIFICATION_ID = 2407
     }
+}
+
+
+/** Tracks which voice turn is allowed to publish a response. */
+internal class VoiceTurnGate {
+    private val generation = java.util.concurrent.atomic.AtomicLong(0)
+    fun begin(): Long = generation.incrementAndGet()
+    fun invalidate(): Long = generation.incrementAndGet()
+    fun isCurrent(turnId: Long): Boolean = generation.get() == turnId
 }

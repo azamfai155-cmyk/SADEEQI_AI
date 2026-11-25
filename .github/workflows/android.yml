@@ -81,7 +81,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Emulator tests are intentionally manual: a cold Android emulator can consume
+      # most of the included Actions compute allowance. Unit tests and APK build still
+      # run for pull requests; dispatch this workflow manually for device instrumentation.
       - name: Run instrumentation tests on API 34 emulator
+        if: github.event_name == 'workflow_dispatch'
         timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:

@@ -35,6 +35,8 @@ import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
 import com.azzam.sadeeqi.memory.EncryptedMemory
+import com.azzam.sadeeqi.memory.ConversationHistory
+import java.util.UUID
 import com.azzam.sadeeqi.music.MusicPlaybackState
 import com.azzam.sadeeqi.music.MusicPlaybackService
 import com.azzam.sadeeqi.music.MusicPlayerManager
@@ -153,6 +155,8 @@ class MainActivity : ComponentActivity() {
         var input by remember {
             mutableStateOf("")
         }
+        var currentConversationId by remember { mutableStateOf(UUID.randomUUID().toString()) }
+        var conversationSummaries by remember { mutableStateOf(emptyList<ConversationHistory.Summary>()) }
         var voiceSessionActive by remember { mutableStateOf(false) }
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
@@ -322,20 +326,26 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            // Capture the originating conversation before the asynchronous request starts.
+            // The user may switch to another conversation while the response is in flight.
+            val requestConversationId = currentConversationId
+            // Freeze this conversation's context now; the user may switch chats before IO begins.
+            val requestTurns = messages.takeLast(24).map { (who, body) ->
+                OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
+            }
+
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             isGenerating = true
             generationJob = scope.launch {
                 try {
-                    val turns = messages.takeLast(24).map { (who, body) ->
-                        OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
-                    }
                     val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                        gateway.reply(requestTurns, imageForRequest)
                     }
-                    messages.add("صديقي" to answer)
+                    val isStillViewingRequest = currentConversationId == requestConversationId
+                    if (isStillViewingRequest) messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
-                    if (voiceSettings.autoRead) {
+                    if (voiceSettings.autoRead && isStillViewingRequest) {
                         withContext(Dispatchers.Main) {
                             messageReader.language = Locale.forLanguageTag(voiceSettings.languageTag)
                             messageReader.setSpeechRate(voiceSettings.speechRate)
@@ -346,15 +356,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     val stamp = System.currentTimeMillis()
-                    memory.save("chat:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
-                    memory.save("chat:$stamp:2", "conversation", "صديقي\n$answer")
+                    memory.save("chat:$requestConversationId:$stamp:1", "conversation", "أنت\n$effectiveQuestion")
+                    memory.save("chat:$requestConversationId:$stamp:2", "conversation", "صديقي\n$answer")
+                    conversationSummaries = ConversationHistory.group(memory.search("chat:"))
                     onReply(answer)
                     status = "متصل — ${BuildConfig.VERSION_NAME}"
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     status = "تم إيقاف توليد الرد."
                     throw e
                 } catch (e: Exception) {
-                    messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
+                    if (currentConversationId == requestConversationId) {
+                        messages.add("صديقي" to "تعذر الاتصال: ${e.message ?: "خطأ غير معروف"}")
+                    }
                     status = "تعذر الاتصال بالخادم"
                 } finally {
                     isGenerating = false
@@ -364,21 +377,12 @@ class MainActivity : ComponentActivity() {
         }
 
         LaunchedEffect(Unit) {
-
-            val saved = memory.search("chat:")
-
-            if (saved.isNotEmpty()) {
-
+            conversationSummaries = ConversationHistory.group(memory.search("chat:"))
+            val latest = conversationSummaries.firstOrNull()
+            if (latest != null) {
+                currentConversationId = latest.id
                 messages.clear()
-
-                saved.sortedBy { it.first }.forEach { entry ->
-
-                    val parts = entry.second.split("\n", limit = 2)
-
-                    if (parts.size == 2) {
-                        messages.add(parts[0] to parts[1])
-                    }
-                }
+                messages.addAll(latest.messages)
             }
         }
 
@@ -560,13 +564,11 @@ class MainActivity : ComponentActivity() {
                         )
                         OutlinedButton(
                             onClick = {
+                                currentConversationId = UUID.randomUUID().toString()
                                 messages.clear()
                                 messages.add("صديقي" to "أهلاً! أنا صديقي. كيف أستطيع مساعدتك؟")
                                 input = ""
-                                scope.launch {
-                                    memory.search("chat:").forEach { (recordId, _) -> memory.delete(recordId) }
-                                    status = "تم حذف سجل المحادثة من ذاكرة هذا الجهاز."
-                                }
+                                status = "بدأت محادثة جديدة. محادثاتك السابقة ما زالت محفوظة."
                                 selectedTab = "الرئيسية"
                                 scope.launch { drawerState.close() }
                             },
@@ -575,6 +577,24 @@ class MainActivity : ComponentActivity() {
                             Text("＋ محادثة جديدة", color = Color(0xFFE6C77A))
                         }
                         Spacer(Modifier.height(10.dp))
+                        if (conversationSummaries.isNotEmpty()) {
+                            Text("المحادثات الأخيرة", modifier = Modifier.padding(start = 18.dp, top = 14.dp, bottom = 6.dp), color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                            conversationSummaries.take(8).forEach { summary ->
+                                NavigationDrawerItem(
+                                    label = { Text(summary.title, maxLines = 1) },
+                                    selected = currentConversationId == summary.id && selectedTab == "الرئيسية",
+                                    onClick = {
+                                        currentConversationId = summary.id
+                                        messages.clear()
+                                        messages.addAll(summary.messages)
+                                        selectedTab = "الرئيسية"
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 1.dp),
+                                    colors = NavigationDrawerItemDefaults.colors(selectedContainerColor = Color(0xFF393044), selectedTextColor = Color(0xFFE6C77A), unselectedTextColor = Color(0xFFE4E1EA))
+                                )
+                            }
+                        }
                         navigationItems.forEach { tab ->
                             NavigationDrawerItem(
                                 label = { Text(tab) },
@@ -692,7 +712,8 @@ class MainActivity : ComponentActivity() {
                                                             input = body
                                                             messages.removeAt(index)
                                                             scope.launch {
-                                                                memory.search("chat:").filter { it.second.endsWith(body) }.forEach { memory.delete(it.first) }
+                                                                memory.search("chat:").filter { ConversationHistory.conversationId(it.first) == currentConversationId && it.second.endsWith(body) }.forEach { memory.delete(it.first) }
+                                                                conversationSummaries = ConversationHistory.group(memory.search("chat:"))
                                                             }
                                                         })
                                                         DropdownMenuItem(text = { Text("نسخ الرسالة") }, onClick = {

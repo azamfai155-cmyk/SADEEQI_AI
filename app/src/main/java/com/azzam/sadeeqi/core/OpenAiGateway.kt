@@ -28,7 +28,11 @@ class OpenAiGateway(
 
     data class Turn(val role: String, val content: String)
 
-    fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
+    fun reply(
+        history: List<Turn>,
+        imageDataUrl: String? = null,
+        shouldContinue: () -> Boolean = { true }
+    ): String {
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
@@ -85,6 +89,7 @@ class OpenAiGateway(
 
         val call = http.newCall(request)
         activeCall = call
+        if (!shouldContinue()) call.cancel()
         try {
             call.execute().use { response ->
                 val body = response.body?.string().orEmpty()
