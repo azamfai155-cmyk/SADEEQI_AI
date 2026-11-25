@@ -245,6 +245,20 @@ export function validateInput(input) {
   return null;
 }
 
+// Public landing/diagnostic route: this project is an API backend, not a hosted web frontend.
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({
+    service: 'sadeeqi-ai',
+    status: 'online',
+    description: 'SADEEQI AI backend API',
+    health: '/health',
+    endpoints: {
+      chat: { method: 'POST', path: '/v1/chat', authentication: 'Bearer Supabase access token' },
+      socialProviders: { method: 'GET', path: '/v1/social/providers', authentication: 'Bearer Supabase access token' }
+    }
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
     service: 'sadeeqi-ai',
