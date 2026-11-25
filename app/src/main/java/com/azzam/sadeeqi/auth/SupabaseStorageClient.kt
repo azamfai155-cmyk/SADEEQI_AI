@@ -96,7 +96,7 @@ class SupabaseStorageClient(context: Context) {
 
     fun delete(objectPath: String) {
         validateOwnedPath(objectPath, currentUserId())
-        val body = JSONArray().put(objectPath)
+        val body = JSONObject().put("prefixes", JSONArray().put(objectPath))
         val request = storageRequest("object/$BUCKET")
             .delete(body.toString().toRequestBody(JSON_MEDIA_TYPE))
             .build()
