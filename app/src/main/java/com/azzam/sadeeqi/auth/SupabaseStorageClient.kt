@@ -31,7 +31,7 @@ class SupabaseStorageClient(context: Context) {
         require(file.length() in 1..MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB وألا يكون فارغاً." }
         require(contentType in ALLOWED_TYPES) { "نوع الملف غير مسموح." }
         val userId = currentUserId()
-        val safeName = originalFileName.substringAfterLast('/').substringAfterLast('\\')
+        val safeName = originalFileName.substringAfterLast('/').substringAfterLast('\\\\')
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
             .take(100)
             .ifBlank { "file" }
@@ -53,10 +53,11 @@ class SupabaseStorageClient(context: Context) {
         require(file.isFile && file.canRead()) { "الملف غير موجود أو لا يمكن قراءته." }
         require(file.length() in 1..MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB وألا يكون فارغاً." }
         require(contentType in ALLOWED_TYPES) { "نوع الملف غير مسموح." }
+        // Supabase Storage standard uploads use POST with x-upsert=true (not PUT).
         val request = storageRequest("object/$BUCKET/$objectPath")
             .header("Content-Type", contentType)
             .header("x-upsert", "true")
-            .put(file.readBytes().toRequestBody(contentType.toMediaType()))
+            .post(file.readBytes().toRequestBody(contentType.toMediaType()))
             .build()
         return execute(request) { response ->
             require(response.isSuccessful) { errorMessage(response.code, response.body?.string().orEmpty()) }
@@ -90,7 +91,17 @@ class SupabaseStorageClient(context: Context) {
         return execute(request) { response ->
             val raw = response.body?.string().orEmpty()
             require(response.isSuccessful) { errorMessage(response.code, raw) }
-            JSONArray(raw)
+            val result = JSONArray(raw)
+            // Storage list responses may return names relative to the requested prefix.
+            // Normalize them to full, user-scoped object paths for subsequent operations.
+            for (index in 0 until result.length()) {
+                val item = result.optJSONObject(index) ?: continue
+                val name = item.optString("name")
+                if (name.isNotBlank() && !name.startsWith("$userId/")) {
+                    item.put("name", "$userId/$name")
+                }
+            }
+            result
         }
     }
 
