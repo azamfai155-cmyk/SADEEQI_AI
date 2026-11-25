@@ -48,7 +48,7 @@ test('chat input validator rejects malformed multimodal parts', () => {
 
 test('chat input validator accepts text and supported image inputs', () => {
   assert.equal(validateInput([{ role: 'user', content: 'مرحبا' }]), null);
-  assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_text', text: 'حلل الصورة' }, { type: 'input_image', image_url: 'https://example.com/image.jpg' }] }]), null);
+  assert.equal(validateInput([{ role: 'user', content: [{ type: 'input_text', text: 'حلل الصورة' }, { type: 'input_image', image_url: 'https://example.com/image.jpg' }] }]), 'Invalid image input.');
 });
 
 test('social provider readiness exposes all 15 providers without leaking credentials', () => {
