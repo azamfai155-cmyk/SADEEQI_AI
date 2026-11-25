@@ -8,18 +8,34 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Use isolated npm cache
+          name: Install backend dependencies
           command: |
             mkdir -p /tmp/npm-cache
-            echo 'Using /tmp/npm-cache to avoid permission conflicts in the shared CircleCI npm cache.'
-      - run:
-          name: Install backend dependencies
-          command: npm_config_cache=/tmp/npm-cache npm install --no-audit --no-fund
+            npm_config_cache=/tmp/npm-cache npm install --no-audit --no-fund
       - run:
           name: Run backend tests
           command: npm_config_cache=/tmp/npm-cache npm test
+
+  backend-dependency-audit:
+    docker:
+      - image: cimg/node:22.11
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: Generate temporary lockfile
+          command: |
+            mkdir -p /tmp/npm-cache
+            npm_config_cache=/tmp/npm-cache npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Install locked production dependencies
+          command: npm_config_cache=/tmp/npm-cache npm ci --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Audit production dependencies
+          command: npm_config_cache=/tmp/npm-cache npm audit --omit=dev --audit-level=high
 
 workflows:
   backend-ci:
     jobs:
       - backend-checks
+      - backend-dependency-audit
