@@ -32,7 +32,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun PrivateFilesScreen() {
+fun PrivateFilesScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val storage = remember { SupabaseStorageClient(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -99,7 +99,7 @@ fun PrivateFilesScreen() {
     }
 
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
+        modifier.fillMaxWidth().weight(1f).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("ملفاتي الخاصة", style = MaterialTheme.typography.headlineSmall)
