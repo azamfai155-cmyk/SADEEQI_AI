@@ -630,7 +630,7 @@ class MainActivity : ComponentActivity() {
                 Spacer(Modifier.height(12.dp))
                 when (selectedTab) {
                     "ملفاتي" -> {
-                        PrivateFilesScreen()
+                        PrivateFilesScreen(modifier = Modifier.weight(1f))
                     }
                     "الرئيسية" -> {
                         Text("مرحباً بك من جديد", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
