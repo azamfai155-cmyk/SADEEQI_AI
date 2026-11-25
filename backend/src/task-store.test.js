@@ -85,7 +85,35 @@ test('task updates fetch and mutate only the authenticated owner task', async ()
     assert.equal(result.status, 200);
     assert.match(urls[0], /owner_id=eq\.user-123/);
     assert.match(urls[1], /owner_id=eq\.user-123/);
+    assert.match(urls[1], /updated_at=eq\.2026-11-18T00%3A00%3A00\.000Z/);
     assert.equal(urls.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('concurrent task update returns conflict instead of overwriting newer state', async () => {
+  const originalFetch = globalThis.fetch;
+  const id = '8c95c1ae-8e43-4ec6-84c7-c8ac1b74b33a';
+  const task = {
+    id, ownerId: 'user-123', title: 'Research', goal: 'Find sources',
+    state: 'queued', steps: [], approval: null,
+    createdAt: '2026-11-18T00:00:00.000Z',
+    updatedAt: '2026-11-18T00:00:00.000Z', lastError: null
+  };
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) return new Response(JSON.stringify([{ task_data: task }]), { status: 200 });
+    return new Response(JSON.stringify([]), { status: 200 });
+  };
+  try {
+    const result = await handleTaskRequest(
+      request('/v1/tasks/' + id, 'PATCH', { operation: 'start' }), env, auth
+    );
+    assert.equal(result.status, 409);
+    assert.match((await result.json()).error, /not persisted/);
+    assert.equal(calls, 2);
   } finally {
     globalThis.fetch = originalFetch;
   }

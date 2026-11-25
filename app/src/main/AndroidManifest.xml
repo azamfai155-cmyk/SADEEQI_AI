@@ -7,18 +7,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-      <queries>
+    <queries>
         <package android:name="com.whatsapp" />
         <package android:name="org.telegram.messenger" />
         <package android:name="com.google.android.youtube" />
         <intent><action android:name="android.media.action.IMAGE_CAPTURE" /></intent>
         <intent><action android:name="android.intent.action.SET_ALARM" /></intent>
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
 
     <application
@@ -46,16 +42,14 @@
             android:name=".auth.AuthActivity"
             android:exported="false" />
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:windowSoftInputMode="adjustResize">
-
+        <!-- Android's launcher contract requires this entry point to be exported.
+             MainActivity exposes no custom/deep-link intent filters and checks the encrypted
+             authenticated session in onCreate before rendering application functionality. -->
+        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize"> <!-- nosemgrep: java.android.security.exported_activity.exported_activity -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
     </application>

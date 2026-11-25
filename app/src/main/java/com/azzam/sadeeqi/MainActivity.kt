@@ -150,9 +150,11 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val messageSources = remember { mutableStateMapOf<String, List<OpenAiGateway.Source>>() }
         var input by remember {
             mutableStateOf("")
         }
+        var webSearchEnabled by remember { mutableStateOf(false) }
         var voiceSessionActive by remember { mutableStateOf(false) }
         var isGenerating by remember { mutableStateOf(false) }
         var generationJob by remember { mutableStateOf<Job?>(null) }
@@ -322,6 +324,7 @@ class MainActivity : ComponentActivity() {
                 }
             )
 
+            val useWebSearch = webSearchEnabled
             status = "يتصل بمحرك صديقي عبر الإنترنت…"
 
             isGenerating = true
@@ -330,9 +333,11 @@ class MainActivity : ComponentActivity() {
                     val turns = messages.takeLast(24).map { (who, body) ->
                         OpenAiGateway.Turn(if (who == "صديقي") "assistant" else "user", body)
                     }
-                    val answer = withContext(Dispatchers.IO) {
-                        gateway.reply(turns, imageForRequest)
+                    val reply = withContext(Dispatchers.IO) {
+                        gateway.reply(turns, imageForRequest, useWebSearch)
                     }
+                    val answer = reply.text
+                    if (reply.sources.isNotEmpty()) messageSources[answer] = reply.sources
                     messages.add("صديقي" to answer)
                     val voiceSettings = VoiceSettingsStore(this@MainActivity).load()
                     if (voiceSettings.autoRead) {
@@ -707,6 +712,20 @@ class MainActivity : ComponentActivity() {
                                         }
                                         Text(body, color = Color.White)
                                         if (who == "صديقي") {
+                                            val sources = messageSources[body].orEmpty()
+                                            if (sources.isNotEmpty()) {
+                                                Spacer(Modifier.height(4.dp))
+                                                Text("المصادر", color = Color(0xFFE6C77A), style = MaterialTheme.typography.labelLarge)
+                                                sources.forEachIndexed { sourceIndex, source ->
+                                                    TextButton(onClick = {
+                                                        runCatching {
+                                                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(source.url)))
+                                                        }.onFailure { status = "تعذر فتح رابط المصدر." }
+                                                    }) {
+                                                        Text("${sourceIndex + 1}. ${source.title}", color = Color(0xFFB8D7FF))
+                                                    }
+                                                }
+                                            }
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 TextButton(onClick = { status = "شكراً على تقييمك 👍" }) { Text("👍", color = Color(0xFFB9B4C7)) }
                                                 TextButton(onClick = { status = "شكراً على ملاحظتك 👎" }) { Text("👎", color = Color(0xFFB9B4C7)) }
@@ -715,6 +734,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = webSearchEnabled,
+                                onCheckedChange = { webSearchEnabled = it },
+                                colors = CheckboxDefaults.colors(checkedColor = Color(0xFFE6C77A))
+                            )
+                            Text("بحث مباشر بالإنترنت وإظهار المصادر", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
                         }
                         Surface(
                             modifier = Modifier.fillMaxWidth(),

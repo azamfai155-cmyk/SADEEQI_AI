@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 class OpenAiGateway(
@@ -27,8 +28,34 @@ class OpenAiGateway(
         .build()
 
     data class Turn(val role: String, val content: String)
+    data class Source(val title: String, val url: String)
+    data class ChatReply(val text: String, val sources: List<Source>)
 
-    fun reply(history: List<Turn>, imageDataUrl: String? = null): String {
+    internal fun parseSources(body: String): List<Source> {
+        val sourceArray = runCatching { JSONObject(body).getJSONArray("sources") }.getOrNull()
+            ?: return emptyList()
+        val seen = mutableSetOf<String>()
+        val result = mutableListOf<Source>()
+        for (index in 0 until minOf(sourceArray.length(), 48)) {
+            val item = runCatching { sourceArray.getJSONObject(index) }.getOrNull() ?: continue
+            val rawUrl = runCatching { item.getString("url").trim() }.getOrNull()
+                ?.takeIf { it.isNotBlank() } ?: continue
+            val uri = runCatching { URI(rawUrl) }.getOrNull() ?: continue
+            val scheme = uri.scheme ?: continue
+            val host = uri.host ?: continue
+            if (!scheme.equals("https", ignoreCase = true) || host.isBlank() ||
+                uri.userInfo != null) continue
+            val normalized = runCatching { uri.toASCIIString() }.getOrNull() ?: continue
+            if (!seen.add(normalized)) continue
+            val title = runCatching { item.getString("title").trim() }.getOrNull()
+                ?.takeIf { it.isNotBlank() }?.take(240) ?: host
+            result += Source(title, normalized)
+            if (result.size >= 12) break
+        }
+        return result
+    }
+
+    fun reply(history: List<Turn>, imageDataUrl: String? = null, enableWebSearch: Boolean = false): ChatReply {
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
@@ -71,6 +98,7 @@ class OpenAiGateway(
 
         val payload = JSONObject()
             .put("input", input)
+            .put("enable_web_search", enableWebSearch)
 
         val request = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/v1/chat")
@@ -98,12 +126,12 @@ class OpenAiGateway(
                     )
                 }
 
-                return JSONObject(body)
-                    .optString("output_text")
+                val answer = JSONObject(body).optString("output_text")
                     .takeIf { it.isNotBlank() }
                     ?: throw IllegalStateException(
                         "وصل رد فارغ من محرك الذكاء الاصطناعي."
                     )
+                return ChatReply(answer, parseSources(body))
             }
         } finally {
             if (activeCall === call) activeCall = null

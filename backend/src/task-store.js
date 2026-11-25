@@ -120,9 +120,17 @@ export async function handleTaskRequest(request, env, auth) {
           return response({ error: 'Unsupported task operation.' }, 400);
       }
 
+      // Optimistic concurrency: update only if the row still has the version
+      // we just read. A competing update changes updated_at and makes this PATCH
+      // affect zero rows instead of silently overwriting newer task state.
+      const expectedUpdatedAt = found[0].updated_at || found[0].task_data?.updatedAt;
+      if (typeof expectedUpdatedAt !== 'string' || !expectedUpdatedAt) {
+        return response({ error: 'Task version is missing; reload before updating.' }, 409);
+      }
       const rows = await dbRequest(env,
         'sadeeqi_tasks?id=eq.' + encodeURIComponent(id) +
-        '&owner_id=eq.' + encodeURIComponent(auth.userId), {
+        '&owner_id=eq.' + encodeURIComponent(auth.userId) +
+        '&updated_at=eq.' + encodeURIComponent(expectedUpdatedAt), {
           method: 'PATCH',
           body: JSON.stringify(taskRow(task))
         });

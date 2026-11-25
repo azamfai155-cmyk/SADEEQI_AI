@@ -1,0 +1,107 @@
+name: SADEEQI Web Test Lab Validation
+
+on:
+  pull_request:
+    paths:
+      - "test-lab/**"
+      - ".github/workflows/web-test-lab-validation.yml"
+  push:
+    branches:
+      - "feature/web-test-lab-2026-11-18"
+    paths:
+      - "test-lab/**"
+      - ".github/workflows/web-test-lab-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Validate Android-style app homepage
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const landing = fs.readFileSync('test-lab/index.html', 'utf8');
+          if (!landing.includes('app.html')) {
+            console.error('Homepage must route visitors to the Android-style app.');
+            process.exit(1);
+          }
+          const html = fs.readFileSync('test-lab/app.html', 'utf8');
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error('Expected one app script, found ' + matches.length);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['auth', 'app', 'messages', 'chatInput', 'voiceSelect', 'calcRisk', 'calcBacktest', 'audioFiles', 'socialList', 'memoryRows', 'parseDevice', 'musicCommand', 'parseMusicCommand', 'musicSeek', 'musicDuration']) {
+            if (!html.includes('id="' + id + '"')) {
+              console.error('Missing Android app control: ' + id);
+              process.exit(1);
+            }
+          }
+          console.log('Android-style app JavaScript and core screens validated.');
+          NODE
+
+      - name: Validate unified modules dashboard JavaScript
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/modules.html', 'utf8');
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected exactly one modules dashboard script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['moduleCards', 'classify', 'musicParse', 'riskCalc', 'rrCalc', 'backtest']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing modules dashboard control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Unified modules dashboard JavaScript and controls validated.');
+          NODE
+
+      - name: Validate isolated development studio
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/dev-studio.html', 'utf8');
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected exactly one inline script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['htmlCode', 'cssCode', 'jsCode', 'preview', 'runChecks', 'exportProject']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing development studio control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Development studio JavaScript syntax and editor controls validated.');
+          NODE
+
+      - name: Validate Android parity lab JavaScript and feature coverage
+        run: |
+          node --input-type=commonjs <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('test-lab/android-parity.html', 'utf8');
+          const matches = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (matches.length !== 1) {
+            console.error(`Expected one Android parity script, found ${matches.length}`);
+            process.exit(1);
+          }
+          new Function(matches[0][1]);
+          for (const id of ['chat', 'voice', 'trading', 'music', 'social', 'memory', 'tools', 'settings', 'messages', 'audioPlayer', 'parseDevice', 'calcRisk']) {
+            if (!html.includes(`id="${id}"`)) {
+              console.error(`Missing Android parity module/control: ${id}`);
+              process.exit(1);
+            }
+          }
+          console.log('Android parity lab JavaScript and module controls validated.');
+          NODE

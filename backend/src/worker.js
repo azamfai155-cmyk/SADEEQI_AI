@@ -211,6 +211,29 @@ export function providerConfig(env) {
   };
 }
 
+export function extractWebSources(output) {
+  const seen = new Set();
+  const sources = [];
+  for (const item of Array.isArray(output) ? output : []) {
+    for (const part of Array.isArray(item?.content) ? item.content : []) {
+      for (const annotation of Array.isArray(part?.annotations) ? part.annotations : []) {
+        if (annotation?.type !== 'url_citation') continue;
+        let parsed;
+        try { parsed = new URL(annotation.url); } catch { continue; }
+        if (parsed.protocol !== 'https:' || seen.has(parsed.href)) continue;
+        seen.add(parsed.href);
+        sources.push({
+          title: typeof annotation.title === 'string' && annotation.title.trim()
+            ? annotation.title.trim().slice(0, 240) : parsed.hostname,
+          url: parsed.href
+        });
+        if (sources.length >= 12) return sources;
+      }
+    }
+  }
+  return sources;
+}
+
 export async function handleRequest(request, env) {
   const cors = corsHeaders(request, env);
   const url = new URL(request.url);
@@ -246,8 +269,33 @@ export async function handleRequest(request, env) {
     return json({ name: 'SADEEQI AI', status: 'running', version: env.SADEEQI_VERSION || '1.5.1' }, 200, cors);
   }
 
+  if (url.pathname === '/v1/guest-session' && request.method === 'POST') {
+    // Anonymous account creation is opt-in; keep the unauthenticated endpoint closed by default.
+    if (env.ALLOW_GUEST_SESSIONS !== 'true') {
+      return json({ error: 'Guest sessions are disabled.' }, 404, cors);
+    }
+    const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
+    const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_PUBLIC_KEY || '';
+    if (!supabaseUrl || !anonKey) return json({ error: 'Guest sign-in is not configured on the server.' }, 503, cors);
+    try {
+      const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: '{}',
+        signal: AbortSignal.timeout(15000)
+      });
+      const session = await response.json();
+      if (!response.ok || !session.access_token) {
+        return json({ error: session.msg || session.message || session.error_description || 'Supabase guest sign-in failed.' }, response.status >= 400 && response.status < 500 ? response.status : 502, cors);
+      }
+      return json({ access_token: session.access_token, expires_in: session.expires_in || 3600, token_type: session.token_type || 'bearer' }, 200, cors);
+    } catch {
+      return json({ error: 'Unable to reach Supabase guest authentication.' }, 502, cors);
+    }
+  }
+
   const isSocial = url.pathname === '/v1/social/providers';
-  const isTasks = url.pathname === '/v1/tasks' || /^\\/v1\\/tasks\\/[0-9a-f-]{36}$/i.test(url.pathname);
+  const isTasks = url.pathname === '/v1/tasks' || /^\/v1\/tasks\/[0-9a-f-]{36}$/i.test(url.pathname);
   if (!isSocial && !isTasks && url.pathname !== '/v1/chat') {
     return json({ error: 'Not found.' }, 404, cors);
   }
@@ -350,6 +398,7 @@ export async function handleRequest(request, env) {
       model: result.model || config.model,
       provider: config.provider,
       output_text: output,
+      sources: body.enable_web_search === true ? extractWebSources(result.output) : [],
       usage: result.usage || null
     }, 200, cors);
   } catch {
