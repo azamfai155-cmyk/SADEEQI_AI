@@ -14,15 +14,23 @@ jobs:
   backend-dependency-audit:
     name: Backend dependency vulnerability audit
     runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_CACHE: ${{ runner.temp }}/sadeeqi-npm-cache
+      npm_config_cache: ${{ runner.temp }}/sadeeqi-npm-cache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
+      - name: Prepare isolated npm cache
+        run: |
+          mkdir -p "$NPM_CONFIG_CACHE"
+          chmod -R u+rwX "$NPM_CONFIG_CACHE"
+          npm config get cache
       - name: Generate a lockfile for this repository (none is committed yet)
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install locked dependencies
-        run: npm ci --ignore-scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
       - name: Run backend tests
