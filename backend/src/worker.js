@@ -247,6 +247,10 @@ export async function handleRequest(request, env) {
   }
 
   if (url.pathname === '/v1/guest-session' && request.method === 'POST') {
+    // Anonymous account creation is opt-in; keep the unauthenticated endpoint closed by default.
+    if (env.ALLOW_GUEST_SESSIONS !== 'true') {
+      return json({ error: 'Guest sessions are disabled.' }, 404, cors);
+    }
     const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
     const anonKey = env.SUPABASE_ANON_KEY || env.SUPABASE_ANON_PUBLIC_KEY || '';
     if (!supabaseUrl || !anonKey) return json({ error: 'Guest sign-in is not configured on the server.' }, 503, cors);
