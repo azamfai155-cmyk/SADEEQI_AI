@@ -31,6 +31,7 @@ import com.azzam.sadeeqi.core.OpenAiGateway
 import com.azzam.sadeeqi.auth.AuthActivity
 import com.azzam.sadeeqi.auth.EncryptedSessionStore
 import com.azzam.sadeeqi.auth.SupabaseAuthClient
+import com.azzam.sadeeqi.auth.PrivateFilesScreen
 import com.azzam.sadeeqi.voice.VoiceForegroundService
 import com.azzam.sadeeqi.voice.VoiceSettingsStore
 import com.azzam.sadeeqi.voice.VoiceStudioScreen
@@ -166,7 +167,7 @@ class MainActivity : ComponentActivity() {
         var microphoneMuted by remember { mutableStateOf(false) }
         var selectedTab by remember { mutableStateOf("الرئيسية") }
         val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-        val navigationItems = listOf("الرئيسية", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
+        val navigationItems = listOf("الرئيسية", "ملفاتي", "استوديو الصوت", "التداول", "موسيقى", "SOCIAL HUB", "البحث", "الذاكرة", "الأدوات", "الإعدادات")
         var searchQuery by remember { mutableStateOf("") }
         var musicState by remember { mutableStateOf(MusicPlaybackState()) }
         var musicQueue by remember { mutableStateOf(emptyList<Pair<android.net.Uri, String>>()) }
@@ -628,6 +629,9 @@ class MainActivity : ComponentActivity() {
                 }
                 Spacer(Modifier.height(12.dp))
                 when (selectedTab) {
+                    "ملفاتي" -> {
+                        PrivateFilesScreen()
+                    }
                     "الرئيسية" -> {
                         Text("مرحباً بك من جديد", color = Color(0xFFE6C77A), style = MaterialTheme.typography.titleMedium)
                         Text("أنا هنا لمساعدتك في التفكير والبحث وإنجاز المهام.", color = Color(0xFFD2D0DC), style = MaterialTheme.typography.bodySmall)
