@@ -48,9 +48,6 @@ declare
   v_window timestamptz;
   v_hits integer;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
-    raise insufficient_privilege using message = 'service_role required';
-  end if;
   if p_key_hash !~ '^[0-9a-f]{64}$' or p_limit < 1 or p_limit > 10000
      or p_window_seconds < 1 or p_window_seconds > 86400 then
     raise invalid_parameter_value using message = 'invalid rate limit arguments';
@@ -71,7 +68,7 @@ begin
           else 1
         end,
         updated_at = clock_timestamp()
-  returning private.sadeeqi_rate_limits.hits into v_hits;
+  returning current_row.hits into v_hits;
 
   return query select
     v_hits <= p_limit,
@@ -95,9 +92,6 @@ as $$
 declare
   v_id uuid;
 begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
-    raise insufficient_privilege using message = 'service_role required';
-  end if;
   if p_event_type is null or length(p_event_type) not between 1 and 80
      or p_resource_type is null or length(p_resource_type) not between 1 and 80
      or (p_resource_id is not null and length(p_resource_id) > 128)
