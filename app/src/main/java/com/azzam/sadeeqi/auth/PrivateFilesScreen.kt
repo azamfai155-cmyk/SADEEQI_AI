@@ -65,7 +65,8 @@ fun PrivateFilesScreen() {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null && !busy) {
             busy = true
-            message = "جارٍ رفع الملف..."
+            val wasReplacing = replacingPath != null
+            message = if (wasReplacing) "جارٍ استبدال الملف..." else "جارٍ رفع الملف..."
             scope.launch {
                 val result = withContext(Dispatchers.IO) {
                     runCatching {
@@ -89,7 +90,7 @@ fun PrivateFilesScreen() {
                     }
                 }
                 result.onSuccess {
-                    message = if (replacingPath == null) "تم حفظ الملف بنجاح." else "تم استبدال الملف بنجاح."
+                    message = if (wasReplacing) "تم استبدال الملف بنجاح." else "تم رفع الملف بنجاح."
                 }.onFailure { message = it.message ?: "فشل رفع الملف." }
                 busy = false
                 if (result.isSuccess) refresh()
