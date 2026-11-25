@@ -52,7 +52,7 @@ class OpenAiGateway(
         return result
     }
 
-    fun reply(history: List<Turn>, imageDataUrl: String? = null): ChatReply {
+    fun reply(history: List<Turn>, imageDataUrl: String? = null, enableWebSearch: Boolean = false): ChatReply {
         require(baseUrl.startsWith("https://")) {
             "اضبط عنوان HTTPS لخادم صديقي أولاً."
         }
@@ -95,6 +95,7 @@ class OpenAiGateway(
 
         val payload = JSONObject()
             .put("input", input)
+            .put("enable_web_search", enableWebSearch)
 
         val request = Request.Builder()
             .url(baseUrl.trimEnd('/') + "/v1/chat")
