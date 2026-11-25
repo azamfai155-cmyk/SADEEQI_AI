@@ -26,12 +26,12 @@ class SupabaseStorageClient(context: Context) {
 
     fun isConfigured(): Boolean = auth.isConfigured()
 
-    fun upload(file: File, contentType: String): String {
+    fun upload(file: File, contentType: String, originalFileName: String = file.name): String {
         require(file.isFile && file.canRead()) { "الملف غير موجود أو لا يمكن قراءته." }
         require(file.length() in 1..MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB وألا يكون فارغاً." }
         require(contentType in ALLOWED_TYPES) { "نوع الملف غير مسموح." }
         val userId = currentUserId()
-        val safeName = file.name.substringAfterLast('/').substringAfterLast('\\')
+        val safeName = originalFileName.substringAfterLast('/').substringAfterLast('\\')
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
             .take(100)
             .ifBlank { "file" }
