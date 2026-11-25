@@ -63,9 +63,13 @@ fun PrivateFilesScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) { refresh() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null && !busy) {
+        if (uri == null) {
+            replacingPath = null
+        } else if (!busy) {
+            val targetPath = replacingPath
+            replacingPath = null
             busy = true
-            val wasReplacing = replacingPath != null
+            val wasReplacing = targetPath != null
             message = if (wasReplacing) "جارٍ استبدال الملف..." else "جارٍ رفع الملف..."
             scope.launch {
                 val result = withContext(Dispatchers.IO) {
@@ -81,9 +85,7 @@ fun PrivateFilesScreen(modifier: Modifier = Modifier) {
                                 temp.outputStream().use { output -> input.copyTo(output) }
                             } ?: error("تعذر قراءة الملف.")
                             require(temp.length() in 1..SupabaseStorageClient.MAX_FILE_BYTES) { "حجم الملف يجب ألا يتجاوز 10 MB." }
-                            val target = replacingPath
-                            replacingPath = null
-                            if (target == null) storage.upload(temp, mime) else storage.update(target, temp, mime)
+                            if (targetPath == null) storage.upload(temp, mime, name) else storage.update(targetPath, temp, mime)
                         } finally {
                             temp.delete()
                         }
@@ -105,7 +107,7 @@ fun PrivateFilesScreen(modifier: Modifier = Modifier) {
         Text("ملفاتي الخاصة", style = MaterialTheme.typography.headlineSmall)
         Text(message, style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = !busy, onClick = { picker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain")) }) {
+            Button(enabled = !busy, onClick = { replacingPath = null; picker.launch(arrayOf("image/jpeg", "image/png", "image/webp", "application/pdf", "text/plain")) }) {
                 Text("رفع ملف")
             }
             OutlinedButton(enabled = !busy, onClick = { refresh() }) { Text("تحديث") }
