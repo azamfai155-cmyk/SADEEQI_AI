@@ -1,5 +1,6 @@
 package com.azzam.sadeeqi.memory
 
+import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -14,8 +15,6 @@ import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
-import javax.crypto.spec.GCMParameterSpec
-import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class EncryptedMemoryInstrumentedTest {
@@ -129,8 +128,10 @@ class EncryptedMemoryInstrumentedTest {
 
     @Test fun legacyRoomRowMigratesWithoutLosingItsValue() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val dao = MemoryDatabase.get(context).dao()
         val logicalId = "legacy-room-migration-check"
+        val memory = EncryptedMemory(context)
+        memory.delete(logicalId)
+        val dao = MemoryDatabase.get(context).dao()
         val alias = "SADEEQI_MEMORY_AES_GCM_V1"
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val key = (keyStore.getKey(alias, null) as? javax.crypto.SecretKey) ?: run {
@@ -156,7 +157,6 @@ class EncryptedMemoryInstrumentedTest {
         )
         dao.put(oldRow)
 
-        val memory = EncryptedMemory(context)
         assertEquals("legacy-room-secret", memory.read(logicalId))
         assertFalse("Legacy Room row should be replaced by an encrypted v2 row", dao.all().any { it.id == logicalId })
         assertEquals(1, memory.search(logicalId).count { it.first == logicalId })
@@ -166,6 +166,8 @@ class EncryptedMemoryInstrumentedTest {
     @Test fun legacySharedPreferencesEntryMigratesAndIsClearedAfterCommit() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val logicalId = "legacy-preferences-migration-check"
+        val memory = EncryptedMemory(context)
+        memory.delete(logicalId)
         val alias = "SADEEQI_MEMORY_KEY"
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val key = (keyStore.getKey(alias, null) as? javax.crypto.SecretKey) ?: run {
@@ -187,13 +189,13 @@ class EncryptedMemoryInstrumentedTest {
             .toString()
         val combined = cipher.iv + cipher.doFinal(legacyPayload.toByteArray())
         val preferences = context.getSharedPreferences("sadeeqi_encrypted_memory", Context.MODE_PRIVATE)
+        preferences.edit().remove(logicalId).commit()
         assertTrue(
             preferences.edit()
                 .putString(logicalId, Base64.encodeToString(combined, Base64.NO_WRAP))
                 .commit()
         )
 
-        val memory = EncryptedMemory(context)
         assertEquals("legacy-preferences-secret", memory.read(logicalId))
         assertFalse("Legacy preferences should be cleared only after migration commits", preferences.contains(logicalId))
         memory.delete(logicalId)
