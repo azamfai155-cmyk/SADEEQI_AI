@@ -253,3 +253,94 @@ test('default system and identity instructions use real newline separators', asy
   assert.equal(instructions.includes('\\n'), false);
   assert.match(instructions, /صديقي/);
 });
+
+
+test('distributed rate limiter uses shared Supabase counters and blocks over-limit requests', async () => {
+  const { createDistributedRateLimiter } = await import('./server.js');
+  const calls = [];
+  const env = {
+    ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true',
+    SUPABASE_URL: 'https://project.example.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'server-only-key',
+    RATE_LIMIT_HASH_KEY: 'h'.repeat(48)
+  };
+  const middleware = createDistributedRateLimiter({
+    scope: 'chat', limit: 1, env,
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), body: JSON.parse(init.body) });
+      return new Response(JSON.stringify([{ allowed: false, retry_after_seconds: 19, current_hits: 2 }]), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      });
+    }
+  });
+  const res = {
+    headers: {}, statusCode: 200, body: null,
+    set(name, value) { this.headers[name] = value; return this; },
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return this; }
+  };
+  let nextCalls = 0;
+  await middleware({ ip: '203.0.113.20', auth: { userId: 'user-1' } }, res, () => { nextCalls += 1; });
+  assert.equal(res.statusCode, 429);
+  assert.equal(res.headers['Retry-After'], '19');
+  assert.equal(nextCalls, 0);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.url.endsWith('/rpc/consume_sadeeqi_rate_limit')));
+  assert.ok(calls.every(call => /^[a-f0-9]{64}$/.test(call.body.p_key_hash)));
+  assert.equal(JSON.stringify(calls).includes('203.0.113.20'), false);
+});
+
+test('distributed rate limiter fails closed when server credentials are missing', async () => {
+  const { createDistributedRateLimiter } = await import('./server.js');
+  const middleware = createDistributedRateLimiter({
+    scope: 'chat', limit: 20,
+    env: { ENFORCE_DISTRIBUTED_RATE_LIMIT: 'true', RATE_LIMIT_HASH_KEY: 'h'.repeat(48) }
+  });
+  const res = {
+    statusCode: 200,
+    status(code) { this.statusCode = code; return this; },
+    json(value) { this.body = value; return this; }
+  };
+  let nextCalls = 0;
+  await middleware({ ip: '203.0.113.20', auth: { userId: 'user-1' } }, res, () => { nextCalls += 1; });
+  assert.equal(res.statusCode, 503);
+  assert.equal(nextCalls, 0);
+});
+
+test('chat audit writes metadata only through the server-side Supabase RPC', async () => {
+  const { writeAuditEvent } = await import('./server.js');
+  let sent;
+  const env = {
+    ENFORCE_AUDIT_LOGGING: 'true',
+    SUPABASE_URL: 'https://project.example.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'server-only-key'
+  };
+  const written = await writeAuditEvent({
+    actorId: '11111111-1111-4111-8111-111111111111',
+    eventType: 'chat.requested',
+    resourceType: 'chat',
+    metadata: { method: 'POST', provider: 'groq', model: 'test-model' }
+  }, {
+    env,
+    fetchImpl: async (url, init) => {
+      sent = { url: String(url), headers: init.headers, body: JSON.parse(init.body) };
+      return new Response(JSON.stringify('audit-event-id'), { status: 200 });
+    }
+  });
+  assert.equal(written, true);
+  assert.ok(sent.url.endsWith('/rpc/write_sadeeqi_audit_event'));
+  assert.equal(sent.body.p_actor_id, '11111111-1111-4111-8111-111111111111');
+  assert.deepEqual(sent.body.p_metadata, { method: 'POST', provider: 'groq', model: 'test-model' });
+  assert.equal(JSON.stringify(sent.body).includes('prompt'), false);
+  assert.equal(sent.headers.Authorization, 'Bearer server-only-key');
+});
+
+test('audit logging is a no-op when enforcement is disabled', async () => {
+  const { writeAuditEvent } = await import('./server.js');
+  const written = await writeAuditEvent({
+    eventType: 'chat.requested', resourceType: 'chat'
+  }, { env: { ENFORCE_AUDIT_LOGGING: 'false' }, fetchImpl: async () => {
+    throw new Error('must not call Supabase');
+  } });
+  assert.equal(written, false);
+});
