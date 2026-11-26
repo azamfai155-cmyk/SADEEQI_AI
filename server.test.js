@@ -10,6 +10,17 @@ async function withServer(run) {
   finally { await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 }
 
+test('root endpoint serves the Arabic web application', async () => {
+  await withServer(async port => {
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.ok((response.headers.get('content-type') || '').includes('text/html'));
+    assert.match(html, /<!doctype html>/i);
+    assert.match(html, /صديقي AI/);
+  });
+});
+
 test('health endpoint exposes service metadata without secrets', async () => {
   await withServer(async port => {
     const response = await fetch(`http://127.0.0.1:${port}/health`);
@@ -31,6 +42,20 @@ test('chat and social endpoints require authentication', async () => {
     assert.ok([401, 503].includes(chat.status));
     assert.ok([401, 503].includes(social.status));
   });
+});
+
+test('explicit memory requests extract test name and regular user name', async () => {
+  const { parseExplicitMemoryRequest } = await import('./server.js');
+  assert.deepEqual(parseExplicitMemoryRequest([{ role: 'user', content: 'تذكر أن اسمي في الاختبارات هو أحمد' }]), { key: 'اسم الاختبار', value: 'أحمد' });
+  assert.deepEqual(parseExplicitMemoryRequest([{ role: 'user', content: 'احفظ أن اسمي هو خالد' }]), { key: 'اسم المستخدم', value: 'خالد' });
+  assert.equal(parseExplicitMemoryRequest([{ role: 'user', content: 'ما اسمي؟' }]), null);
+});
+
+test('explicit preference memory requests are isolated as facts', async () => {
+  const { parseExplicitMemoryRequest } = await import('./server.js');
+  const memory = parseExplicitMemoryRequest([{ role: 'user', content: 'تذكر أنني أفضل الإجابات المختصرة' }]);
+  assert.equal(memory.value, 'أفضل الإجابات المختصرة');
+  assert.match(memory.key, /^تفضيل:/);
 });
 
 test('bearer token parser strips the authorization scheme', () => {
