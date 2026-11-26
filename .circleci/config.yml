@@ -7,6 +7,11 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Use a writable npm cache
+          command: |
+            mkdir -p "$PWD/.npm-cache"
+            echo 'export npm_config_cache="$PWD/.npm-cache"' >> "$BASH_ENV"
+      - run:
           name: Generate a deterministic lockfile
           command: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - run:
