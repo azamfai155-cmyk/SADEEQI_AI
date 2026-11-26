@@ -1,5 +1,8 @@
 package com.azzam.sadeeqi.memory
 
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -8,6 +11,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.json.JSONObject
 import java.io.File
+import java.security.KeyStore
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.spec.GCMParameterSpec
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class EncryptedMemoryInstrumentedTest {
@@ -117,6 +125,78 @@ class EncryptedMemoryInstrumentedTest {
         assertTrue("Malformed backup JSON must be rejected", rejected)
         assertEquals("preserve-this-value", memory.read("malformed-backup-check"))
         memory.delete("malformed-backup-check")
+    }
+
+    @Test fun legacyRoomRowMigratesWithoutLosingItsValue() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dao = MemoryDatabase.get(context).dao()
+        val logicalId = "legacy-room-migration-check"
+        val alias = "SADEEQI_MEMORY_AES_GCM_V1"
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val key = (keyStore.getKey(alias, null) as? javax.crypto.SecretKey) ?: run {
+            val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+            generator.init(
+                KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .setRandomizedEncryptionRequired(true)
+                    .build()
+            )
+            generator.generateKey()
+        }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val oldRow = MemoryRow(
+            id = logicalId,
+            category = "legacy-category",
+            iv = Base64.encodeToString(cipher.iv, Base64.NO_WRAP),
+            ciphertext = Base64.encodeToString(cipher.doFinal("legacy-room-secret".toByteArray()), Base64.NO_WRAP),
+            updatedAt = 123L
+        )
+        dao.put(oldRow)
+
+        val memory = EncryptedMemory(context)
+        assertEquals("legacy-room-secret", memory.read(logicalId))
+        assertFalse("Legacy Room row should be replaced by an encrypted v2 row", dao.all().any { it.id == logicalId })
+        assertEquals(1, memory.search(logicalId).count { it.first == logicalId })
+        memory.delete(logicalId)
+    }
+
+    @Test fun legacySharedPreferencesEntryMigratesAndIsClearedAfterCommit() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val logicalId = "legacy-preferences-migration-check"
+        val alias = "SADEEQI_MEMORY_KEY"
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val key = (keyStore.getKey(alias, null) as? javax.crypto.SecretKey) ?: run {
+            val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+            generator.init(
+                KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setRandomizedEncryptionRequired(true)
+                    .build()
+            )
+            generator.generateKey()
+        }
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val legacyPayload = JSONObject()
+            .put("category", "legacy-preferences")
+            .put("content", "legacy-preferences-secret")
+            .toString()
+        val combined = cipher.iv + cipher.doFinal(legacyPayload.toByteArray())
+        val preferences = context.getSharedPreferences("sadeeqi_encrypted_memory", Context.MODE_PRIVATE)
+        assertTrue(
+            preferences.edit()
+                .putString(logicalId, Base64.encodeToString(combined, Base64.NO_WRAP))
+                .commit()
+        )
+
+        val memory = EncryptedMemory(context)
+        assertEquals("legacy-preferences-secret", memory.read(logicalId))
+        assertFalse("Legacy preferences should be cleared only after migration commits", preferences.contains(logicalId))
+        memory.delete(logicalId)
     }
 
 }
