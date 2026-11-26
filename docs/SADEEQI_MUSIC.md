@@ -16,7 +16,7 @@ Updated: 2026-11-26
 ## Global music streaming — Audius integration added
 
 - Added an Audius read-only catalogue adapter using the documented REST API.
-- Added remote track search, artist/title metadata, artwork metadata and stream URL resolution.
+- Added remote track search, artist/title metadata and stream URL resolution. Artwork URLs are currently not populated by the repository implementation.
 - Added remote Media3 queue playback alongside local file playback.
 - Added Arabic text search in the SADEEQI MUSIC screen.
 - Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; search runs on the IO dispatcher and returns streamable results for the user to select.
