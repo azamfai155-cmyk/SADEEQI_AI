@@ -1,7 +1,9 @@
 # نشر خادم صديقي على Cloudflare Workers
 
-ملف Worker الفعلي هو `backend/src/worker.js`، وإعداد Wrangler في جذر المستودع هو `wrangler.jsonc`. اسم Worker المعتمد في المشروع هو `sadeeqi-ai`، لذلك يكون العنوان المتوقع:
+ملف Worker الفعلي هو `backend/src/worker.js`، وإعداد Wrangler في جذر المستودع هو `wrangler.jsonc`. اسم Worker المعتمد في Cloudflare وWrangler هو `sadeeqi-ai-v2`، لذلك يكون العنوان المتوقع:
 `https://sadeeqi-ai-v2.azamfai155.workers.dev`
+
+ملاحظة: قد يظهر المعرّف `sadeeqi-ai` داخل استجابات التطبيق أو سجلاته بوصفه معرّفاً داخلياً للخدمة؛ هذا لا يغيّر اسم Worker الذي يجب أن يطابق قيمة `name` في `wrangler.jsonc`.
 
 ## إعداد Cloudflare
 
