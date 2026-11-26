@@ -85,6 +85,8 @@ jobs:
         timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         env:
+          # GitHub-hosted runners without KVM require the emulator's TCG fallback.
+          ANDROID_I_WANT_MY_TCG: "yes"
           SUPABASE_URL: ${{ secrets.SADEEQI_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SADEEQI_SUPABASE_ANON_KEY }}
         with:
