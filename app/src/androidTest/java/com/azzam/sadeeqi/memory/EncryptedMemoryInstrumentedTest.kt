@@ -51,4 +51,24 @@ class EncryptedMemoryInstrumentedTest {
         memory.delete("stable-logical-id")
     }
 
+
+    @Test fun wrongBackupPasswordDoesNotModifyExistingMemory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val memory = EncryptedMemory(context)
+        memory.delete("backup-atomicity-check")
+        memory.save("backup-atomicity-check", "test", "original-value")
+
+        val backup = memory.exportEncrypted("correct-password-123".toCharArray())
+        var rejected = false
+        try {
+            memory.importEncrypted(backup, "incorrect-password-123".toCharArray())
+        } catch (_: Exception) {
+            rejected = true
+        }
+
+        assertTrue("An archive with the wrong password must be rejected", rejected)
+        assertEquals("original-value", memory.read("backup-atomicity-check"))
+        memory.delete("backup-atomicity-check")
+    }
+
 }
