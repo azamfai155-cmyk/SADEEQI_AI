@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 import java.io.File
 
 @RunWith(AndroidJUnit4::class)
@@ -21,8 +22,13 @@ class EncryptedMemoryInstrumentedTest {
         assertEquals("updated-secret", memory.read("acceptance-key"))
 
         val db = context.getDatabasePath("sadeeqi_secure.db")
-        val raw = File(db.absolutePath).takeIf { it.exists() }?.readBytes()?.toString(Charsets.ISO_8859_1).orEmpty()
-        assertFalse("Plaintext marker found in SQLite main file", raw.contains(marker))
+        // Inspect the main database and any live SQLite sidecar files while the
+        // Room connection is still open; WAL may contain recently committed pages.
+        val storageFiles = listOf(db, File(db.absolutePath + "-wal"), File(db.absolutePath + "-shm"))
+        storageFiles.filter { it.exists() }.forEach { file ->
+            val raw = file.readBytes().toString(Charsets.ISO_8859_1)
+            assertFalse("Plaintext marker found in ${file.name}", raw.contains(marker))
+        }
 
         val password = "test-password-123".toCharArray()
         val backup = memory.exportEncrypted(password)
@@ -69,6 +75,48 @@ class EncryptedMemoryInstrumentedTest {
         assertTrue("An archive with the wrong password must be rejected", rejected)
         assertEquals("original-value", memory.read("backup-atomicity-check"))
         memory.delete("backup-atomicity-check")
+    }
+
+    @Test fun tamperedBackupDoesNotModifyExistingMemory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val memory = EncryptedMemory(context)
+        memory.delete("tampered-backup-check")
+        memory.save("tampered-backup-check", "test", "keep-this-value")
+
+        val backup = memory.exportEncrypted("correct-password-123".toCharArray())
+        val envelope = JSONObject(backup)
+        val encrypted = envelope.getString("data")
+        val replacement = if (encrypted.last() == 'A') 'B' else 'A'
+        envelope.put("data", encrypted.dropLast(1) + replacement)
+
+        var rejected = false
+        try {
+            memory.importEncrypted(envelope.toString(), "correct-password-123".toCharArray())
+        } catch (_: Exception) {
+            rejected = true
+        }
+
+        assertTrue("A modified authenticated ciphertext must be rejected", rejected)
+        assertEquals("keep-this-value", memory.read("tampered-backup-check"))
+        memory.delete("tampered-backup-check")
+    }
+
+    @Test fun malformedBackupDoesNotModifyExistingMemory() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val memory = EncryptedMemory(context)
+        memory.delete("malformed-backup-check")
+        memory.save("malformed-backup-check", "test", "preserve-this-value")
+
+        var rejected = false
+        try {
+            memory.importEncrypted("{not-json", "correct-password-123".toCharArray())
+        } catch (_: Exception) {
+            rejected = true
+        }
+
+        assertTrue("Malformed backup JSON must be rejected", rejected)
+        assertEquals("preserve-this-value", memory.read("malformed-backup-check"))
+        memory.delete("malformed-backup-check")
     }
 
 }
