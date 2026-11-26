@@ -5,6 +5,8 @@ import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 export const app = express();
+// Vercel is the single trusted proxy hop; use its client IP for abuse controls.
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 // Baseline response hardening for the JSON API. TLS is enforced by the deployment edge.
 app.use((_req, res, next) => {
@@ -216,7 +218,89 @@ export function createRateLimiter({ windowMs = 60_000, max = 20, now = Date.now 
 
 
 // Per-instance best-effort protection; use a shared store for strict cross-instance limits.
-const chatRateLimit = createRateLimiter({ windowMs: 60_000, max: 20 });
+const localChatRateLimit = createRateLimiter({ windowMs: 60_000, max: 20 });
+const localSocialRateLimit = createRateLimiter({ windowMs: 60_000, max: 30 });
+const distributedChatRateLimit = createDistributedRateLimiter({ scope: 'chat', limit: 20 });
+const distributedSocialRateLimit = createDistributedRateLimiter({ scope: 'social', limit: 30 });
+const chatRateLimit = (req, res, next) => process.env.ENFORCE_DISTRIBUTED_RATE_LIMIT === 'true'
+  ? distributedChatRateLimit(req, res, next) : localChatRateLimit(req, res, next);
+const socialRateLimit = (req, res, next) => process.env.ENFORCE_DISTRIBUTED_RATE_LIMIT === 'true'
+  ? distributedSocialRateLimit(req, res, next) : localSocialRateLimit(req, res, next);
+
+
+async function callSecurityRpc(env, functionName, payload, fetchImpl = globalThis.fetch) {
+  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!supabaseUrl || !serviceKey) throw new Error('Supabase security credentials are missing.');
+  const response = await fetchImpl(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000)
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(`Security RPC failed: ${response.status}`);
+  return data;
+}
+
+export function createDistributedRateLimiter({
+  scope, limit, env = process.env, fetchImpl = globalThis.fetch
+} = {}) {
+  return async (req, res, next) => {
+    if (env.ENFORCE_DISTRIBUTED_RATE_LIMIT !== 'true') return next();
+    const ip = typeof req.ip === 'string' ? req.ip : '';
+    if (!ip || ip.length > 128) {
+      return res.status(503).json({ error: 'Trusted client IP is unavailable; request was not processed.' });
+    }
+    const secret = env.RATE_LIMIT_HASH_KEY || '';
+    if (secret.length < 32) {
+      return res.status(503).json({ error: 'Distributed rate limiting is not configured; request was not processed.' });
+    }
+    const identities = [`ip:${ip}`];
+    if (req.auth?.userId) identities.push(`user:${req.auth.userId}`);
+    try {
+      let blockedFor = 0;
+      for (const identity of identities) {
+        const keyHash = crypto.createHmac('sha256', secret)
+          .update(`${scope}:${identity}`).digest('hex');
+        const result = await callSecurityRpc(env, 'consume_sadeeqi_rate_limit', {
+          p_key_hash: keyHash, p_limit: limit, p_window_seconds: 60
+        }, fetchImpl);
+        const row = Array.isArray(result) ? result[0] : result;
+        if (!row || typeof row.allowed !== 'boolean') throw new Error('Invalid rate limit response.');
+        if (!row.allowed) blockedFor = Math.max(blockedFor, Number(row.retry_after_seconds) || 1);
+      }
+      if (blockedFor > 0) {
+        res.set('Retry-After', String(blockedFor));
+        res.set('RateLimit-Limit', String(limit));
+        res.set('RateLimit-Remaining', '0');
+        return res.status(429).json({ error: 'طلبات كثيرة خلال وقت قصير. حاول مرة أخرى بعد قليل.' });
+      }
+      return next();
+    } catch (error) {
+      console.error('[security] distributed rate limiter unavailable', { scope, name: error?.name || 'Error' });
+      return res.status(503).json({ error: 'Security controls are temporarily unavailable. Request was not processed.' });
+    }
+  };
+}
+
+export async function writeAuditEvent({
+  actorId = null, eventType, resourceType, resourceId = null, metadata = {}
+}, { env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (env.ENFORCE_AUDIT_LOGGING !== 'true') return false;
+  await callSecurityRpc(env, 'write_sadeeqi_audit_event', {
+    p_actor_id: actorId,
+    p_event_type: eventType,
+    p_resource_type: resourceType,
+    p_resource_id: resourceId,
+    p_metadata: metadata
+  }, fetchImpl);
+  return true;
+}
 
 export function validateInput(input) {
   if (!Array.isArray(input) || input.length < 1 || input.length > 24) return 'input must contain 1 to 24 turns.';
@@ -291,7 +375,7 @@ export function buildSocialProviders(env = process.env) {
   });
 }
 
-app.get('/v1/social/providers', requireAuth, (_req, res) => {
+app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
   // Readiness only: OAuth, account linking and social actions are not implemented.
   const providers = buildSocialProviders();
   res.set('Cache-Control', 'no-store').json({
@@ -308,6 +392,18 @@ app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
 
   const validationError = validateInput(req.body?.input);
   if (validationError) return res.status(400).json({ error: validationError });
+
+  try {
+    await writeAuditEvent({
+      actorId: req.auth?.userId || null,
+      eventType: 'chat.requested',
+      resourceType: 'chat',
+      metadata: { method: 'POST', provider: PROVIDER, model: MODEL }
+    });
+  } catch (error) {
+    console.error('[security] chat audit write failed', { name: error?.name || 'Error' });
+    return res.status(503).json({ error: 'Audit logging is unavailable. Request was not processed.' });
+  }
 
   try {
     const providerRequest = buildProviderRequest({
