@@ -19,6 +19,8 @@ export function normalizeAuthMode(value) {
   return ['legacy', 'dual', 'supabase'].includes(mode) ? mode : 'invalid';
 }
 const AUTH_MODE = normalizeAuthMode(process.env.AUTH_MODE);
+// Immutable Supabase Auth user ID for the project's single owner.
+const PROJECT_OWNER_USER_ID = process.env.SADEEQI_OWNER_USER_ID || '';
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_JWKS = SUPABASE_URL ? createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`)) : null;
 export function resolveAiProviderConfig(env = process.env) {
@@ -176,6 +178,10 @@ export function createAuthMiddleware() {
 
 const requireAuth = createAuthMiddleware();
 
+export function isProjectOwner(auth, ownerUserId = PROJECT_OWNER_USER_ID) {
+  return Boolean(ownerUserId && auth?.userId && auth.userId === ownerUserId);
+}
+
 export function createRateLimiter({ windowMs = 60_000, max = 20, now = Date.now } = {}) {
   const buckets = new Map();
 
@@ -256,6 +262,12 @@ app.get('/web-config', (_req, res) => {
 app.get('/', (_req, res) => {
   res.set('Cache-Control', 'no-store');
   return res.sendFile(fileURLToPath(new URL('./web/index.html', import.meta.url)));
+});
+
+app.get('/v1/owner/me', requireAuth, (req, res) => {
+  if (!PROJECT_OWNER_USER_ID) return res.status(503).json({ error: 'Project owner is not configured.' });
+  const isOwner = isProjectOwner(req.auth);
+  res.set('Cache-Control', 'no-store').json({ role: isOwner ? 'owner' : 'user', isOwner });
 });
 
 app.get('/health', (_req, res) => {
