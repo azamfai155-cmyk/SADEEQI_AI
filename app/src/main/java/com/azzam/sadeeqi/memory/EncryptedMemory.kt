@@ -169,11 +169,19 @@ class EncryptedMemory(context: Context) {
     private suspend fun migrateLegacyRows() {
         dao.all().filter { !it.id.startsWith("v2:") }.forEach { old ->
             val record = decode(old)
-            val rowId = "v2:" + UUID.randomUUID().toString()
-            val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
-                .put("value", record.value).put("updatedAt", record.updatedAt).toString()
-            val (iv, ct) = encryptDevice(rowId, payload.toByteArray(StandardCharsets.UTF_8))
-            dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
+            // If a prior migration attempt committed the encrypted replacement
+            // but was interrupted before deleting the legacy row, reuse it.
+            val alreadyMigrated = dao.all().any { candidate ->
+                candidate.id.startsWith("v2:") &&
+                    runCatching { decode(candidate).logicalId == record.logicalId }.getOrDefault(false)
+            }
+            if (!alreadyMigrated) {
+                val rowId = "v2:" + UUID.randomUUID().toString()
+                val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
+                    .put("value", record.value).put("updatedAt", record.updatedAt).toString()
+                val (iv, ct) = encryptDevice(rowId, payload.toByteArray(StandardCharsets.UTF_8))
+                dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
+            }
             dao.delete(old.id)
         }
     }
