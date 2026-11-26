@@ -229,7 +229,7 @@ const socialRateLimit = (req, res, next) => process.env.ENFORCE_DISTRIBUTED_RATE
 
 
 async function callSecurityRpc(env, functionName, payload, fetchImpl = globalThis.fetch) {
-  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+  const supabaseUrl = (env.SUPABASE_URL || '').replace(/\/$/, '');
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || '';
   if (!supabaseUrl || !serviceKey) throw new Error('Supabase security credentials are missing.');
   const response = await fetchImpl(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
