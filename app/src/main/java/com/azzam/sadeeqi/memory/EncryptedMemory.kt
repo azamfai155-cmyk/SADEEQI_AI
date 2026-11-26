@@ -28,8 +28,17 @@ data class MemoryRow(@PrimaryKey val id: String, val category: String, val iv: S
 @Dao interface MemoryDao {
     @Query("SELECT * FROM secure_memory ORDER BY updatedAt DESC") suspend fun all(): List<MemoryRow>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(row: MemoryRow)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putAll(rows: List<MemoryRow>)
     @Query("DELETE FROM secure_memory WHERE id=:id") suspend fun delete(id: String)
+    @Query("DELETE FROM secure_memory WHERE id IN (:ids)") suspend fun deleteRows(ids: List<String>)
     @Query("DELETE FROM secure_memory") suspend fun clear()
+
+    /** Replace imported records as one SQLite transaction so interruption cannot leave a partial import. */
+    @Transaction
+    suspend fun replaceRowsAtomically(idsToDelete: List<String>, rowsToInsert: List<MemoryRow>) {
+        if (idsToDelete.isNotEmpty()) deleteRows(idsToDelete)
+        if (rowsToInsert.isNotEmpty()) putAll(rowsToInsert)
+    }
 }
 
 @Database(entities = [MemoryRow::class], version = 1, exportSchema = true)
@@ -133,12 +142,16 @@ class EncryptedMemory(context: Context) {
         migrateLegacyRows()
     }
 
-    private suspend fun storeRecord(record: Record) {
+    private fun encryptedRow(record: Record): MemoryRow {
         val rowId = "v2:" + UUID.randomUUID().toString()
         val payload = JSONObject().put("id", record.logicalId).put("category", record.category)
             .put("value", record.value).put("updatedAt", record.updatedAt).toString()
         val (iv, ct) = encryptDevice(rowId, payload.toByteArray(StandardCharsets.UTF_8))
-        dao.put(MemoryRow(rowId, "__encrypted__", iv, ct, 0L))
+        return MemoryRow(rowId, "__encrypted__", iv, ct, 0L)
+    }
+
+    private suspend fun storeRecord(record: Record) {
+        dao.put(encryptedRow(record))
     }
 
     /** Keep one logical record per ID; safe to retry migrations and imports. */
@@ -223,9 +236,20 @@ class EncryptedMemory(context: Context) {
             Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
         } }
         migrateLegacyData()
-        validated.forEach { r ->
-            replaceRecord(r)
+
+        // Collapse duplicate logical IDs in the archive; the last record wins, matching
+        // the previous sequential import behavior while avoiding intermediate DB states.
+        val finalRecords = LinkedHashMap<String, Record>()
+        validated.forEach { record -> finalRecords[record.logicalId] = record }
+        val importedIds = finalRecords.keys
+        val existingRowsToReplace = dao.all().mapNotNull { row ->
+            runCatching { row.takeIf { decode(it).logicalId in importedIds }?.id }.getOrNull()
         }
+        val encryptedRows = finalRecords.values.map(::encryptedRow)
+
+        // A single Room transaction deletes prior versions and inserts the complete
+        // validated archive subset. A process interruption commits all or none of this step.
+        dao.replaceRowsAtomically(existingRowsToReplace, encryptedRows)
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
