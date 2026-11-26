@@ -41,9 +41,9 @@ This is source code only, not a built APK. The canonical Vercel backend health e
 ## SADEEQI MUSIC (source integration)
 - Added AndroidX Media3 ExoPlayer and MediaSession service foundation.
 - Local user-selected audio playback, queue, seek, repeat, shuffle, volume, persistent favorites/history and Arabic playback voice commands are implemented in source.
-- A remote global catalogue or licensed streaming provider is **not connected** yet. Search commands clearly report this limitation rather than pretending to stream.
+- An Audius read-only catalogue adapter is connected in source for remote track search and stream-URL playback, including Arabic text/voice search. This is an open, creator-uploaded catalogue—not a complete commercial catalogue, and availability/rights vary by track.
 - See [docs/SADEEQI_MUSIC.md](docs/SADEEQI_MUSIC.md) for architecture, data estimates, legal integration requirements and device-validation checklist.
-- CI now runs Android unit tests before building the debug APK. No APK/device success should be claimed until the relevant run succeeds and the artifact is verified.
+- CI runs Android unit tests before building the debug APK. A successful CI artifact proves a build, not physical-device acceptance; verify the relevant run and artifact before making release claims.
 
 
 ## Ultimate Premium development audit — 2026-11-14
