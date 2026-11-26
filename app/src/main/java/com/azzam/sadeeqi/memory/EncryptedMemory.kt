@@ -36,7 +36,10 @@ data class MemoryRow(@PrimaryKey val id: String, val category: String, val iv: S
     /** Replace imported records as one SQLite transaction so interruption cannot leave a partial import. */
     @Transaction
     suspend fun replaceRowsAtomically(idsToDelete: List<String>, rowsToInsert: List<MemoryRow>) {
-        if (idsToDelete.isNotEmpty()) deleteRows(idsToDelete)
+        // Stay below SQLite's commonly encountered 999 bind-parameter limit.
+        idsToDelete.chunked(900).forEach { chunk ->
+            if (chunk.isNotEmpty()) deleteRows(chunk)
+        }
         if (rowsToInsert.isNotEmpty()) putAll(rowsToInsert)
     }
 }
@@ -233,7 +236,10 @@ class EncryptedMemory(context: Context) {
         val records = JSONArray(String(cipher.doFinal(un64(envelope.getString("data"))), StandardCharsets.UTF_8))
         // Authenticate and parse the complete archive before modifying the database.
         val validated = (0 until records.length()).map { i -> records.getJSONObject(i).let { j ->
-            Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            val record = Record(j.getString("id"), j.getString("category"), j.getString("value"), j.getLong("updatedAt"))
+            require(record.logicalId.isNotBlank()) { "معرّف سجل الذاكرة غير صالح." }
+            require(record.category.isNotBlank()) { "تصنيف سجل الذاكرة غير صالح." }
+            record
         } }
         migrateLegacyData()
 
