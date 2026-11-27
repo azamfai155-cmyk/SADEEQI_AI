@@ -441,6 +441,99 @@ app.get('/v1/social/providers', requireAuth, requireOwner, socialRateLimit, (_re
   });
 });
 
+
+export function createOwnerDataRequest({
+  env = process.env,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  return async function ownerDataRequest({ table, method = 'GET', query = '', body } = {}) {
+    const base = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!base || !key) throw new Error('Owner data storage is not configured.');
+    if (!['sadeeqi_memories', 'sadeeqi_tasks'].includes(table)) throw new Error('Unsupported owner data table.');
+    const response = await fetchImpl(`${base}/rest/v1/${table}${query ? `?${query}` : ''}`, {
+      method,
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation'
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(`Owner data request failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+}
+
+const ownerDataRequest = createOwnerDataRequest();
+const ownerId = req => typeof req.auth?.userId === 'string' ? req.auth.userId : '';
+const ownerDataError = (res, error) => {
+  console.error('[owner-data] request failed', { name: error?.name || 'Error', status: error?.status || null });
+  return res.status(error?.status === 400 ? 400 : 503).json({ error: 'تعذر الوصول إلى بيانات صديقي المحفوظة حالياً.' });
+};
+
+app.get('/v1/memory', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const query = new URLSearchParams({ select: 'id,memory_key,memory_value,created_at,updated_at', owner_id: `eq.${ownerId(req)}`, order: 'updated_at.desc', limit: '200' }).toString();
+    res.set('Cache-Control', 'no-store').json({ memories: await ownerDataRequest({ table: 'sadeeqi_memories', query }) || [] });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.post('/v1/memory', requireAuth, requireOwner, async (req, res) => {
+  const key = typeof req.body?.memory_key === 'string' ? req.body.memory_key.trim() : '';
+  const value = typeof req.body?.memory_value === 'string' ? req.body.memory_value.trim() : '';
+  if (!key || key.length > 80 || !value || value.length > 2000) return res.status(400).json({ error: 'مفتاح الذاكرة أو محتواها غير صالح.' });
+  try {
+    const rows = await ownerDataRequest({ table: 'sadeeqi_memories', method: 'POST', query: 'on_conflict=owner_id,memory_key', body: { owner_id: ownerId(req), memory_key: key, memory_value: value } });
+    res.status(201).set('Cache-Control', 'no-store').json({ memory: Array.isArray(rows) ? rows[0] : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.delete('/v1/memory/:id', requireAuth, requireOwner, async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: 'معرّف الذاكرة غير صالح.' });
+  try {
+    const query = new URLSearchParams({ id: `eq.${req.params.id}`, owner_id: `eq.${ownerId(req)}` }).toString();
+    await ownerDataRequest({ table: 'sadeeqi_memories', method: 'DELETE', query });
+    res.status(204).end();
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.get('/v1/tasks', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const query = new URLSearchParams({ select: 'id,state,title,goal,task_data,created_at,updated_at', owner_id: `eq.${ownerId(req)}`, order: 'created_at.desc', limit: '100' }).toString();
+    res.set('Cache-Control', 'no-store').json({ tasks: await ownerDataRequest({ table: 'sadeeqi_tasks', query }) || [] });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.post('/v1/tasks', requireAuth, requireOwner, async (req, res) => {
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+  const goal = typeof req.body?.goal === 'string' ? req.body.goal.trim() : '';
+  if (!title || title.length > 160 || !goal || goal.length > 8000) return res.status(400).json({ error: 'عنوان المهمة أو هدفها غير صالح.' });
+  try {
+    const rows = await ownerDataRequest({ table: 'sadeeqi_tasks', method: 'POST', body: { owner_id: ownerId(req), title, goal, state: 'waiting_approval', task_data: { source: 'owner_request', approval_required: true } } });
+    res.status(201).set('Cache-Control', 'no-store').json({ task: Array.isArray(rows) ? rows[0] : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.patch('/v1/tasks/:id', requireAuth, requireOwner, async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: 'معرّف المهمة غير صالح.' });
+  const allowed = ['queued', 'waiting_approval', 'paused', 'completed', 'failed', 'cancelled'];
+  const state = req.body?.state;
+  if (!allowed.includes(state)) return res.status(400).json({ error: 'حالة المهمة غير مسموحة.' });
+  try {
+    const query = new URLSearchParams({ id: `eq.${req.params.id}`, owner_id: `eq.${ownerId(req)}` }).toString();
+    const rows = await ownerDataRequest({ table: 'sadeeqi_tasks', method: 'PATCH', query, body: { state } });
+    res.set('Cache-Control', 'no-store').json({ task: Array.isArray(rows) ? rows[0] || null : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
 app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
