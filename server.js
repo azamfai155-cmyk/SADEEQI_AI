@@ -129,8 +129,8 @@ export function buildProviderRequest({
 }
 
 const MEMORY_SECRET_PATTERN = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بيانات البطاقة|رقم البطاقة|cvv/i;
-const MEMORY_SENSITIVE_PATTERN = /\\b(?:medical|health|diagnos|medication|disability|bank|financial|salary|income|debt|religion|politic|sexual)\\b|صحي|طبي|مرض|إعاقة|دواء|علاج|تشخيص|مالي|راتب|دخل|دين|بنك|ديون|معتقد|ديني|سياسي|جنسي/i;
-const MEMORY_OPT_OUT_PATTERN = /لا\\s*(?:تحفظ|تتذكر|تسجل)|لا\\s*تريد\\s*(?:حفظ|تذكر)|انسَ\\s*هذا|تجاهل\\s*هذه\\s*المعلومة/i;
+const MEMORY_SENSITIVE_PATTERN = /\b(?:medical|health|diagnos|medication|disability|bank|financial|salary|income|debt|religion|politic|sexual)\b|صحي|طبي|مرض|إعاقة|دواء|علاج|تشخيص|مالي|راتب|دخل|دين|بنك|ديون|معتقد|ديني|سياسي|جنسي/i;
+const MEMORY_OPT_OUT_PATTERN = /لا\s*(?:تحفظ|تتذكر|تسجل)|لا\s*تريد\s*(?:حفظ|تذكر)|انسَ\s*هذا|تجاهل\s*هذه\s*المعلومة/i;
 
 export function isMemorySafeText(value) {
   return typeof value === 'string' && Boolean(value.trim()) &&
@@ -140,7 +140,7 @@ export function isMemorySafeText(value) {
 export function parseAutomaticMemories(raw) {
   if (typeof raw !== 'string' || raw.length > 12000) return [];
   let parsed;
-  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '')); }
+  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
   catch { return []; }
   if (!Array.isArray(parsed)) return [];
   const seen = new Set();
@@ -161,7 +161,7 @@ export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODE
     .filter(turn => turn.content.trim());
   const userTurns = turns.filter(turn => turn.role === 'user');
   if (!userTurns.length || userTurns.some(turn => MEMORY_OPT_OUT_PATTERN.test(turn.content))) return null;
-  const userText = userTurns.map(turn => turn.content).join('\\n');
+  const userText = userTurns.map(turn => turn.content).join('\n');
   if (userText.length > 8000 || !isMemorySafeText(userText)) return null;
   return buildProviderRequest({
     provider, model, apiKey,
@@ -172,7 +172,7 @@ export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODE
 
 export function selectRelevantMemories(memories, query, limit = 8) {
   if (!Array.isArray(memories) || typeof query !== 'string') return [];
-  const tokenize = value => new Set((value.toLowerCase().match(/[\\p{L}\\p{N}]{2,}/gu) || [])
+  const tokenize = value => new Set((value.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])
     .filter(token => !['هذا','هذه','على','إلى','من','في','عن','مع','the','and','for','with'].includes(token)));
   const terms = tokenize(query);
   return memories.map(memory => {
