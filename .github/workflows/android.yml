@@ -92,6 +92,8 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
+          # GitHub-hosted runners may not expose KVM; use software acceleration fallback.
+          disable-linux-hw-accel: true
           cores: 2
           ram-size: 2048M
           disk-size: 4096M
