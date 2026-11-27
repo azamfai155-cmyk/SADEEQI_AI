@@ -184,7 +184,7 @@ test('provider request builder rejects unsupported providers and missing keys', 
   }), /Unsupported AI_PROVIDER/);
   assert.throws(() => buildProviderRequest({
     provider: 'groq', apiKey: '', input: [{ role: 'user', content: 'x' }]
-  }), /credentials are not configured/);
+  }), /storage is not configured/);
 });
 
 
