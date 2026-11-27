@@ -128,36 +128,61 @@ export function buildProviderRequest({
   };
 }
 
+const MEMORY_SECRET_PATTERN = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بيانات البطاقة|رقم البطاقة|cvv/i;
+const MEMORY_SENSITIVE_PATTERN = /\\b(?:medical|health|diagnos|medication|disability|bank|financial|salary|income|debt|religion|politic|sexual)\\b|صحي|طبي|مرض|إعاقة|دواء|علاج|تشخيص|مالي|راتب|دخل|دين|بنك|ديون|معتقد|ديني|سياسي|جنسي/i;
+const MEMORY_OPT_OUT_PATTERN = /لا\\s*(?:تحفظ|تتذكر|تسجل)|لا\\s*تريد\\s*(?:حفظ|تذكر)|انسَ\\s*هذا|تجاهل\\s*هذه\\s*المعلومة/i;
+
+export function isMemorySafeText(value) {
+  return typeof value === 'string' && Boolean(value.trim()) &&
+    !MEMORY_SECRET_PATTERN.test(value) && !MEMORY_SENSITIVE_PATTERN.test(value);
+}
+
 export function parseAutomaticMemories(raw) {
   if (typeof raw !== 'string' || raw.length > 12000) return [];
   let parsed;
-  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '')); }
   catch { return []; }
   if (!Array.isArray(parsed)) return [];
-  const sensitive = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بطاقة|رقم الحساب البنكي/i;
   const seen = new Set();
   return parsed.slice(0, 8).flatMap(item => {
     if (!item || typeof item.key !== 'string' || typeof item.value !== 'string') return [];
-    const key = item.key.trim().slice(0, 80);
-    const value = item.value.trim().slice(0, 2000);
+    const key = item.key.trim().slice(0, 80), value = item.value.trim().slice(0, 1000);
     const normalized = key.toLowerCase();
-    if (!key || !value || sensitive.test(key) || sensitive.test(value) || seen.has(normalized)) return [];
+    if (!key || !value || !isMemorySafeText(key) || !isMemorySafeText(value) || seen.has(normalized)) return [];
     seen.add(normalized);
     return [{ key, value }];
   });
 }
 
-export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODEL, apiKey = API_KEY, userText }) {
-  if (typeof userText !== 'string' || !userText.trim() || userText.length > 6000) return null;
-  const sensitive = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بيانات البطاقة/i;
-  if (sensitive.test(userText)) return null;
+export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODEL, apiKey = API_KEY, conversation }) {
+  if (!Array.isArray(conversation) || !conversation.length || conversation.length > 12) return null;
+  const turns = conversation.filter(turn => turn && ['user','assistant'].includes(turn.role))
+    .map(turn => ({ role: turn.role, content: typeof turn.content === 'string' ? turn.content.slice(0,3000) : '' }))
+    .filter(turn => turn.content.trim());
+  const userTurns = turns.filter(turn => turn.role === 'user');
+  if (!userTurns.length || userTurns.some(turn => MEMORY_OPT_OUT_PATTERN.test(turn.content))) return null;
+  const userText = userTurns.map(turn => turn.content).join('\\n');
+  if (userText.length > 8000 || !isMemorySafeText(userText)) return null;
   return buildProviderRequest({
     provider, model, apiKey,
-    instructions: 'أنت مستخرج ذاكرة شخصية. استخرج فقط الحقائق المستقرة والمفيدة مستقبلاً التي صرّح بها المستخدم عن نفسه أو تفضيلاته أو مشاريعه أو قراراته. لا تستخرج الأسئلة العابرة أو التخمينات أو المعلومات عن أشخاص آخرين. تجاهل كلمات المرور والرموز والمفاتيح والبيانات المالية أو الصحية الحساسة وأي أسرار. أعد JSON array فقط بالشكل [{"key":"مفتاح واضح","value":"حقيقة موجزة"}]. إذا لا توجد حقيقة مناسبة فأعد []. لا تحفظ المعلومة إذا كانت مؤقتة أو غير مؤكدة.',
-    input: [{ role: 'user', content: userText }]
+    instructions: 'أنت محرك استخراج ذاكرة طويلة الأمد. استخرج فقط حقائق صرّح بها المستخدم بوضوح وتفيد مستقبلاً: تفضيلات مستمرة، اهتمامات، مشاريع، قرارات، قيود، أهداف غير حساسة، وطريقة التواصل. لا تعتبر كلام المساعد حقيقة عن المستخدم. لا تستخرج التخمينات أو الكلام المؤقت أو بيانات الآخرين. امنع حفظ المعلومات الصحية والطبية والمالية والدينية والسياسية والجنسية وأي أسرار أو بيانات اعتماد. أعد JSON array فقط بالشكل [{"key":"مفتاح ثابت وواضح","value":"حقيقة موجزة"}] وبحد أقصى 8 عناصر. عند التصحيح أعد القيمة الحالية للمفتاح نفسه. إذا لا توجد حقيقة مناسبة أعد [].',
+    input: [{ role: 'user', content: JSON.stringify(turns) }]
   });
 }
 
+export function selectRelevantMemories(memories, query, limit = 8) {
+  if (!Array.isArray(memories) || typeof query !== 'string') return [];
+  const tokenize = value => new Set((value.toLowerCase().match(/[\\p{L}\\p{N}]{2,}/gu) || [])
+    .filter(token => !['هذا','هذه','على','إلى','من','في','عن','مع','the','and','for','with'].includes(token)));
+  const terms = tokenize(query);
+  return memories.map(memory => {
+    const words = tokenize(`${memory.memory_key || ''} ${memory.memory_value || ''}`);
+    let score = 0;
+    for (const term of terms) if (words.has(term)) score++;
+    return { memory, score };
+  }).filter(item => item.score > 0).sort((x,y) => y.score-x.score)
+    .slice(0,limit).map(item => item.memory);
+}
 export function extractProviderText(result) {
   if (typeof result?.output_text === 'string' && result.output_text.trim()) {
     return result.output_text.trim();
@@ -565,28 +590,33 @@ app.patch('/v1/tasks/:id', requireAuth, requireOwner, async (req, res) => {
   } catch (error) { ownerDataError(res, error); }
 });
 
-async function extractAndSaveAutomaticMemories(userText, userId) {
-  const request = buildMemoryExtractionRequest({ userText });
-  if (!request) return 0;
+async function extractAndSaveAutomaticMemories(conversation, userId) {
+  const request = buildMemoryExtractionRequest({ conversation });
+  if (!request || !userId) return 0;
   const upstream = await fetch(request.url, request.init);
   if (!upstream.ok) return 0;
   const result = await upstream.json().catch(() => null);
   const memories = parseAutomaticMemories(extractProviderText(result));
   let saved = 0;
   for (const memory of memories) {
-    try {
-      await ownerDataRequest({
-        table: 'sadeeqi_memories',
-        method: 'POST',
-        query: 'on_conflict=owner_id,memory_key',
-        body: { owner_id: userId, memory_key: memory.key, memory_value: memory.value }
-      });
-      saved += 1;
-    } catch (error) {
-      console.error('[automatic-memory] save failed', { name: error?.name || 'Error', status: error?.status || null });
-    }
+    const rows = await ownerDataRequest({
+      table: 'sadeeqi_memories', method: 'POST',
+      query: 'on_conflict=owner_id,memory_key',
+      body: { owner_id: userId, memory_key: memory.key, memory_value: memory.value }
+    });
+    if (Array.isArray(rows) ? rows.length > 0 : Boolean(rows)) saved++;
   }
   return saved;
+}
+
+async function loadRelevantMemories(userId, queryText) {
+  if (!userId || !queryText) return [];
+  const query = new URLSearchParams({
+    select: 'memory_key,memory_value,updated_at',
+    owner_id: `eq.${userId}`, order: 'updated_at.desc', limit: '200'
+  }).toString();
+  const rows = await ownerDataRequest({ table: 'sadeeqi_memories', query });
+  return selectRelevantMemories(rows || [], queryText, 8);
 }
 
 app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) => {
@@ -608,8 +638,20 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
   }
 
   try {
+    let memoryContext = '';
+    try {
+      const latestUser = [...req.body.input].reverse().find(turn => turn.role === 'user');
+      const queryText = typeof latestUser?.content === 'string' ? latestUser.content
+        : Array.isArray(latestUser?.content) ? latestUser.content.filter(part => part.type === 'input_text').map(part => part.text || '').join(' ') : '';
+      const relevant = await loadRelevantMemories(req.auth.userId, queryText);
+      if (relevant.length) memoryContext = '\\n\\nذاكرة المستخدم ذات الصلة (استخدمها عند ارتباطها فقط):\\n' +
+        relevant.map(item => `- ${item.memory_key}: ${item.memory_value}`).join('\\n');
+    } catch (error) {
+      console.error('[automatic-memory] retrieval failed', { name: error?.name || 'Error' });
+    }
     const providerRequest = buildProviderRequest({
       input: req.body.input,
+      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, memoryContext].filter(Boolean).join('\\n\\n'),
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
@@ -634,16 +676,10 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
     const output = extractProviderText(result);
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.', provider: PROVIDER });
     let memorySaved = 0;
-    const latestUserText = [...req.body.input].reverse().find(turn => turn.role === 'user');
-    const memoryText = typeof latestUserText?.content === 'string'
-      ? latestUserText.content
-      : Array.isArray(latestUserText?.content)
-        ? latestUserText.content.filter(part => part.type === 'input_text').map(part => part.text).join('\n')
-        : '';
     try {
-      memorySaved = await extractAndSaveAutomaticMemories(memoryText, req.auth.userId);
+      memorySaved = await extractAndSaveAutomaticMemories(req.body.input.slice(-8), req.auth.userId);
     } catch (error) {
-      console.error('[automatic-memory] extraction failed', { name: error?.name || 'Error' });
+      console.error('[automatic-memory] extraction failed', { name: error?.name || 'Error', status: error?.status || null });
     }
     return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, memory_saved: memorySaved > 0, memory_saved_count: memorySaved, usage: result.usage || null });
   } catch (error) {
