@@ -447,7 +447,7 @@ export function createOwnerDataRequest({
   fetchImpl = globalThis.fetch
 } = {}) {
   return async function ownerDataRequest({ table, method = 'GET', query = '', body } = {}) {
-    const base = (env.SUPABASE_URL || '').replace(/\\/$/, '');
+    const base = (env.SUPABASE_URL || '').replace(/\/+$/, '');
     const key = env.SUPABASE_SERVICE_ROLE_KEY || '';
     if (!base || !key) throw new Error('Owner data storage is not configured.');
     if (!['sadeeqi_memories', 'sadeeqi_tasks'].includes(table)) throw new Error('Unsupported owner data table.');
