@@ -1,5 +1,5 @@
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -328,6 +328,19 @@ export function validateInput(input) {
   }
   return null;
 }
+
+// Browser-first web app. The Supabase anon key is public by design; never expose service-role keys.
+app.get('/web-config', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+  });
+});
+
+app.get('/', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.sendFile(fileURLToPath(new URL('./web/index.html', import.meta.url)));
+});
 
 app.get('/health', (_req, res) => {
   res.set('Cache-Control', 'no-store').json({
