@@ -128,6 +128,36 @@ export function buildProviderRequest({
   };
 }
 
+export function parseAutomaticMemories(raw) {
+  if (typeof raw !== 'string' || raw.length > 12000) return [];
+  let parsed;
+  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  const sensitive = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بطاقة|رقم الحساب البنكي/i;
+  const seen = new Set();
+  return parsed.slice(0, 8).flatMap(item => {
+    if (!item || typeof item.key !== 'string' || typeof item.value !== 'string') return [];
+    const key = item.key.trim().slice(0, 80);
+    const value = item.value.trim().slice(0, 2000);
+    const normalized = key.toLowerCase();
+    if (!key || !value || sensitive.test(key) || sensitive.test(value) || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [{ key, value }];
+  });
+}
+
+export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODEL, apiKey = API_KEY, userText }) {
+  if (typeof userText !== 'string' || !userText.trim() || userText.length > 6000) return null;
+  const sensitive = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بيانات البطاقة/i;
+  if (sensitive.test(userText)) return null;
+  return buildProviderRequest({
+    provider, model, apiKey,
+    instructions: 'أنت مستخرج ذاكرة شخصية. استخرج فقط الحقائق المستقرة والمفيدة مستقبلاً التي صرّح بها المستخدم عن نفسه أو تفضيلاته أو مشاريعه أو قراراته. لا تستخرج الأسئلة العابرة أو التخمينات أو المعلومات عن أشخاص آخرين. تجاهل كلمات المرور والرموز والمفاتيح والبيانات المالية أو الصحية الحساسة وأي أسرار. أعد JSON array فقط بالشكل [{"key":"مفتاح واضح","value":"حقيقة موجزة"}]. إذا لا توجد حقيقة مناسبة فأعد []. لا تحفظ المعلومة إذا كانت مؤقتة أو غير مؤكدة.',
+    input: [{ role: 'user', content: userText }]
+  });
+}
+
 export function extractProviderText(result) {
   if (typeof result?.output_text === 'string' && result.output_text.trim()) {
     return result.output_text.trim();
@@ -535,6 +565,30 @@ app.patch('/v1/tasks/:id', requireAuth, requireOwner, async (req, res) => {
   } catch (error) { ownerDataError(res, error); }
 });
 
+async function extractAndSaveAutomaticMemories(userText, userId) {
+  const request = buildMemoryExtractionRequest({ userText });
+  if (!request) return 0;
+  const upstream = await fetch(request.url, request.init);
+  if (!upstream.ok) return 0;
+  const result = await upstream.json().catch(() => null);
+  const memories = parseAutomaticMemories(extractProviderText(result));
+  let saved = 0;
+  for (const memory of memories) {
+    try {
+      await ownerDataRequest({
+        table: 'sadeeqi_memories',
+        method: 'POST',
+        query: 'on_conflict=owner_id,memory_key',
+        body: { owner_id: userId, memory_key: memory.key, memory_value: memory.value }
+      });
+      saved += 1;
+    } catch (error) {
+      console.error('[automatic-memory] save failed', { name: error?.name || 'Error', status: error?.status || null });
+    }
+  }
+  return saved;
+}
+
 app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
@@ -579,7 +633,19 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
     }
     const output = extractProviderText(result);
     if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.', provider: PROVIDER });
-    return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
+    let memorySaved = 0;
+    const latestUserText = [...req.body.input].reverse().find(turn => turn.role === 'user');
+    const memoryText = typeof latestUserText?.content === 'string'
+      ? latestUserText.content
+      : Array.isArray(latestUserText?.content)
+        ? latestUserText.content.filter(part => part.type === 'input_text').map(part => part.text).join('\n')
+        : '';
+    try {
+      memorySaved = await extractAndSaveAutomaticMemories(memoryText, req.auth.userId);
+    } catch (error) {
+      console.error('[automatic-memory] extraction failed', { name: error?.name || 'Error' });
+    }
+    return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, memory_saved: memorySaved > 0, memory_saved_count: memorySaved, usage: result.usage || null });
   } catch (error) {
     // Do not log prompt content, credentials, or upstream response bodies.
     console.error('[ai-provider] request failed', { provider: PROVIDER, name: error?.name || 'Error' });
