@@ -184,7 +184,7 @@ test('provider request builder rejects unsupported providers and missing keys', 
   }), /Unsupported AI_PROVIDER/);
   assert.throws(() => buildProviderRequest({
     provider: 'groq', apiKey: '', input: [{ role: 'user', content: 'x' }]
-  }), /storage is not configured/);
+  }), /server credentials are not configured/);
 });
 
 
@@ -413,5 +413,5 @@ test('owner data API restricts tables and keeps service credentials server-side'
 test('owner data API fails closed when Supabase server credentials are missing', async () => {
   const { createOwnerDataRequest } = await import('./server.js');
   const request = createOwnerDataRequest({ env: {}, fetchImpl: async () => { throw new Error('must not fetch'); } });
-  await assert.rejects(() => request({ table: 'sadeeqi_tasks' }), /credentials are not configured/);
+  await assert.rejects(() => request({ table: 'sadeeqi_tasks' }), /storage is not configured/);
 });
