@@ -177,10 +177,10 @@ export function selectRelevantMemories(memories, query, limit = 8) {
 
   // Broad recall questions must not depend on lexical overlap with memory keys.
   // Otherwise general recall prompts return nothing even when rows exist.
-  const recallIntent = /(?:\\b(?:remember|memory|memories|recall|saved facts|what do you know about me)\\b|ذاكر(?:ة|تي|تك|ات)|ذكريات|معلومات.{0,20}(?:حفظ|مخزن)|(?:ما|ماذا|ايش|إيش|وش).{0,35}(?:حفظت|تتذكر|تذكر|مخزن|محفوظ)|استرجع.{0,20}(?:معلومات|ذكريات|ذاكرة))/iu;
+  const recallIntent = /(?:\b(?:remember|memory|memories|recall|saved facts|what do you know about me)\b|ذاكر(?:ة|تي|تك|ات)|ذكريات|معلومات.{0,20}(?:حفظ|مخزن)|(?:ما|ماذا|ايش|إيش|وش).{0,35}(?:حفظت|تتذكر|تذكر|مخزن|محفوظ)|استرجع.{0,20}(?:معلومات|ذكريات|ذاكرة))/iu;
   if (recallIntent.test(query)) return memories.slice(0, safeLimit);
 
-  const tokenize = value => new Set((value.toLowerCase().match(/[\\p{L}\\p{N}]{2,}/gu) || [])
+  const tokenize = value => new Set((value.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])
     .filter(token => !['هذا','هذه','على','إلى','من','في','عن','مع','the','and','for','with'].includes(token)));
   const terms = tokenize(query);
   if (!terms.size) return [];
