@@ -29,7 +29,7 @@ app.use(express.static(fileURLToPath(PUBLIC_DIR), {
 // Only the Supabase project URL and browser publishable/anon key are exposed.
 // Never return service-role or provider credentials to the browser.
 app.get('/config.js', (_req, res) => {
-  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\\/$/, '');
+  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
   res.set('Cache-Control', 'no-store').json({ supabaseUrl, supabaseAnonKey });
 });
