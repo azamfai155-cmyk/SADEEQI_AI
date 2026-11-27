@@ -470,3 +470,27 @@ test('automatic memory extraction analyzes context and skips opt-out or sensitiv
   assert.equal(relevant.length, 1);
   assert.equal(relevant[0].memory_key, 'المشروع');
 });
+
+
+test('broad Arabic memory recall returns saved memories without lexical keyword overlap', async () => {
+  const { selectRelevantMemories } = await import('./server.js');
+  const memories = [
+    { memory_key: 'الاسم المفضل', memory_value: 'عزام' },
+    { memory_key: 'المشروع الحالي', memory_value: 'تطوير صديقي AI' },
+    { memory_key: 'أسلوب التواصل', memory_value: 'أفضل الإجابات العربية المباشرة' },
+    { memory_key: 'الأداة', memory_value: 'استخدام Supabase' }
+  ];
+  const result = selectRelevantMemories(
+    memories,
+    'ما المعلومات الأربع التي حفظتها عني؟ استرجعها من الذاكرة الدائمة، ولا تعتمد على سجل هذه المحادثة.'
+  );
+  assert.deepEqual(result, memories);
+});
+
+test('broad English memory recall returns saved memories and respects the limit', async () => {
+  const { selectRelevantMemories } = await import('./server.js');
+  const memories = Array.from({ length: 10 }, (_, index) => ({
+    memory_key: 'fact-' + index, memory_value: 'value-' + index
+  }));
+  assert.deepEqual(selectRelevantMemories(memories, 'What do you remember about me?', 3), memories.slice(0, 3));
+});
