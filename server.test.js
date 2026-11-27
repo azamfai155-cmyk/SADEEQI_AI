@@ -124,6 +124,8 @@ test('authentication mode parser rejects unknown values instead of silently fall
   assert.equal(normalizeAuthMode('supabase'), 'supabase');
   assert.equal(normalizeAuthMode('DUAL'), 'dual');
   assert.equal(normalizeAuthMode('legacy'), 'legacy');
+  assert.equal(normalizeAuthMode(undefined), 'invalid');
+  assert.equal(normalizeAuthMode(''), 'invalid');
   assert.equal(normalizeAuthMode('unexpected'), 'invalid');
 });
 
