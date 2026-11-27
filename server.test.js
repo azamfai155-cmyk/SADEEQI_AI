@@ -451,7 +451,22 @@ test('automatic memory parser fails closed on malformed output', () => {
   assert.deepEqual(parseAutomaticMemories(JSON.stringify({ key: 'x', value: 'y' })), []);
 });
 
-test('automatic memory extraction skips sensitive or empty user text', () => {
-  assert.equal(buildMemoryExtractionRequest({ userText: 'كلمة المرور هي abc123' }), null);
-  assert.equal(buildMemoryExtractionRequest({ userText: '   ' }), null);
+test('automatic memory extraction analyzes context and skips opt-out or sensitive content', async () => {
+  const { isMemorySafeText, selectRelevantMemories } = await import('./server.js');
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: 'كلمة المرور هي abc123' }] }), null);
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: '   ' }] }), null);
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: 'لا تحفظ هذا: أفضل اللون الأزرق' }] }), null);
+  const request = buildMemoryExtractionRequest({ conversation: [
+    { role: 'user', content: 'أعمل على مشروع صديقي AI' },
+    { role: 'assistant', content: 'ما التقنية المستخدمة؟' },
+    { role: 'user', content: 'أستخدم Supabase وGitHub' }
+  ], provider: 'groq', model: 'test-model', apiKey: 'test-key' });
+  assert.equal(request.init.method, 'POST');
+  assert.equal(isMemorySafeText('لدي مشكلة صحية'), false);
+  const relevant = selectRelevantMemories([
+    { memory_key: 'المشروع', memory_value: 'أعمل على صديقي AI باستخدام Supabase' },
+    { memory_key: 'اللهجة', memory_value: 'أفضل اللهجة اليمنية' }
+  ], 'أكمل مشروع صديقي باستخدام Supabase');
+  assert.equal(relevant.length, 1);
+  assert.equal(relevant[0].memory_key, 'المشروع');
 });
