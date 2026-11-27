@@ -32,7 +32,8 @@ jobs:
 
   android:
     name: Android - unit tests, APK and emulator tests
-    runs-on: ubuntu-latest
+    # Pin a known-compatible hosted image; ubuntu-latest moved this run to Ubuntu 26.04.
+    runs-on: ubuntu-22.04
     timeout-minutes: 75
     steps:
       - name: Checkout
@@ -81,6 +82,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Grant runner access to KVM
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::KVM device /dev/kvm is not available on this runner."
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          ls -l /dev/kvm
+
       - name: Run instrumentation tests on API 34 emulator
         timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
@@ -92,6 +104,8 @@ jobs:
           arch: x86_64
           profile: pixel_2
           force-avd-creation: true
+          # GitHub-hosted Ubuntu runners provide KVM; keep hardware CPU acceleration enabled.
+          disable-linux-hw-accel: false
           cores: 2
           ram-size: 2048M
           disk-size: 4096M
