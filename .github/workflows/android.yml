@@ -82,6 +82,17 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Grant runner access to KVM
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::KVM device /dev/kvm is not available on this runner."
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          ls -l /dev/kvm
+
       - name: Run instrumentation tests on API 34 emulator
         timeout-minutes: 35
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
