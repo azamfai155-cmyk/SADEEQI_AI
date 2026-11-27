@@ -94,6 +94,7 @@ jobs:
           profile: pixel_2
           force-avd-creation: true
           # GitHub-hosted Ubuntu runners provide KVM; keep hardware CPU acceleration enabled.
+          disable-linux-hw-accel: false
           cores: 2
           ram-size: 2048M
           disk-size: 4096M
