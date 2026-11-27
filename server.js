@@ -172,16 +172,25 @@ export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODE
 
 export function selectRelevantMemories(memories, query, limit = 8) {
   if (!Array.isArray(memories) || typeof query !== 'string') return [];
-  const tokenize = value => new Set((value.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])
+  const safeLimit = Number.isInteger(limit) ? Math.max(0, Math.min(limit, 50)) : 8;
+  if (!safeLimit) return [];
+
+  // Broad recall questions must not depend on lexical overlap with memory keys.
+  // Otherwise general recall prompts return nothing even when rows exist.
+  const recallIntent = /(?:\\b(?:remember|memory|memories|recall|saved facts|what do you know about me)\\b|ذاكر(?:ة|تي|تك|ات)|ذكريات|معلومات.{0,20}(?:حفظ|مخزن)|(?:ما|ماذا|ايش|إيش|وش).{0,35}(?:حفظت|تتذكر|تذكر|مخزن|محفوظ)|استرجع.{0,20}(?:معلومات|ذكريات|ذاكرة))/iu;
+  if (recallIntent.test(query)) return memories.slice(0, safeLimit);
+
+  const tokenize = value => new Set((value.toLowerCase().match(/[\\p{L}\\p{N}]{2,}/gu) || [])
     .filter(token => !['هذا','هذه','على','إلى','من','في','عن','مع','the','and','for','with'].includes(token)));
   const terms = tokenize(query);
+  if (!terms.size) return [];
   return memories.map(memory => {
-    const words = tokenize(`${memory.memory_key || ''} ${memory.memory_value || ''}`);
+    const words = tokenize((memory.memory_key || '') + ' ' + (memory.memory_value || ''));
     let score = 0;
     for (const term of terms) if (words.has(term)) score++;
     return { memory, score };
   }).filter(item => item.score > 0).sort((x,y) => y.score-x.score)
-    .slice(0,limit).map(item => item.memory);
+    .slice(0,safeLimit).map(item => item.memory);
 }
 export function extractProviderText(result) {
   if (typeof result?.output_text === 'string' && result.output_text.trim()) {
