@@ -39,6 +39,20 @@ test('health does not report configured when Supabase auth is selected but missi
   assert.equal(body.configured, false);
 });
 
+test('missing authentication mode fails closed even when a legacy token exists', async () => {
+  const response = await handleRequest(request('/v1/chat', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer legacy-token' },
+    body: { input: [{ role: 'user', content: 'hello' }] }
+  }), {
+    SADEEQI_APP_TOKEN: 'legacy-token',
+    OPENAI_API_KEY: 'server-only-test-key',
+    OPENAI_MODEL: 'gpt-4.1-mini'
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /authentication mode is invalid/i);
+});
+
 test('legacy mode rejects requests without the configured bearer token', async () => {
   const response = await handleRequest(request('/v1/chat', {
     method: 'POST',
