@@ -457,7 +457,7 @@ export function createOwnerDataRequest({
         apikey: key,
         Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
-        Prefer: 'return=representation'
+        Prefer: 'resolution=merge-duplicates,return=representation'
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(8000)
