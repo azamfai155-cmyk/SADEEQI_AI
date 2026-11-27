@@ -221,7 +221,7 @@ app.get('/v1/admin/access-check', requireAuth, requireOwner, (_req, res) => {
   res.set('Cache-Control', 'no-store').json({ authorized: true, role: 'owner' });
 });
 
-app.get('/v1/me', requireAuth, (req, res) => {
+app.get('/v1/me', requireAuth, requireOwner, (req, res) => {
   const email = typeof req.auth?.email === 'string' ? req.auth.email.trim().toLowerCase() : '';
   const isOwner = Boolean(OWNER_EMAIL && email && email === OWNER_EMAIL);
   res.json({
@@ -441,7 +441,7 @@ app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
   });
 });
 
-app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
+app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
   const validationError = validateInput(req.body?.input);
