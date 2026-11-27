@@ -198,6 +198,18 @@ export function createAuthMiddleware() {
 
 const requireAuth = createAuthMiddleware();
 
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').trim().toLowerCase();
+app.get('/v1/me', requireAuth, (req, res) => {
+  const email = typeof req.auth?.email === 'string' ? req.auth.email.trim().toLowerCase() : '';
+  const isOwner = Boolean(OWNER_EMAIL && email && email === OWNER_EMAIL);
+  res.json({
+    email: email || null,
+    role: isOwner ? 'owner' : 'user',
+    role_label: isOwner ? 'المالك' : 'حساب مسجل',
+    is_owner: isOwner
+  });
+});
+
 export function createRateLimiter({ windowMs = 60_000, max = 20, now = Date.now } = {}) {
   const buckets = new Map();
 
