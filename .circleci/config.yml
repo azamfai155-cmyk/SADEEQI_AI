@@ -1,0 +1,31 @@
+version: 2.1
+
+jobs:
+  backend-validation:
+    docker:
+      - image: cimg/node:20.20.2
+    steps:
+      - checkout
+      - run:
+          name: Use a writable npm cache
+          command: |
+            mkdir -p "$PWD/.npm-cache"
+            echo 'export npm_config_cache="$PWD/.npm-cache"' >> "$BASH_ENV"
+      - run:
+          name: Generate a deterministic lockfile
+          command: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run:
+          name: Install dependencies
+          command: npm ci --ignore-scripts
+      - run:
+          name: Run backend tests
+          command: npm test
+      - run:
+          name: Audit production dependencies
+          command: npm audit --omit=dev --audit-level=high
+
+workflows:
+  version: 2
+  sadeeqi-backend-validation:
+    jobs:
+      - backend-validation

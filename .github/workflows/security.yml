@@ -19,6 +19,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
+      - name: Use a writable npm cache
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.npm-cache"
+          echo "npm_config_cache=$GITHUB_WORKSPACE/.npm-cache" >> "$GITHUB_ENV"
       - name: Generate a lockfile for this repository (none is committed yet)
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install locked dependencies
