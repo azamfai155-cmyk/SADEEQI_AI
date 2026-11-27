@@ -51,7 +51,7 @@ function getJwks(supabaseUrl) {
 }
 
 async function authenticate(request, env) {
-  const mode = (env.AUTH_MODE || 'legacy').toLowerCase();
+  const mode = (env.AUTH_MODE || 'invalid').toLowerCase();
   if (!['legacy', 'dual', 'supabase'].includes(mode)) {
     return { ok: false, status: 503, body: { error: 'Backend authentication mode is invalid.' } };
   }
@@ -223,7 +223,7 @@ export async function handleRequest(request, env) {
 
   if (url.pathname === '/health' && request.method === 'GET') {
     const config = providerConfig(env);
-    const authMode = (env.AUTH_MODE || 'legacy').toLowerCase();
+    const authMode = (env.AUTH_MODE || 'invalid').toLowerCase();
     const authModeValid = ['legacy', 'dual', 'supabase'].includes(authMode);
     const authConfigured = authMode === 'supabase'
       ? Boolean(env.SUPABASE_URL)
