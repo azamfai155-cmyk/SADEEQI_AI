@@ -71,3 +71,9 @@ The Android client no longer embeds the shared backend bearer token. It signs us
 6. Only after the new APK is distributed and old clients are retired, change Vercel `AUTH_MODE` to `supabase` and delete the legacy `SADEEQI_APP_TOKEN` variable. This permanently rejects the shared-token scheme.
 
 Do not commit Supabase secrets, the service-role key, Groq/OpenAI keys, or user passwords. The project URL and anon/public key may be embedded in the APK; backend provider credentials remain server-only. These branch changes are source code and are not a production deployment.
+
+## Private Supabase Storage (source integration)
+- Added `SupabaseStorageClient` for authenticated per-user private file upload, replacement, download, listing and deletion.
+- Object paths are generated under the authenticated user's UUID; caller-supplied paths are validated and Supabase RLS remains the final authorization boundary.
+- The bucket is expected to remain private with the four user-folder policies documented in [docs/SUPABASE_STORAGE_SETUP_AR.md](docs/SUPABASE_STORAGE_SETUP_AR.md).
+- Added the Android **ملفاتي** screen for upload, listing, replacement, in-app download and deletion. Two-account network acceptance testing is still required before production.
