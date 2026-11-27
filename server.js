@@ -264,23 +264,45 @@ export function createAuthMiddleware() {
 const requireAuth = createAuthMiddleware();
 
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').trim().toLowerCase();
+const OWNER_USER_ID = (process.env.OWNER_USER_ID || '').trim().toLowerCase();
 
-// Authorization is derived only from the verified server-side identity.
-// A role sent in a body, query, or custom header is never trusted.
-export function createOwnerMiddleware({ ownerEmail = process.env.OWNER_EMAIL } = {}) {
-  const configuredOwner = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+// Authorization is derived only from the verified server-side Supabase identity.
+// Both the immutable Auth user UUID and configured email must match. Client-supplied
+// roles, owner IDs, body fields, query parameters, and headers are never trusted.
+export function createOwnerMiddleware({
+  ownerEmail = process.env.OWNER_EMAIL,
+  ownerUserId = process.env.OWNER_USER_ID
+} = {}) {
+  const configuredOwnerEmail = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+  const configuredOwnerUserId = typeof ownerUserId === 'string' ? ownerUserId.trim().toLowerCase() : '';
+  const validOwnerUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(configuredOwnerUserId);
+
   return (req, res, next) => {
     const verifiedEmail = typeof req.auth?.email === 'string'
       ? req.auth.email.trim().toLowerCase()
       : '';
-    if (!configuredOwner || !verifiedEmail || verifiedEmail !== configuredOwner) {
+    const verifiedUserId = typeof req.auth?.userId === 'string'
+      ? req.auth.userId.trim().toLowerCase()
+      : '';
+
+    if (
+      !configuredOwnerEmail ||
+      !validOwnerUserId ||
+      !verifiedEmail ||
+      !verifiedUserId ||
+      verifiedEmail !== configuredOwnerEmail ||
+      verifiedUserId !== configuredOwnerUserId
+    ) {
       return res.status(403).json({ error: 'Owner permission required.' });
     }
     return next();
   };
 }
 
-const requireOwner = createOwnerMiddleware({ ownerEmail: OWNER_EMAIL });
+const requireOwner = createOwnerMiddleware({
+  ownerEmail: OWNER_EMAIL,
+  ownerUserId: OWNER_USER_ID
+});
 
 app.get('/v1/admin/access-check', requireAuth, requireOwner, (_req, res) => {
   res.set('Cache-Control', 'no-store').json({ authorized: true, role: 'owner' });
