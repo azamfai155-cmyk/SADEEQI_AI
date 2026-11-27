@@ -199,6 +199,28 @@ export function createAuthMiddleware() {
 const requireAuth = createAuthMiddleware();
 
 const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').trim().toLowerCase();
+
+// Authorization is derived only from the verified server-side identity.
+// A role sent in a body, query, or custom header is never trusted.
+export function createOwnerMiddleware({ ownerEmail = process.env.OWNER_EMAIL } = {}) {
+  const configuredOwner = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+  return (req, res, next) => {
+    const verifiedEmail = typeof req.auth?.email === 'string'
+      ? req.auth.email.trim().toLowerCase()
+      : '';
+    if (!configuredOwner || !verifiedEmail || verifiedEmail !== configuredOwner) {
+      return res.status(403).json({ error: 'Owner permission required.' });
+    }
+    return next();
+  };
+}
+
+const requireOwner = createOwnerMiddleware({ ownerEmail: OWNER_EMAIL });
+
+app.get('/v1/admin/access-check', requireAuth, requireOwner, (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ authorized: true, role: 'owner' });
+});
+
 app.get('/v1/me', requireAuth, (req, res) => {
   const email = typeof req.auth?.email === 'string' ? req.auth.email.trim().toLowerCase() : '';
   const isOwner = Boolean(OWNER_EMAIL && email && email === OWNER_EMAIL);
