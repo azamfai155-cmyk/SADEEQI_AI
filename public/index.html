@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1020"><title>صديقي AI — مساعدك الرقمي</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="shell">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-mark">ص</div><div><strong>صديقي AI</strong><small>مساعدك الرقمي الشخصي</small></div></div>
+  <button id="newChat" class="new-chat">＋ محادثة جديدة</button>
+  <nav><a class="active" href="/">⌂　الرئيسية</a><a href="#chat">◉　المحادثة</a><a href="#tools">✧　الأدوات</a><a href="#memory">◷　الذاكرة</a></nav>
+  <div class="side-bottom"><span class="status-dot"></span><span id="backendStatus">جارٍ فحص الاتصال...</span></div>
+</aside>
+<main class="main">
+<header class="topbar"><button id="menuBtn" class="icon-btn" aria-label="القائمة">☰</button><div><span class="eyebrow">مساحتك الذكية</span><h1>أهلاً بك في صديقي</h1></div><button id="accountBtn" class="account">حسابي</button></header>
+<section id="authPanel" class="auth-card">
+  <div class="auth-copy"><span class="pill">دخول آمن عبر Supabase</span><h2>ابدأ محادثتك مع صديقي</h2><p>سجّل الدخول أو أنشئ حساباً جديداً للوصول إلى المساعد.</p></div>
+  <form id="authForm"><label>البريد الإلكتروني<input id="email" type="email" autocomplete="email" required placeholder="name@example.com"></label><label>كلمة المرور<input id="password" type="password" minlength="8" autocomplete="current-password" required placeholder="8 أحرف على الأقل"></label><div class="auth-actions"><button class="primary" id="signIn" type="submit">تسجيل الدخول</button><button class="secondary" id="signUp" type="button">إنشاء حساب</button></div><p id="authMessage" class="message" role="status"></p></form>
+</section>
+<section id="chatPanel" class="chat-card hidden">
+  <div class="chat-head"><div class="avatar">ص</div><div><strong>صديقي</strong><small><span class="status-dot"></span> مساعدك متاح</small></div><button id="signOut" class="secondary small">تسجيل الخروج</button></div>
+  <div id="messages" class="messages"><div class="welcome"><div class="welcome-icon">✦</div><h2>كيف أقدر أساعدك اليوم؟</h2><p>اكتب سؤالك أو اختر أحد الاقتراحات.</p><div class="suggestions"><button>اشرح لي موضوعاً صعباً</button><button>ساعدني في تنظيم مهامي</button><button>اكتب لي خطة عمل</button></div></div></div>
+  <form id="chatForm" class="composer"><textarea id="prompt" rows="1" maxlength="16000" placeholder="اكتب رسالتك إلى صديقي..." required></textarea><button class="send" type="submit" aria-label="إرسال">➤</button></form><div class="disclaimer">قد يخطئ الذكاء الاصطناعي؛ تحقق من المعلومات المهمة.</div>
+</section>
+<section id="tools" class="feature-grid"><article><span>✧</span><h3>الأدوات</h3><p>مساحة مخصصة للأدوات التي ستُربط بخدمات المشروع.</p></article><article id="memory"><span>◷</span><h3>الذاكرة</h3><p>الذاكرة المتقدمة قيد ربط واجهتها بخدمات التخزين الحالية.</p></article><article><span>♫</span><h3>استوديو الصوت</h3><p>سيظهر هنا عند اكتمال ربط وظائف الصوت بالويب.</p></article></section>
+<footer>صديقي AI <span>•</span> واجهة ويب تجريبية — نسخة الاختبار</footer>
+</main>
+</div>
+<script src="/app.js" defer></script>
+</body></html>
