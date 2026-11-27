@@ -21,15 +21,38 @@ test('health endpoint exposes service metadata without secrets', async () => {
   });
 });
 
-test('chat and social endpoints require authentication', async () => {
+test('every owner-only API route rejects unauthenticated and client-spoofed owner requests', async () => {
   await withServer(async port => {
-    const chat = await fetch(`http://127.0.0.1:${port}/v1/chat`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: [{ role: 'user', content: 'hello' }] })
-    });
-    const social = await fetch(`http://127.0.0.1:${port}/v1/social/providers`);
-    assert.ok([401, 503].includes(chat.status));
-    assert.ok([401, 503].includes(social.status));
+    const base = `http://127.0.0.1:${port}`;
+    const protectedRequests = [
+      ['GET', '/v1/admin/access-check'],
+      ['GET', '/v1/me'],
+      ['GET', '/v1/social/providers'],
+      ['GET', '/v1/memory'],
+      ['POST', '/v1/memory', { memory_key: 'spoof', memory_value: 'must not save' }],
+      ['DELETE', '/v1/memory/00000000-0000-4000-8000-000000000001'],
+      ['GET', '/v1/tasks'],
+      ['POST', '/v1/tasks', { title: 'spoof', goal: 'must not create' }],
+      ['PATCH', '/v1/tasks/00000000-0000-4000-8000-000000000001', { state: 'done' }],
+      ['POST', '/v1/chat', { input: [{ role: 'user', content: 'hello' }] }]
+    ];
+
+    for (const [method, path, body] of protectedRequests) {
+      const options = {
+        method,
+        headers: {
+          ...(body ? { 'content-type': 'application/json' } : {}),
+          'x-user-role': 'owner',
+          'x-owner': 'true'
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+      };
+      const response = await fetch(base + path, options);
+      assert.ok(
+        [401, 503].includes(response.status),
+        `${method} ${path} must reject requests without a verified owner session; got ${response.status}`
+      );
+    }
   });
 });
 
