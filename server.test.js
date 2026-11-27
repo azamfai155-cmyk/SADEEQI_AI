@@ -346,3 +346,47 @@ test('audit logging is a no-op when enforcement is disabled', async () => {
   } });
   assert.equal(written, false);
 });
+
+
+test('owner middleware allows only the verified configured owner email', async () => {
+  const { createOwnerMiddleware } = await import('./server.js');
+  const middleware = createOwnerMiddleware({ ownerEmail: 'Owner@Example.com' });
+  const invoke = (auth, spoofedRole) => {
+    const res = {
+      statusCode: 200, body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    let nextCalls = 0;
+    middleware({ auth, body: { role: spoofedRole }, headers: { 'x-user-role': spoofedRole } }, res, () => { nextCalls += 1; });
+    return { res, nextCalls };
+  };
+
+  const owner = invoke({ userId: 'owner-id', email: 'owner@example.com' }, 'user');
+  assert.equal(owner.nextCalls, 1);
+  assert.equal(owner.res.statusCode, 200);
+
+  const regular = invoke({ userId: 'user-id', email: 'user@example.com' }, 'owner');
+  assert.equal(regular.nextCalls, 0);
+  assert.equal(regular.res.statusCode, 403);
+
+  const missingIdentity = invoke({ userId: 'legacy-id', email: null }, 'owner');
+  assert.equal(missingIdentity.nextCalls, 0);
+  assert.equal(missingIdentity.res.statusCode, 403);
+});
+
+test('owner middleware fails closed when OWNER_EMAIL is missing or blank', async () => {
+  const { createOwnerMiddleware } = await import('./server.js');
+  for (const ownerEmail of [undefined, '', '   ']) {
+    const middleware = createOwnerMiddleware({ ownerEmail });
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    let nextCalls = 0;
+    middleware({ auth: { userId: 'owner-id', email: 'owner@example.com' } }, res, () => { nextCalls += 1; });
+    assert.equal(nextCalls, 0);
+    assert.equal(res.statusCode, 403);
+  }
+});
