@@ -1,6 +1,6 @@
 # SADEEQI MUSIC — implementation status
 
-Updated: 2026-11-14
+Updated: 2026-11-26
 
 ## Implemented in source
 
@@ -16,13 +16,13 @@ Updated: 2026-11-14
 ## Global music streaming — Audius integration added
 
 - Added an Audius read-only catalogue adapter using the documented REST API.
-- Added remote track search, artist/title metadata, artwork metadata and stream URL resolution.
+- Added remote track search, artist/title metadata and stream URL resolution. Artwork URLs are currently not populated by the repository implementation.
 - Added remote Media3 queue playback alongside local file playback.
 - Added Arabic text search in the SADEEQI MUSIC screen.
-- Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; the first available streamable result is queued.
-- Read-only search uses the public API mode and an app_name identifier; an Audius API key can be added later if higher rate limits are needed.
+- Added voice search: say "ابحث عن [اسم الأغنية أو الفنان]" or "شغل [اسم الأغنية أو الفنان]"; search runs on the IO dispatcher and returns streamable results for the user to select.
+- Read-only search uses the public API endpoint and an `app_name` identifier. Current source does not configure a dedicated Audius API key.
 - The catalogue is an open, creator-uploaded catalogue, not a complete catalogue of mainstream commercial releases. Each track's availability and rights are governed by its creator/platform terms. Do not describe it as every song in the world.
-- Network playback requires internet access. Data-saver mode is currently a preference only; adaptive bitrate selection is not implemented.
+- Network playback requires internet access. Data-saver mode applies a Media3 maximum audio bitrate selection parameter, but this does not guarantee lower data use for progressive single-bitrate streams; adaptive bitrate selection is not implemented.
 
 The integration uses Audius documented track search and stream endpoints. Before public release, review Audius API terms, track-level rights/availability, attribution requirements, rate limits, regional availability and background playback conditions. Do not scrape music sites, bypass DRM or bundle commercial music.
 
@@ -30,7 +30,7 @@ The integration uses Audius documented track search and stream endpoints. Before
 
 The local-file player itself adds **0 streaming data** when playing a file already on the device. Selecting files uses document-provider URIs and does not intentionally duplicate audio bytes inside the app. Metadata preferences are small and bounded (history retains up to 50 entries).
 
-For a future streaming service, payload estimates from nominal encoded bitrate (excluding protocol overhead, retransmissions and adaptive-bitrate variation):
+For reference, payload estimates from nominal encoded bitrate (excluding protocol overhead, retransmissions and adaptive-bitrate variation):
 
 | Nominal audio bitrate | Approx. MB/min | Approx. MB/hour |
 |---:|---:|---:|
