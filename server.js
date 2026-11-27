@@ -15,7 +15,7 @@ app.use(express.json({ limit: '12mb', strict: true }));
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 export function normalizeAuthMode(value) {
-  const mode = (value || 'legacy').toLowerCase();
+  const mode = (value || 'invalid').toLowerCase();
   return ['legacy', 'dual', 'supabase'].includes(mode) ? mode : 'invalid';
 }
 const AUTH_MODE = normalizeAuthMode(process.env.AUTH_MODE);
