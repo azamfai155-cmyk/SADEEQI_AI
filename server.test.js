@@ -390,3 +390,28 @@ test('owner middleware fails closed when OWNER_EMAIL is missing or blank', async
     assert.equal(res.statusCode, 403);
   }
 });
+
+
+test('owner data API restricts tables and keeps service credentials server-side', async () => {
+  const { createOwnerDataRequest } = await import('./server.js');
+  let sent;
+  const request = createOwnerDataRequest({
+    env: { SUPABASE_URL: 'https://project.example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'server-only-key' },
+    fetchImpl: async (url, init) => {
+      sent = { url: String(url), headers: init.headers, method: init.method, body: init.body };
+      return new Response(JSON.stringify([{ id: 'memory-id' }]), { status: 200 });
+    }
+  });
+  const rows = await request({ table: 'sadeeqi_memories', method: 'POST', body: { owner_id: 'owner-id', memory_key: 'preference', memory_value: 'Arabic' } });
+  assert.equal(rows[0].id, 'memory-id');
+  assert.ok(sent.url.includes('/rest/v1/sadeeqi_memories'));
+  assert.equal(sent.headers.Authorization, 'Bearer server-only-key');
+  assert.equal(sent.method, 'POST');
+  await assert.rejects(() => request({ table: 'auth_users' }), /Unsupported owner data table/);
+});
+
+test('owner data API fails closed when Supabase server credentials are missing', async () => {
+  const { createOwnerDataRequest } = await import('./server.js');
+  const request = createOwnerDataRequest({ env: {}, fetchImpl: async () => { throw new Error('must not fetch'); } });
+  await assert.rejects(() => request({ table: 'sadeeqi_tasks' }), /credentials are not configured/);
+});
