@@ -371,9 +371,10 @@ test('audit logging is a no-op when enforcement is disabled', async () => {
 });
 
 
-test('owner middleware allows only the verified configured owner email', async () => {
+test('owner middleware requires both the verified owner UUID and email', async () => {
   const { createOwnerMiddleware } = await import('./server.js');
-  const middleware = createOwnerMiddleware({ ownerEmail: 'Owner@Example.com' });
+  const ownerUserId = '71d67d65-4192-426d-8485-1f344c3b1d31';
+  const middleware = createOwnerMiddleware({ ownerEmail: 'Owner@Example.com', ownerUserId });
   const invoke = (auth, spoofedRole) => {
     const res = {
       statusCode: 200, body: null,
@@ -381,39 +382,47 @@ test('owner middleware allows only the verified configured owner email', async (
       json(value) { this.body = value; return this; }
     };
     let nextCalls = 0;
-    middleware({ auth, body: { role: spoofedRole }, headers: { 'x-user-role': spoofedRole } }, res, () => { nextCalls += 1; });
+    middleware({ auth, body: { role: spoofedRole, owner_id: ownerUserId }, headers: { 'x-user-role': spoofedRole, 'x-owner-id': ownerUserId } }, res, () => { nextCalls += 1; });
     return { res, nextCalls };
   };
 
-  const owner = invoke({ userId: 'owner-id', email: 'owner@example.com' }, 'user');
+  const owner = invoke({ userId: ownerUserId, email: 'owner@example.com' }, 'user');
   assert.equal(owner.nextCalls, 1);
   assert.equal(owner.res.statusCode, 200);
 
-  const regular = invoke({ userId: 'user-id', email: 'user@example.com' }, 'owner');
-  assert.equal(regular.nextCalls, 0);
-  assert.equal(regular.res.statusCode, 403);
-
-  const missingIdentity = invoke({ userId: 'legacy-id', email: null }, 'owner');
-  assert.equal(missingIdentity.nextCalls, 0);
-  assert.equal(missingIdentity.res.statusCode, 403);
+  for (const auth of [
+    { userId: '00000000-0000-4000-8000-000000000002', email: 'owner@example.com' },
+    { userId: ownerUserId, email: 'user@example.com' },
+    { userId: 'owner-id', email: 'owner@example.com' },
+    { userId: ownerUserId, email: null },
+    { userId: null, email: 'owner@example.com' }
+  ]) {
+    const rejected = invoke(auth, 'owner');
+    assert.equal(rejected.nextCalls, 0);
+    assert.equal(rejected.res.statusCode, 403);
+  }
 });
 
-test('owner middleware fails closed when OWNER_EMAIL is missing or blank', async () => {
+test('owner middleware fails closed when either configured owner identity is missing or invalid', async () => {
   const { createOwnerMiddleware } = await import('./server.js');
-  for (const ownerEmail of [undefined, '', '   ']) {
-    const middleware = createOwnerMiddleware({ ownerEmail });
+  for (const config of [
+    { ownerEmail: undefined, ownerUserId: '71d67d65-4192-426d-8485-1f344c3b1d31' },
+    { ownerEmail: 'owner@example.com', ownerUserId: undefined },
+    { ownerEmail: 'owner@example.com', ownerUserId: 'not-a-uuid' },
+    { ownerEmail: '   ', ownerUserId: '71d67d65-4192-426d-8485-1f344c3b1d31' }
+  ]) {
+    const middleware = createOwnerMiddleware(config);
     const res = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
       json(value) { this.body = value; return this; }
     };
     let nextCalls = 0;
-    middleware({ auth: { userId: 'owner-id', email: 'owner@example.com' } }, res, () => { nextCalls += 1; });
+    middleware({ auth: { userId: '71d67d65-4192-426d-8485-1f344c3b1d31', email: 'owner@example.com' } }, res, () => { nextCalls += 1; });
     assert.equal(nextCalls, 0);
     assert.equal(res.statusCode, 403);
   }
 });
-
 
 test('owner data API restricts tables and keeps service credentials server-side', async () => {
   const { createOwnerDataRequest } = await import('./server.js');
