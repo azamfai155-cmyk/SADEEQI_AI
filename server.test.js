@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app, buildSocialProviders, extractBearerToken, validateInput } from './server.js';
+import { app, buildSocialProviders, extractBearerToken, validateInput, parseAutomaticMemories, buildMemoryExtractionRequest } from './server.js';
 import http from 'node:http';
 
 async function withServer(run) {
@@ -430,4 +430,28 @@ test('Sadeeqi identity policy consistently names Azam Fayez as founder and idea 
     'أنا صديقي، مساعدك الرقمي يا عزام'
   ]) assert.ok(instructions.includes(phrase), `Missing identity policy phrase: ${phrase}`);
   assert.ok(instructions.includes('مزوّد النموذج الأساسي'));
+});
+
+test('automatic memory parser accepts useful facts and filters secrets', () => {
+  const memories = parseAutomaticMemories(JSON.stringify([
+    { key: 'الاسم المفضل', value: 'عزام' },
+    { key: 'المشروع', value: 'أعمل على صديقي AI' },
+    { key: 'كلمة المرور', value: 'not-a-real-password' },
+    { key: 'مفتاح API', value: 'secret-value' },
+    { key: 'الاسم المفضل', value: 'اسم مكرر' }
+  ]));
+  assert.deepEqual(memories, [
+    { key: 'الاسم المفضل', value: 'عزام' },
+    { key: 'المشروع', value: 'أعمل على صديقي AI' }
+  ]);
+});
+
+test('automatic memory parser fails closed on malformed output', () => {
+  assert.deepEqual(parseAutomaticMemories('not json'), []);
+  assert.deepEqual(parseAutomaticMemories(JSON.stringify({ key: 'x', value: 'y' })), []);
+});
+
+test('automatic memory extraction skips sensitive or empty user text', () => {
+  assert.equal(buildMemoryExtractionRequest({ userText: 'كلمة المرور هي abc123' }), null);
+  assert.equal(buildMemoryExtractionRequest({ userText: '   ' }), null);
 });
