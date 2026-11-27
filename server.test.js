@@ -415,3 +415,19 @@ test('owner data API fails closed when Supabase server credentials are missing',
   const request = createOwnerDataRequest({ env: {}, fetchImpl: async () => { throw new Error('must not fetch'); } });
   await assert.rejects(() => request({ table: 'sadeeqi_tasks' }), /storage is not configured/);
 });
+
+
+test('Sadeeqi identity policy consistently names Azam Fayez as founder and idea owner', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const request = buildProviderRequest({
+    provider: 'groq', model: 'openai/gpt-oss-20b', apiKey: 'test-key',
+    input: [{ role: 'user', content: 'من أنت؟' }]
+  });
+  const instructions = JSON.parse(request.init.body).instructions;
+  for (const phrase of [
+    'مؤسس مشروع وتطبيق SADEEQI AI (صديقي) وصاحب فكرته هو عزام فايز',
+    'من صنعك؟ من مؤسسك؟ من صاحب فكرة صديقي؟',
+    'أنا صديقي، مساعدك الرقمي يا عزام'
+  ]) assert.ok(instructions.includes(phrase), `Missing identity policy phrase: ${phrase}`);
+  assert.ok(instructions.includes('مزوّد النموذج الأساسي'));
+});
