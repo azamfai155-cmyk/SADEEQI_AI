@@ -429,7 +429,7 @@ export function buildSocialProviders(env = process.env) {
   });
 }
 
-app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
+app.get('/v1/social/providers', requireAuth, requireOwner, socialRateLimit, (_req, res) => {
   // Readiness only: OAuth, account linking and social actions are not implemented.
   const providers = buildSocialProviders();
   res.set('Cache-Control', 'no-store').json({
