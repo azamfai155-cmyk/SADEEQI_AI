@@ -1,5 +1,5 @@
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -14,6 +14,26 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '12mb', strict: true }));
+
+// Serve the first-party web client from the same origin as the authenticated API.
+const PUBLIC_DIR = new URL('./public/', import.meta.url);
+app.use(express.static(fileURLToPath(PUBLIC_DIR), {
+  index: 'index.html',
+  etag: true,
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+  }
+}));
+
+// Only the Supabase project URL and browser publishable/anon key are exposed.
+// Never return service-role or provider credentials to the browser.
+app.get('/config.js', (_req, res) => {
+  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\\/$/, '');
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+  res.set('Cache-Control', 'no-store').json({ supabaseUrl, supabaseAnonKey });
+});
+
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 export function normalizeAuthMode(value) {
