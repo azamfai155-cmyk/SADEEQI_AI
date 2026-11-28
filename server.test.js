@@ -277,6 +277,9 @@ test('default system and identity instructions use real newline separators', asy
   assert.match(instructions, /\n/);
   assert.equal(instructions.includes('\\n'), false);
   assert.match(instructions, /صديقي/);
+  assert.match(instructions, /Supabase/);
+  assert.match(instructions, /مزود نموذج الذكاء الاصطناعي/);
+  assert.match(instructions, /لا تقل إن البيانات لا تُشارك/);
 });
 
 
