@@ -153,7 +153,7 @@ test('authentication mode parser rejects unknown values instead of silently fall
 });
 
 
-test('Groq Responses request uses supported endpoint and omits unsupported store option', async () => {
+test('runtime context exposes only server-supplied provider and model values', async () => {\n  const { buildRuntimeContext } = await import('./server.js');\n  const context = buildRuntimeContext({ provider: 'groq', model: 'openai/gpt-oss-20b' });\n  assert.match(context, /مزود الذكاء الاصطناعي: groq/);\n  assert.match(context, /الموديل الذي أرسله الخادم في طلب المزود: openai\\/gpt-oss-20b/);\n  assert.match(context, /لا تستخدم الذاكرة أو التخمين/);\n  const unavailable = buildRuntimeContext({ provider: '', model: '' });\n  assert.match(unavailable, /مزود الذكاء الاصطناعي: غير متاح/);\n  assert.match(unavailable, /الموديل الذي أرسله الخادم في طلب المزود: غير متاح/);\n});\n\ntest('Groq Responses request uses supported endpoint and omits unsupported store option', async () => {
   const { buildProviderRequest } = await import('./server.js');
   const request = buildProviderRequest({
     provider: 'groq', model: 'openai/gpt-oss-20b', apiKey: 'test-groq-key',
