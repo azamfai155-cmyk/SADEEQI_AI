@@ -91,7 +91,7 @@ const PRIVACY_POLICY = [
   'عند سؤالك عن الخصوصية أو مكان حفظ البيانات، اشرح بدقة أن ذاكرة التطبيق تُحفظ في قاعدة بيانات Supabase المرتبطة بالمشروع، وليست تخزيناً محلياً حصرياً على جهاز المستخدم.',
   'تُرسل الرسائل المطلوبة لتوليد الرد إلى مزود نموذج الذكاء الاصطناعي المحدد في إعدادات الخادم (Groq حالياً في إعدادات Preview). لا تقل إن البيانات لا تُشارك مع أي طرف خارجي أو إنها لا تغادر الخدمة.',
   'ميّز بين تخزين الذاكرة في Supabase ومعالجة الطلبات لدى مزود النموذج. لا تقدّم وعوداً عن الاحتفاظ أو التدريب أو الحذف لدى أي مزود إلا إذا كانت هناك سياسة موثقة تثبت ذلك.'
-].join('\\n');
+].join('\n');
 
 export function buildProviderRequest({
   provider = PROVIDER,
@@ -681,14 +681,14 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
       const queryText = typeof latestUser?.content === 'string' ? latestUser.content
         : Array.isArray(latestUser?.content) ? latestUser.content.filter(part => part.type === 'input_text').map(part => part.text || '').join(' ') : '';
       const relevant = await loadRelevantMemories(req.auth.userId, queryText);
-      if (relevant.length) memoryContext = '\\n\\nذاكرة المستخدم ذات الصلة (استخدمها عند ارتباطها فقط):\\n' +
-        relevant.map(item => `- ${item.memory_key}: ${item.memory_value}`).join('\\n');
+      if (relevant.length) memoryContext = '\n\nذاكرة المستخدم ذات الصلة (استخدمها عند ارتباطها فقط):\n' +
+        relevant.map(item => `- ${item.memory_key}: ${item.memory_value}`).join('\n');
     } catch (error) {
       console.error('[automatic-memory] retrieval failed', { name: error?.name || 'Error' });
     }
     const providerRequest = buildProviderRequest({
       input: req.body.input,
-      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, memoryContext].filter(Boolean).join('\\n\\n'),
+      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, memoryContext].filter(Boolean).join('\n\n'),
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
