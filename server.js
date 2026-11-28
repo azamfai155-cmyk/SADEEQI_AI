@@ -87,12 +87,18 @@ const IDENTITY_POLICY = [
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
+const PRIVACY_POLICY = [
+  'عند سؤالك عن الخصوصية أو مكان حفظ البيانات، اشرح بدقة أن ذاكرة التطبيق تُحفظ في قاعدة بيانات Supabase المرتبطة بالمشروع، وليست تخزيناً محلياً حصرياً على جهاز المستخدم.',
+  'تُرسل الرسائل المطلوبة لتوليد الرد إلى مزود نموذج الذكاء الاصطناعي المحدد في إعدادات الخادم (Groq حالياً في إعدادات Preview). لا تقل إن البيانات لا تُشارك مع أي طرف خارجي أو إنها لا تغادر الخدمة.',
+  'ميّز بين تخزين الذاكرة في Supabase ومعالجة الطلبات لدى مزود النموذج. لا تقدّم وعوداً عن الاحتفاظ أو التدريب أو الحذف لدى أي مزود إلا إذا كانت هناك سياسة موثقة تثبت ذلك.'
+].join('\\n');
+
 export function buildProviderRequest({
   provider = PROVIDER,
   model = MODEL,
   apiKey = API_KEY,
   input,
-  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\n\n'),
+  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY].filter(Boolean).join('\n\n'),
   enableWebSearch = false
 }) {
   if (!['groq', 'openai'].includes(provider)) {
@@ -682,7 +688,7 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
     }
     const providerRequest = buildProviderRequest({
       input: req.body.input,
-      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, memoryContext].filter(Boolean).join('\\n\\n'),
+      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, memoryContext].filter(Boolean).join('\\n\\n'),
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
