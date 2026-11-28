@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app, buildSocialProviders, extractBearerToken, validateInput } from './server.js';
+import { app, buildSocialProviders, extractBearerToken, validateInput, parseAutomaticMemories, buildMemoryExtractionRequest } from './server.js';
 import http from 'node:http';
 
 async function withServer(run) {
@@ -21,15 +21,38 @@ test('health endpoint exposes service metadata without secrets', async () => {
   });
 });
 
-test('chat and social endpoints require authentication', async () => {
+test('every owner-only API route rejects unauthenticated and client-spoofed owner requests', async () => {
   await withServer(async port => {
-    const chat = await fetch(`http://127.0.0.1:${port}/v1/chat`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: [{ role: 'user', content: 'hello' }] })
-    });
-    const social = await fetch(`http://127.0.0.1:${port}/v1/social/providers`);
-    assert.ok([401, 503].includes(chat.status));
-    assert.ok([401, 503].includes(social.status));
+    const base = `http://127.0.0.1:${port}`;
+    const protectedRequests = [
+      ['GET', '/v1/admin/access-check'],
+      ['GET', '/v1/me'],
+      ['GET', '/v1/social/providers'],
+      ['GET', '/v1/memory'],
+      ['POST', '/v1/memory', { memory_key: 'spoof', memory_value: 'must not save' }],
+      ['DELETE', '/v1/memory/00000000-0000-4000-8000-000000000001'],
+      ['GET', '/v1/tasks'],
+      ['POST', '/v1/tasks', { title: 'spoof', goal: 'must not create' }],
+      ['PATCH', '/v1/tasks/00000000-0000-4000-8000-000000000001', { state: 'done' }],
+      ['POST', '/v1/chat', { input: [{ role: 'user', content: 'hello' }] }]
+    ];
+
+    for (const [method, path, body] of protectedRequests) {
+      const options = {
+        method,
+        headers: {
+          ...(body ? { 'content-type': 'application/json' } : {}),
+          'x-user-role': 'owner',
+          'x-owner': 'true'
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+      };
+      const response = await fetch(base + path, options);
+      assert.ok(
+        [401, 503].includes(response.status),
+        `${method} ${path} must reject requests without a verified owner session; got ${response.status}`
+      );
+    }
   });
 });
 
@@ -130,6 +153,17 @@ test('authentication mode parser rejects unknown values instead of silently fall
 });
 
 
+test('runtime context exposes only server-supplied provider and model values', async () => {
+  const { buildRuntimeContext } = await import('./server.js');
+  const context = buildRuntimeContext({ provider: 'groq', model: 'openai/gpt-oss-20b' });
+  assert.match(context, /مزود الذكاء الاصطناعي: groq/);
+  assert.match(context, /الموديل الذي أرسله الخادم في طلب المزود: openai\/gpt-oss-20b/);
+  assert.match(context, /لا تستخدم الذاكرة أو التخمين/);
+  const unavailable = buildRuntimeContext({ provider: '', model: '' });
+  assert.match(unavailable, /مزود الذكاء الاصطناعي: غير متاح/);
+  assert.match(unavailable, /الموديل الذي أرسله الخادم في طلب المزود: غير متاح/);
+});
+
 test('Groq Responses request uses supported endpoint and omits unsupported store option', async () => {
   const { buildProviderRequest } = await import('./server.js');
   const request = buildProviderRequest({
@@ -184,7 +218,7 @@ test('provider request builder rejects unsupported providers and missing keys', 
   }), /Unsupported AI_PROVIDER/);
   assert.throws(() => buildProviderRequest({
     provider: 'groq', apiKey: '', input: [{ role: 'user', content: 'x' }]
-  }), /credentials are not configured/);
+  }), /server credentials are not configured/);
 });
 
 
@@ -254,6 +288,9 @@ test('default system and identity instructions use real newline separators', asy
   assert.match(instructions, /\n/);
   assert.equal(instructions.includes('\\n'), false);
   assert.match(instructions, /صديقي/);
+  assert.match(instructions, /Supabase/);
+  assert.match(instructions, /مزود نموذج الذكاء الاصطناعي/);
+  assert.match(instructions, /لا تقل إن البيانات لا تُشارك/);
 });
 
 
@@ -345,4 +382,222 @@ test('audit logging is a no-op when enforcement is disabled', async () => {
     throw new Error('must not call Supabase');
   } });
   assert.equal(written, false);
+});
+
+
+test('owner middleware requires both the verified owner UUID and email', async () => {
+  const { createOwnerMiddleware } = await import('./server.js');
+  const ownerUserId = '71d67d65-4192-426d-8485-1f344c3b1d31';
+  const middleware = createOwnerMiddleware({ ownerEmail: 'Owner@Example.com', ownerUserId });
+  const invoke = (auth, spoofedRole) => {
+    const res = {
+      statusCode: 200, body: null,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    let nextCalls = 0;
+    middleware({ auth, body: { role: spoofedRole, owner_id: ownerUserId }, headers: { 'x-user-role': spoofedRole, 'x-owner-id': ownerUserId } }, res, () => { nextCalls += 1; });
+    return { res, nextCalls };
+  };
+
+  const owner = invoke({ userId: ownerUserId, email: 'owner@example.com' }, 'user');
+  assert.equal(owner.nextCalls, 1);
+  assert.equal(owner.res.statusCode, 200);
+
+  for (const auth of [
+    { userId: '00000000-0000-4000-8000-000000000002', email: 'owner@example.com' },
+    { userId: ownerUserId, email: 'user@example.com' },
+    { userId: 'owner-id', email: 'owner@example.com' },
+    { userId: ownerUserId, email: null },
+    { userId: null, email: 'owner@example.com' }
+  ]) {
+    const rejected = invoke(auth, 'owner');
+    assert.equal(rejected.nextCalls, 0);
+    assert.equal(rejected.res.statusCode, 403);
+  }
+});
+
+test('owner middleware fails closed when either configured owner identity is missing or invalid', async () => {
+  const { createOwnerMiddleware } = await import('./server.js');
+  for (const config of [
+    { ownerEmail: undefined, ownerUserId: '71d67d65-4192-426d-8485-1f344c3b1d31' },
+    { ownerEmail: 'owner@example.com', ownerUserId: undefined },
+    { ownerEmail: 'owner@example.com', ownerUserId: 'not-a-uuid' },
+    { ownerEmail: '   ', ownerUserId: '71d67d65-4192-426d-8485-1f344c3b1d31' }
+  ]) {
+    const middleware = createOwnerMiddleware(config);
+    const res = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(value) { this.body = value; return this; }
+    };
+    let nextCalls = 0;
+    middleware({ auth: { userId: '71d67d65-4192-426d-8485-1f344c3b1d31', email: 'owner@example.com' } }, res, () => { nextCalls += 1; });
+    assert.equal(nextCalls, 0);
+    assert.equal(res.statusCode, 403);
+  }
+});
+
+test('owner data API restricts tables and keeps service credentials server-side', async () => {
+  const { createOwnerDataRequest } = await import('./server.js');
+  let sent;
+  const request = createOwnerDataRequest({
+    env: { SUPABASE_URL: 'https://project.example.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'server-only-key' },
+    fetchImpl: async (url, init) => {
+      sent = { url: String(url), headers: init.headers, method: init.method, body: init.body };
+      return new Response(JSON.stringify([{ id: 'memory-id' }]), { status: 200 });
+    }
+  });
+  const rows = await request({ table: 'sadeeqi_memories', method: 'POST', body: { owner_id: 'owner-id', memory_key: 'preference', memory_value: 'Arabic' } });
+  assert.equal(rows[0].id, 'memory-id');
+  assert.ok(sent.url.includes('/rest/v1/sadeeqi_memories'));
+  assert.equal(sent.headers.Authorization, 'Bearer server-only-key');
+  assert.equal(sent.method, 'POST');
+  await assert.rejects(() => request({ table: 'auth_users' }), /Unsupported owner data table/);
+});
+
+test('owner data API fails closed when Supabase server credentials are missing', async () => {
+  const { createOwnerDataRequest } = await import('./server.js');
+  const request = createOwnerDataRequest({ env: {}, fetchImpl: async () => { throw new Error('must not fetch'); } });
+  await assert.rejects(() => request({ table: 'sadeeqi_tasks' }), /storage is not configured/);
+});
+
+
+test('Sadeeqi identity policy consistently names Azam Fayez as founder and idea owner', async () => {
+  const { buildProviderRequest } = await import('./server.js');
+  const request = buildProviderRequest({
+    provider: 'groq', model: 'openai/gpt-oss-20b', apiKey: 'test-key',
+    input: [{ role: 'user', content: 'من أنت؟' }]
+  });
+  const instructions = JSON.parse(request.init.body).instructions;
+  for (const phrase of [
+    'مؤسس مشروع وتطبيق SADEEQI AI (صديقي) وصاحب فكرته هو عزام فايز',
+    'من صنعك؟ من مؤسسك؟ من صاحب فكرة صديقي؟',
+    'أنا صديقي، مساعدك الرقمي يا عزام'
+  ]) assert.ok(instructions.includes(phrase), `Missing identity policy phrase: ${phrase}`);
+  assert.ok(instructions.includes('مزوّد النموذج الأساسي'));
+});
+
+test('automatic memory parser accepts useful facts and filters secrets', () => {
+  const memories = parseAutomaticMemories(JSON.stringify([
+    { key: 'الاسم المفضل', value: 'عزام' },
+    { key: 'المشروع', value: 'أعمل على صديقي AI' },
+    { key: 'كلمة المرور', value: 'not-a-real-password' },
+    { key: 'مفتاح API', value: 'secret-value' },
+    { key: 'الاسم المفضل', value: 'اسم مكرر' }
+  ]));
+  assert.deepEqual(memories, [
+    { key: 'الاسم المفضل', value: 'عزام' },
+    { key: 'المشروع', value: 'أعمل على صديقي AI' }
+  ]);
+});
+
+test('automatic memory parser fails closed on malformed output', () => {
+  assert.deepEqual(parseAutomaticMemories('not json'), []);
+  assert.deepEqual(parseAutomaticMemories(JSON.stringify({ key: 'x', value: 'y' })), []);
+});
+
+test('automatic memory extraction analyzes context and skips opt-out or sensitive content', async () => {
+  const { isMemorySafeText, selectRelevantMemories } = await import('./server.js');
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: 'كلمة المرور هي abc123' }] }), null);
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: '   ' }] }), null);
+  assert.equal(buildMemoryExtractionRequest({ conversation: [{ role: 'user', content: 'لا تحفظ هذا: أفضل اللون الأزرق' }] }), null);
+  const request = buildMemoryExtractionRequest({ conversation: [
+    { role: 'user', content: 'أعمل على مشروع صديقي AI' },
+    { role: 'assistant', content: 'ما التقنية المستخدمة؟' },
+    { role: 'user', content: 'أستخدم Supabase وGitHub' }
+  ], provider: 'groq', model: 'test-model', apiKey: 'test-key' });
+  assert.equal(request.init.method, 'POST');
+  assert.equal(isMemorySafeText('لدي مشكلة صحية'), false);
+  const relevant = selectRelevantMemories([
+    { memory_key: 'المشروع', memory_value: 'أعمل على صديقي AI باستخدام Supabase' },
+    { memory_key: 'اللهجة', memory_value: 'أفضل اللهجة اليمنية' }
+  ], 'أكمل مشروع صديقي باستخدام Supabase');
+  assert.equal(relevant.length, 1);
+  assert.equal(relevant[0].memory_key, 'المشروع');
+});
+
+
+test('broad Arabic memory recall returns saved memories without lexical keyword overlap', async () => {
+  const { selectRelevantMemories } = await import('./server.js');
+  const memories = [
+    { memory_key: 'الاسم المفضل', memory_value: 'عزام' },
+    { memory_key: 'المشروع الحالي', memory_value: 'تطوير صديقي AI' },
+    { memory_key: 'أسلوب التواصل', memory_value: 'أفضل الإجابات العربية المباشرة' },
+    { memory_key: 'الأداة', memory_value: 'استخدام Supabase' }
+  ];
+  const result = selectRelevantMemories(
+    memories,
+    'ما المعلومات الأربع التي حفظتها عني؟ استرجعها من الذاكرة الدائمة، ولا تعتمد على سجل هذه المحادثة.'
+  );
+  assert.deepEqual(result, memories);
+});
+
+test('broad English memory recall returns saved memories and respects the limit', async () => {
+  const { selectRelevantMemories } = await import('./server.js');
+  const memories = Array.from({ length: 10 }, (_, index) => ({
+    memory_key: 'fact-' + index, memory_value: 'value-' + index
+  }));
+  assert.deepEqual(selectRelevantMemories(memories, 'What do you remember about me?', 3), memories.slice(0, 3));
+});
+
+
+test('provider response normalizer accepts successful output and reports the actual returned model', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    id: 'resp_test',
+    model: 'openai/gpt-oss-20b-actual',
+    output_text: '  SADEEQI_OK  ',
+    usage: { total_tokens: 12 }
+  }), { status: 200, headers: { 'content-type': 'application/json' } }), 'groq', 'configured-model');
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.status, 200);
+  assert.equal(normalized.body.model, 'openai/gpt-oss-20b-actual');
+  assert.equal(normalized.body.output_text, 'SADEEQI_OK');
+  assert.equal(normalized.body.provider, 'groq');
+  assert.deepEqual(normalized.body.usage, { total_tokens: 12 });
+});
+
+test('provider response normalizer falls back to configured model only when upstream omits it', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    output: [{ content: [{ type: 'output_text', text: 'ok' }] }]
+  }), { status: 200 }), 'groq', 'configured-model');
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.body.model, 'configured-model');
+});
+
+test('provider response normalizer preserves rate limits and retry-after metadata', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    error: { message: 'rate limited', code: 'rate_limit_exceeded' }
+  }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '17' } }), 'groq', 'model');
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.status, 429);
+  assert.equal(normalized.retryAfter, '17');
+  assert.equal(normalized.body.error, 'rate limited');
+  assert.equal(normalized.body.code, 'rate_limit_exceeded');
+});
+
+test('provider response normalizer maps upstream server errors to 502', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    error: { message: 'upstream unavailable' }
+  }), { status: 500 }), 'groq', 'model');
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.status, 502);
+  assert.equal(normalized.body.error, 'upstream unavailable');
+});
+
+test('provider response normalizer rejects invalid JSON and empty successful responses', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const invalidJson = await normalizeProviderResponse(new Response('not-json', { status: 200 }), 'groq', 'model');
+  assert.equal(invalidJson.ok, false);
+  assert.equal(invalidJson.status, 502);
+  assert.match(invalidJson.body.error, /invalid response/);
+
+  const empty = await normalizeProviderResponse(new Response(JSON.stringify({ output: [] }), { status: 200 }), 'groq', 'model');
+  assert.equal(empty.ok, false);
+  assert.equal(empty.status, 502);
+  assert.match(empty.body.error, /empty response/);
 });

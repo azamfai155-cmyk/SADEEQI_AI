@@ -1,5 +1,5 @@
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { isSafeImageInput } from './security/input-validation.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
@@ -14,6 +14,26 @@ app.use((_req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '12mb', strict: true }));
+
+// Serve the first-party web client from the same origin as the authenticated API.
+const PUBLIC_DIR = new URL('./public/', import.meta.url);
+app.use(express.static(fileURLToPath(PUBLIC_DIR), {
+  index: 'index.html',
+  etag: true,
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+  }
+}));
+
+// Only the Supabase project URL and browser publishable/anon key are exposed.
+// Never return service-role or provider credentials to the browser.
+app.get('/config.js', (_req, res) => {
+  const supabaseUrl = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+  res.set('Cache-Control', 'no-store').json({ supabaseUrl, supabaseAnonKey });
+});
+
 
 const APP_TOKEN = process.env.SADEEQI_APP_TOKEN;
 export function normalizeAuthMode(value) {
@@ -59,19 +79,37 @@ const MODEL = ACTIVE_PROVIDER.model;
 const API_KEY = ACTIVE_PROVIDER.apiKey;
 const IDENTITY_POLICY = [
   'هويتك داخل هذا التطبيق هي صديقي، واسم المستخدم هو عزام. عند سؤال المستخدم عن اسمك أو التعريف بنفسك، ابدأ دائماً بقول: أنا صديقي، مساعدك الرقمي يا عزام. لا تقدّم نفسك باسم ChatGPT أو باسم شركة.',
-  'إذا سُئلت عمّن طوّرك أو عن أصل نموذج الذكاء الاصطناعي، ففرّق بوضوح بين تطبيق صديقي الذي يحمل هوية صديقي، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة، ولا تنسب تطوير التطبيق إلى جهة غير مثبتة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
+  'مؤسس مشروع وتطبيق SADEEQI AI (صديقي) وصاحب فكرته هو عزام فايز. عند السؤال: من صنعك؟ من مؤسسك؟ من صاحب فكرة صديقي؟ أجب بوضوح: مؤسس صديقي وصاحب فكرته هو عزام فايز. لا تنسب تأسيس التطبيق أو فكرته إلى مزود نموذج الذكاء الاصطناعي أو إلى جهة أخرى.',
+  'إذا سُئلت عن الجهة التي طورت نموذج الذكاء الاصطناعي الأساسي، ففرّق بوضوح بين تطبيق صديقي الذي أسسه وصاحب فكرته عزام فايز، وبين مزوّد النموذج الأساسي. لا تخمّن اسم شركة أو جهة. اذكر مزوّد النموذج فقط إذا كان معروفاً من إعدادات التشغيل ومناسباً للسؤال.',
   'لا تخلط بين هوية المساعد ومصدر التقنية التي تشغّله. حافظ على هذه الهوية في النص والصوت وفي كل المحادثات.'
 ].join('\n');
 
 const SYSTEM_PROMPT = process.env.SADEEQI_SYSTEM_PROMPT ||
   'أنت صديقي، المساعد الرقمي الشخصي لعزام. أجب بالعربية وبلهجة يمنية طبيعية عند ملاءمتها. كن عملياً ودقيقاً وصريحاً ولا تدّع تنفيذ إجراء لم تنفذه. اطلب الموافقة قبل الإجراءات الحساسة.';
 
+const PRIVACY_POLICY = [
+  'عند سؤالك عن الخصوصية أو مكان حفظ البيانات، اشرح بدقة أن ذاكرة التطبيق تُحفظ في قاعدة بيانات Supabase المرتبطة بالمشروع، وليست تخزيناً محلياً حصرياً على جهاز المستخدم.',
+  'تُرسل الرسائل المطلوبة لتوليد الرد إلى مزود نموذج الذكاء الاصطناعي المحدد في إعدادات الخادم (Groq حالياً في إعدادات Preview). لا تقل إن البيانات لا تُشارك مع أي طرف خارجي أو إنها لا تغادر الخدمة.',
+  'ميّز بين تخزين الذاكرة في Supabase ومعالجة الطلبات لدى مزود النموذج. لا تقدّم وعوداً عن الاحتفاظ أو التدريب أو الحذف لدى أي مزود إلا إذا كانت هناك سياسة موثقة تثبت ذلك.'
+].join('\n');
+
+export function buildRuntimeContext({ provider = PROVIDER, model = MODEL } = {}) {
+  const runtimeProvider = typeof provider === 'string' && provider.trim() ? provider.trim() : 'غير متاح';
+  const runtimeModel = typeof model === 'string' && model.trim() ? model.trim() : 'غير متاح';
+  return [
+    'بيانات التشغيل التالية موثوقة ومقدمة من الخادم لهذا الطلب الحالي:',
+    `مزود الذكاء الاصطناعي: ${runtimeProvider}`,
+    `الموديل الذي أرسله الخادم في طلب المزود: ${runtimeModel}`,
+    'عند سؤال المستخدم عن المزود أو الموديل، أجب من هذه البيانات فقط. لا تستخدم الذاكرة أو التخمين أو معلومات عامة. إذا كانت القيمة غير متاحة فقل إنها غير متاحة.'
+  ].join('\n');
+}
+
 export function buildProviderRequest({
   provider = PROVIDER,
   model = MODEL,
   apiKey = API_KEY,
   input,
-  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY].filter(Boolean).join('\n\n'),
+  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, buildRuntimeContext()].filter(Boolean).join('\n\n'),
   enableWebSearch = false
 }) {
   if (!['groq', 'openai'].includes(provider)) {
@@ -107,6 +145,70 @@ export function buildProviderRequest({
   };
 }
 
+const MEMORY_SECRET_PATTERN = /password|passphrase|secret|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|private[_ -]?key|otp|one[- ]time code|كلمة المرور|رمز التحقق|مفتاح سري|مفتاح api|توكن|بيانات البطاقة|رقم البطاقة|cvv/i;
+const MEMORY_SENSITIVE_PATTERN = /\b(?:medical|health|diagnos|medication|disability|bank|financial|salary|income|debt|religion|politic|sexual)\b|صحي|طبي|مرض|إعاقة|دواء|علاج|تشخيص|مالي|راتب|دخل|دين|بنك|ديون|معتقد|ديني|سياسي|جنسي/i;
+const MEMORY_OPT_OUT_PATTERN = /لا\s*(?:تحفظ|تتذكر|تسجل)|لا\s*تريد\s*(?:حفظ|تذكر)|انسَ\s*هذا|تجاهل\s*هذه\s*المعلومة/i;
+
+export function isMemorySafeText(value) {
+  return typeof value === 'string' && Boolean(value.trim()) &&
+    !MEMORY_SECRET_PATTERN.test(value) && !MEMORY_SENSITIVE_PATTERN.test(value);
+}
+
+export function parseAutomaticMemories(raw) {
+  if (typeof raw !== 'string' || raw.length > 12000) return [];
+  let parsed;
+  try { parsed = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')); }
+  catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  const seen = new Set();
+  return parsed.slice(0, 8).flatMap(item => {
+    if (!item || typeof item.key !== 'string' || typeof item.value !== 'string') return [];
+    const key = item.key.trim().slice(0, 80), value = item.value.trim().slice(0, 1000);
+    const normalized = key.toLowerCase();
+    if (!key || !value || !isMemorySafeText(key) || !isMemorySafeText(value) || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [{ key, value }];
+  });
+}
+
+export function buildMemoryExtractionRequest({ provider = PROVIDER, model = MODEL, apiKey = API_KEY, conversation }) {
+  if (!Array.isArray(conversation) || !conversation.length || conversation.length > 12) return null;
+  const turns = conversation.filter(turn => turn && ['user','assistant'].includes(turn.role))
+    .map(turn => ({ role: turn.role, content: typeof turn.content === 'string' ? turn.content.slice(0,3000) : '' }))
+    .filter(turn => turn.content.trim());
+  const userTurns = turns.filter(turn => turn.role === 'user');
+  if (!userTurns.length || userTurns.some(turn => MEMORY_OPT_OUT_PATTERN.test(turn.content))) return null;
+  const userText = userTurns.map(turn => turn.content).join('\n');
+  if (userText.length > 8000 || !isMemorySafeText(userText)) return null;
+  return buildProviderRequest({
+    provider, model, apiKey,
+    instructions: 'أنت محرك استخراج ذاكرة طويلة الأمد. استخرج فقط حقائق صرّح بها المستخدم بوضوح وتفيد مستقبلاً: تفضيلات مستمرة، اهتمامات، مشاريع، قرارات، قيود، أهداف غير حساسة، وطريقة التواصل. لا تعتبر كلام المساعد حقيقة عن المستخدم. لا تستخرج التخمينات أو الكلام المؤقت أو بيانات الآخرين. امنع حفظ المعلومات الصحية والطبية والمالية والدينية والسياسية والجنسية وأي أسرار أو بيانات اعتماد. أعد JSON array فقط بالشكل [{"key":"مفتاح ثابت وواضح","value":"حقيقة موجزة"}] وبحد أقصى 8 عناصر. عند التصحيح أعد القيمة الحالية للمفتاح نفسه. إذا لا توجد حقيقة مناسبة أعد [].',
+    input: [{ role: 'user', content: JSON.stringify(turns) }]
+  });
+}
+
+export function selectRelevantMemories(memories, query, limit = 8) {
+  if (!Array.isArray(memories) || typeof query !== 'string') return [];
+  const safeLimit = Number.isInteger(limit) ? Math.max(0, Math.min(limit, 50)) : 8;
+  if (!safeLimit) return [];
+
+  // Broad recall questions must not depend on lexical overlap with memory keys.
+  // Otherwise general recall prompts return nothing even when rows exist.
+  const recallIntent = /(?:\b(?:remember|memory|memories|recall|saved facts|what do you know about me)\b|ذاكر(?:ة|تي|تك|ات)|ذكريات|معلومات.{0,20}(?:حفظ|مخزن)|(?:ما|ماذا|ايش|إيش|وش).{0,35}(?:حفظت|تتذكر|تذكر|مخزن|محفوظ)|استرجع.{0,20}(?:معلومات|ذكريات|ذاكرة))/iu;
+  if (recallIntent.test(query)) return memories.slice(0, safeLimit);
+
+  const tokenize = value => new Set((value.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || [])
+    .filter(token => !['هذا','هذه','على','إلى','من','في','عن','مع','the','and','for','with'].includes(token)));
+  const terms = tokenize(query);
+  if (!terms.size) return [];
+  return memories.map(memory => {
+    const words = tokenize((memory.memory_key || '') + ' ' + (memory.memory_value || ''));
+    let score = 0;
+    for (const term of terms) if (words.has(term)) score++;
+    return { memory, score };
+  }).filter(item => item.score > 0).sort((x,y) => y.score-x.score)
+    .slice(0,safeLimit).map(item => item.memory);
+}
 export function extractProviderText(result) {
   if (typeof result?.output_text === 'string' && result.output_text.trim()) {
     return result.output_text.trim();
@@ -117,6 +219,62 @@ export function extractProviderText(result) {
     .map(part => part.text)
     .join('\n')
     .trim();
+}
+
+// Normalize provider HTTP responses in one place so success and failure paths
+// can be tested deterministically without making live provider requests.
+export async function normalizeProviderResponse(upstream, provider = PROVIDER, fallbackModel = MODEL) {
+  let result;
+  try {
+    result = await upstream.json();
+  } catch {
+    return {
+      ok: false,
+      status: 502,
+      retryAfter: null,
+      body: { error: `${provider} returned an invalid response.`, provider }
+    };
+  }
+
+  if (!upstream.ok) {
+    const status = upstream.status === 429 ? 429 : 502;
+    return {
+      ok: false,
+      status,
+      retryAfter: status === 429 ? upstream.headers?.get?.('retry-after') || null : null,
+      body: {
+        error: result?.error?.message || `${provider} request failed.`,
+        code: result?.error?.code || null,
+        provider
+      }
+    };
+  }
+
+  const output = extractProviderText(result);
+  if (!output) {
+    return {
+      ok: false,
+      status: 502,
+      retryAfter: null,
+      body: { error: 'AI provider returned an empty response.', provider }
+    };
+  }
+
+  const actualModel = typeof result?.model === 'string' && result.model.trim()
+    ? result.model.trim()
+    : fallbackModel;
+  return {
+    ok: true,
+    status: 200,
+    retryAfter: null,
+    body: {
+      id: result.id,
+      model: actualModel,
+      provider,
+      output_text: output,
+      usage: result.usage || null
+    }
+  };
 }
 
 
@@ -177,6 +335,62 @@ export function createAuthMiddleware() {
 }
 
 const requireAuth = createAuthMiddleware();
+
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || '').trim().toLowerCase();
+const OWNER_USER_ID = (process.env.OWNER_USER_ID || '').trim().toLowerCase();
+
+// Authorization is derived only from the verified server-side Supabase identity.
+// Both the immutable Auth user UUID and configured email must match. Client-supplied
+// roles, owner IDs, body fields, query parameters, and headers are never trusted.
+export function createOwnerMiddleware({
+  ownerEmail = process.env.OWNER_EMAIL,
+  ownerUserId = process.env.OWNER_USER_ID
+} = {}) {
+  const configuredOwnerEmail = typeof ownerEmail === 'string' ? ownerEmail.trim().toLowerCase() : '';
+  const configuredOwnerUserId = typeof ownerUserId === 'string' ? ownerUserId.trim().toLowerCase() : '';
+  const validOwnerUserId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(configuredOwnerUserId);
+
+  return (req, res, next) => {
+    const verifiedEmail = typeof req.auth?.email === 'string'
+      ? req.auth.email.trim().toLowerCase()
+      : '';
+    const verifiedUserId = typeof req.auth?.userId === 'string'
+      ? req.auth.userId.trim().toLowerCase()
+      : '';
+
+    if (
+      !configuredOwnerEmail ||
+      !validOwnerUserId ||
+      !verifiedEmail ||
+      !verifiedUserId ||
+      verifiedEmail !== configuredOwnerEmail ||
+      verifiedUserId !== configuredOwnerUserId
+    ) {
+      return res.status(403).json({ error: 'Owner permission required.' });
+    }
+    return next();
+  };
+}
+
+const requireOwner = createOwnerMiddleware({
+  ownerEmail: OWNER_EMAIL,
+  ownerUserId: OWNER_USER_ID
+});
+
+app.get('/v1/admin/access-check', requireAuth, requireOwner, (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ authorized: true, role: 'owner' });
+});
+
+app.get('/v1/me', requireAuth, requireOwner, (req, res) => {
+  const email = typeof req.auth?.email === 'string' ? req.auth.email.trim().toLowerCase() : '';
+  const isOwner = Boolean(OWNER_EMAIL && email && email === OWNER_EMAIL);
+  res.json({
+    email: email || null,
+    role: isOwner ? 'owner' : 'user',
+    role_label: isOwner ? 'المالك' : 'حساب مسجل',
+    is_owner: isOwner
+  });
+});
 
 export function createRateLimiter({ windowMs = 60_000, max = 20, now = Date.now } = {}) {
   const buckets = new Map();
@@ -375,7 +589,7 @@ export function buildSocialProviders(env = process.env) {
   });
 }
 
-app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
+app.get('/v1/social/providers', requireAuth, requireOwner, socialRateLimit, (_req, res) => {
   // Readiness only: OAuth, account linking and social actions are not implemented.
   const providers = buildSocialProviders();
   res.set('Cache-Control', 'no-store').json({
@@ -387,7 +601,129 @@ app.get('/v1/social/providers', requireAuth, socialRateLimit, (_req, res) => {
   });
 });
 
-app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
+
+export function createOwnerDataRequest({
+  env = process.env,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  return async function ownerDataRequest({ table, method = 'GET', query = '', body } = {}) {
+    const base = (env.SUPABASE_URL || '').replace(/\/+$/, '');
+    const key = env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!base || !key) throw new Error('Owner data storage is not configured.');
+    if (!['sadeeqi_memories', 'sadeeqi_tasks'].includes(table)) throw new Error('Unsupported owner data table.');
+    const response = await fetchImpl(`${base}/rest/v1/${table}${query ? `?${query}` : ''}`, {
+      method,
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation'
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(`Owner data request failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  };
+}
+
+const ownerDataRequest = createOwnerDataRequest();
+const ownerId = req => typeof req.auth?.userId === 'string' ? req.auth.userId : '';
+const ownerDataError = (res, error) => {
+  console.error('[owner-data] request failed', { name: error?.name || 'Error', status: error?.status || null });
+  return res.status(error?.status === 400 ? 400 : 503).json({ error: 'تعذر الوصول إلى بيانات صديقي المحفوظة حالياً.' });
+};
+
+app.get('/v1/memory', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const query = new URLSearchParams({ select: 'id,memory_key,memory_value,created_at,updated_at', owner_id: `eq.${ownerId(req)}`, order: 'updated_at.desc', limit: '200' }).toString();
+    res.set('Cache-Control', 'no-store').json({ memories: await ownerDataRequest({ table: 'sadeeqi_memories', query }) || [] });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.post('/v1/memory', requireAuth, requireOwner, async (req, res) => {
+  const key = typeof req.body?.memory_key === 'string' ? req.body.memory_key.trim() : '';
+  const value = typeof req.body?.memory_value === 'string' ? req.body.memory_value.trim() : '';
+  if (!key || key.length > 80 || !value || value.length > 2000) return res.status(400).json({ error: 'مفتاح الذاكرة أو محتواها غير صالح.' });
+  try {
+    const rows = await ownerDataRequest({ table: 'sadeeqi_memories', method: 'POST', query: 'on_conflict=owner_id,memory_key', body: { owner_id: ownerId(req), memory_key: key, memory_value: value } });
+    res.status(201).set('Cache-Control', 'no-store').json({ memory: Array.isArray(rows) ? rows[0] : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.delete('/v1/memory/:id', requireAuth, requireOwner, async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: 'معرّف الذاكرة غير صالح.' });
+  try {
+    const query = new URLSearchParams({ id: `eq.${req.params.id}`, owner_id: `eq.${ownerId(req)}` }).toString();
+    await ownerDataRequest({ table: 'sadeeqi_memories', method: 'DELETE', query });
+    res.status(204).end();
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.get('/v1/tasks', requireAuth, requireOwner, async (req, res) => {
+  try {
+    const query = new URLSearchParams({ select: 'id,state,title,goal,task_data,created_at,updated_at', owner_id: `eq.${ownerId(req)}`, order: 'created_at.desc', limit: '100' }).toString();
+    res.set('Cache-Control', 'no-store').json({ tasks: await ownerDataRequest({ table: 'sadeeqi_tasks', query }) || [] });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.post('/v1/tasks', requireAuth, requireOwner, async (req, res) => {
+  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+  const goal = typeof req.body?.goal === 'string' ? req.body.goal.trim() : '';
+  if (!title || title.length > 160 || !goal || goal.length > 8000) return res.status(400).json({ error: 'عنوان المهمة أو هدفها غير صالح.' });
+  try {
+    const rows = await ownerDataRequest({ table: 'sadeeqi_tasks', method: 'POST', body: { owner_id: ownerId(req), title, goal, state: 'waiting_approval', task_data: { source: 'owner_request', approval_required: true } } });
+    res.status(201).set('Cache-Control', 'no-store').json({ task: Array.isArray(rows) ? rows[0] : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+app.patch('/v1/tasks/:id', requireAuth, requireOwner, async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(400).json({ error: 'معرّف المهمة غير صالح.' });
+  const allowed = ['queued', 'waiting_approval', 'paused', 'completed', 'failed', 'cancelled'];
+  const state = req.body?.state;
+  if (!allowed.includes(state)) return res.status(400).json({ error: 'حالة المهمة غير مسموحة.' });
+  try {
+    const query = new URLSearchParams({ id: `eq.${req.params.id}`, owner_id: `eq.${ownerId(req)}` }).toString();
+    const rows = await ownerDataRequest({ table: 'sadeeqi_tasks', method: 'PATCH', query, body: { state } });
+    res.set('Cache-Control', 'no-store').json({ task: Array.isArray(rows) ? rows[0] || null : rows });
+  } catch (error) { ownerDataError(res, error); }
+});
+
+async function extractAndSaveAutomaticMemories(conversation, userId) {
+  const request = buildMemoryExtractionRequest({ conversation });
+  if (!request || !userId) return 0;
+  const upstream = await fetch(request.url, request.init);
+  if (!upstream.ok) return 0;
+  const result = await upstream.json().catch(() => null);
+  const memories = parseAutomaticMemories(extractProviderText(result));
+  let saved = 0;
+  for (const memory of memories) {
+    const rows = await ownerDataRequest({
+      table: 'sadeeqi_memories', method: 'POST',
+      query: 'on_conflict=owner_id,memory_key',
+      body: { owner_id: userId, memory_key: memory.key, memory_value: memory.value }
+    });
+    if (Array.isArray(rows) ? rows.length > 0 : Boolean(rows)) saved++;
+  }
+  return saved;
+}
+
+async function loadRelevantMemories(userId, queryText) {
+  if (!userId || !queryText) return [];
+  const query = new URLSearchParams({
+    select: 'memory_key,memory_value,updated_at',
+    owner_id: `eq.${userId}`, order: 'updated_at.desc', limit: '200'
+  }).toString();
+  const rows = await ownerDataRequest({ table: 'sadeeqi_memories', query });
+  return selectRelevantMemories(rows || [], queryText, 8);
+}
+
+app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) => {
   if (!API_KEY || !MODEL) return res.status(503).json({ error: `${PROVIDER} server credentials are not configured.` });
 
   const validationError = validateInput(req.body?.input);
@@ -406,32 +742,37 @@ app.post('/v1/chat', requireAuth, chatRateLimit, async (req, res) => {
   }
 
   try {
+    let memoryContext = '';
+    try {
+      const latestUser = [...req.body.input].reverse().find(turn => turn.role === 'user');
+      const queryText = typeof latestUser?.content === 'string' ? latestUser.content
+        : Array.isArray(latestUser?.content) ? latestUser.content.filter(part => part.type === 'input_text').map(part => part.text || '').join(' ') : '';
+      const relevant = await loadRelevantMemories(req.auth.userId, queryText);
+      if (relevant.length) memoryContext = '\n\nذاكرة المستخدم ذات الصلة (استخدمها عند ارتباطها فقط):\n' +
+        relevant.map(item => `- ${item.memory_key}: ${item.memory_value}`).join('\n');
+    } catch (error) {
+      console.error('[automatic-memory] retrieval failed', { name: error?.name || 'Error' });
+    }
     const providerRequest = buildProviderRequest({
       input: req.body.input,
+      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, buildRuntimeContext({ provider: PROVIDER, model: MODEL }), memoryContext].filter(Boolean).join('\n\n'),
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
-    let result;
-    try {
-      result = await upstream.json();
-    } catch {
-      return res.status(502).json({ error: `${PROVIDER} returned an invalid response.`, provider: PROVIDER });
-    }
-    if (!upstream.ok) {
+    const normalized = await normalizeProviderResponse(upstream, PROVIDER, MODEL);
+    if (!normalized.ok) {
       // Provider failures must not be mistaken for expired user sessions.
-      const status = upstream.status === 429 ? 429 : 502;
-      if (status === 429 && upstream.headers.get('retry-after')) {
-        res.set('Retry-After', upstream.headers.get('retry-after'));
-      }
-      return res.status(status).json({
-        error: result?.error?.message || `${PROVIDER} request failed.`,
-        code: result?.error?.code || null,
-        provider: PROVIDER
-      });
+      if (normalized.retryAfter) res.set('Retry-After', normalized.retryAfter);
+      return res.status(normalized.status).json(normalized.body);
     }
-    const output = extractProviderText(result);
-    if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.', provider: PROVIDER });
-    return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, usage: result.usage || null });
+    const result = normalized.body;
+    let memorySaved = 0;
+    try {
+      memorySaved = await extractAndSaveAutomaticMemories(req.body.input.slice(-8), req.auth.userId);
+    } catch (error) {
+      console.error('[automatic-memory] extraction failed', { name: error?.name || 'Error', status: error?.status || null });
+    }
+    return res.json({ ...result, memory_saved: memorySaved > 0, memory_saved_count: memorySaved });
   } catch (error) {
     // Do not log prompt content, credentials, or upstream response bodies.
     console.error('[ai-provider] request failed', { provider: PROVIDER, name: error?.name || 'Error' });
