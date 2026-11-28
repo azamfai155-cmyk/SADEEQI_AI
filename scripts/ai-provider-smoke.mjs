@@ -33,4 +33,5 @@ const output = typeof data.output_text === 'string' ? data.output_text :
   (data.output || []).flatMap(item => item.content || [])
     .filter(part => part.type === 'output_text').map(part => part.text).join('\n');
 if (!output.includes('SADEEQI_AI_PROVIDER_OK')) throw new Error('Provider returned an unexpected response.');
-console.log(`PASS: live ${provider} Responses API call succeeded (model: ${model}).`);
+const actualModel = typeof data?.model === 'string' && data.model.trim() ? data.model.trim() : model;
+console.log(`PASS: live ${provider} Responses API call succeeded (model: ${actualModel}).`);
