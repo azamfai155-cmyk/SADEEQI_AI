@@ -101,7 +101,7 @@ export function buildRuntimeContext({ provider = PROVIDER, model = MODEL } = {})
     `مزود الذكاء الاصطناعي: ${runtimeProvider}`,
     `الموديل الذي أرسله الخادم في طلب المزود: ${runtimeModel}`,
     'عند سؤال المستخدم عن المزود أو الموديل، أجب من هذه البيانات فقط. لا تستخدم الذاكرة أو التخمين أو معلومات عامة. إذا كانت القيمة غير متاحة فقل إنها غير متاحة.'
-  ].join('\\n');
+  ].join('\n');
 }
 
 export function buildProviderRequest({
