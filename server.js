@@ -93,12 +93,23 @@ const PRIVACY_POLICY = [
   'ميّز بين تخزين الذاكرة في Supabase ومعالجة الطلبات لدى مزود النموذج. لا تقدّم وعوداً عن الاحتفاظ أو التدريب أو الحذف لدى أي مزود إلا إذا كانت هناك سياسة موثقة تثبت ذلك.'
 ].join('\n');
 
+export function buildRuntimeContext({ provider = PROVIDER, model = MODEL } = {}) {
+  const runtimeProvider = typeof provider === 'string' && provider.trim() ? provider.trim() : 'غير متاح';
+  const runtimeModel = typeof model === 'string' && model.trim() ? model.trim() : 'غير متاح';
+  return [
+    'بيانات التشغيل التالية موثوقة ومقدمة من الخادم لهذا الطلب الحالي:',
+    `مزود الذكاء الاصطناعي: ${runtimeProvider}`,
+    `الموديل الذي أرسله الخادم في طلب المزود: ${runtimeModel}`,
+    'عند سؤال المستخدم عن المزود أو الموديل، أجب من هذه البيانات فقط. لا تستخدم الذاكرة أو التخمين أو معلومات عامة. إذا كانت القيمة غير متاحة فقل إنها غير متاحة.'
+  ].join('\\n');
+}
+
 export function buildProviderRequest({
   provider = PROVIDER,
   model = MODEL,
   apiKey = API_KEY,
   input,
-  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY].filter(Boolean).join('\n\n'),
+  instructions = [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, buildRuntimeContext()].filter(Boolean).join('\n\n'),
   enableWebSearch = false
 }) {
   if (!['groq', 'openai'].includes(provider)) {
@@ -688,7 +699,7 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
     }
     const providerRequest = buildProviderRequest({
       input: req.body.input,
-      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, memoryContext].filter(Boolean).join('\n\n'),
+      instructions: [SYSTEM_PROMPT, IDENTITY_POLICY, PRIVACY_POLICY, buildRuntimeContext({ provider: PROVIDER, model: MODEL }), memoryContext].filter(Boolean).join('\n\n'),
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
