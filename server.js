@@ -221,6 +221,62 @@ export function extractProviderText(result) {
     .trim();
 }
 
+// Normalize provider HTTP responses in one place so success and failure paths
+// can be tested deterministically without making live provider requests.
+export async function normalizeProviderResponse(upstream, provider = PROVIDER, fallbackModel = MODEL) {
+  let result;
+  try {
+    result = await upstream.json();
+  } catch {
+    return {
+      ok: false,
+      status: 502,
+      retryAfter: null,
+      body: { error: `${provider} returned an invalid response.`, provider }
+    };
+  }
+
+  if (!upstream.ok) {
+    const status = upstream.status === 429 ? 429 : 502;
+    return {
+      ok: false,
+      status,
+      retryAfter: status === 429 ? upstream.headers?.get?.('retry-after') || null : null,
+      body: {
+        error: result?.error?.message || `${provider} request failed.`,
+        code: result?.error?.code || null,
+        provider
+      }
+    };
+  }
+
+  const output = extractProviderText(result);
+  if (!output) {
+    return {
+      ok: false,
+      status: 502,
+      retryAfter: null,
+      body: { error: 'AI provider returned an empty response.', provider }
+    };
+  }
+
+  const actualModel = typeof result?.model === 'string' && result.model.trim()
+    ? result.model.trim()
+    : fallbackModel;
+  return {
+    ok: true,
+    status: 200,
+    retryAfter: null,
+    body: {
+      id: result.id,
+      model: actualModel,
+      provider,
+      output_text: output,
+      usage: result.usage || null
+    }
+  };
+}
+
 
 export function extractBearerToken(value) {
   return typeof value === 'string' ? value.replace(/^Bearer\s+/i, '').trim() : '';
@@ -703,33 +759,20 @@ app.post('/v1/chat', requireAuth, requireOwner, chatRateLimit, async (req, res) 
       enableWebSearch: process.env.ALLOW_WEB_SEARCH !== 'false' && req.body.enable_web_search === true
     });
     const upstream = await fetch(providerRequest.url, providerRequest.init);
-    let result;
-    try {
-      result = await upstream.json();
-    } catch {
-      return res.status(502).json({ error: `${PROVIDER} returned an invalid response.`, provider: PROVIDER });
-    }
-    if (!upstream.ok) {
+    const normalized = await normalizeProviderResponse(upstream, PROVIDER, MODEL);
+    if (!normalized.ok) {
       // Provider failures must not be mistaken for expired user sessions.
-      const status = upstream.status === 429 ? 429 : 502;
-      if (status === 429 && upstream.headers.get('retry-after')) {
-        res.set('Retry-After', upstream.headers.get('retry-after'));
-      }
-      return res.status(status).json({
-        error: result?.error?.message || `${PROVIDER} request failed.`,
-        code: result?.error?.code || null,
-        provider: PROVIDER
-      });
+      if (normalized.retryAfter) res.set('Retry-After', normalized.retryAfter);
+      return res.status(normalized.status).json(normalized.body);
     }
-    const output = extractProviderText(result);
-    if (!output) return res.status(502).json({ error: 'AI provider returned an empty response.', provider: PROVIDER });
+    const result = normalized.body;
     let memorySaved = 0;
     try {
       memorySaved = await extractAndSaveAutomaticMemories(req.body.input.slice(-8), req.auth.userId);
     } catch (error) {
       console.error('[automatic-memory] extraction failed', { name: error?.name || 'Error', status: error?.status || null });
     }
-    return res.json({ id: result.id, model: result.model || MODEL, provider: PROVIDER, output_text: output, memory_saved: memorySaved > 0, memory_saved_count: memorySaved, usage: result.usage || null });
+    return res.json({ ...result, memory_saved: memorySaved > 0, memory_saved_count: memorySaved });
   } catch (error) {
     // Do not log prompt content, credentials, or upstream response bodies.
     console.error('[ai-provider] request failed', { provider: PROVIDER, name: error?.name || 'Error' });
