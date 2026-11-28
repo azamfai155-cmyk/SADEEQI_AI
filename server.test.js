@@ -540,3 +540,64 @@ test('broad English memory recall returns saved memories and respects the limit'
   }));
   assert.deepEqual(selectRelevantMemories(memories, 'What do you remember about me?', 3), memories.slice(0, 3));
 });
+
+
+test('provider response normalizer accepts successful output and reports the actual returned model', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    id: 'resp_test',
+    model: 'openai/gpt-oss-20b-actual',
+    output_text: '  SADEEQI_OK  ',
+    usage: { total_tokens: 12 }
+  }), { status: 200, headers: { 'content-type': 'application/json' } }), 'groq', 'configured-model');
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.status, 200);
+  assert.equal(normalized.body.model, 'openai/gpt-oss-20b-actual');
+  assert.equal(normalized.body.output_text, 'SADEEQI_OK');
+  assert.equal(normalized.body.provider, 'groq');
+  assert.deepEqual(normalized.body.usage, { total_tokens: 12 });
+});
+
+test('provider response normalizer falls back to configured model only when upstream omits it', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    output: [{ content: [{ type: 'output_text', text: 'ok' }] }]
+  }), { status: 200 }), 'groq', 'configured-model');
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.body.model, 'configured-model');
+});
+
+test('provider response normalizer preserves rate limits and retry-after metadata', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    error: { message: 'rate limited', code: 'rate_limit_exceeded' }
+  }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '17' } }), 'groq', 'model');
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.status, 429);
+  assert.equal(normalized.retryAfter, '17');
+  assert.equal(normalized.body.error, 'rate limited');
+  assert.equal(normalized.body.code, 'rate_limit_exceeded');
+});
+
+test('provider response normalizer maps upstream server errors to 502', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const normalized = await normalizeProviderResponse(new Response(JSON.stringify({
+    error: { message: 'upstream unavailable' }
+  }), { status: 500 }), 'groq', 'model');
+  assert.equal(normalized.ok, false);
+  assert.equal(normalized.status, 502);
+  assert.equal(normalized.body.error, 'upstream unavailable');
+});
+
+test('provider response normalizer rejects invalid JSON and empty successful responses', async () => {
+  const { normalizeProviderResponse } = await import('./server.js');
+  const invalidJson = await normalizeProviderResponse(new Response('not-json', { status: 200 }), 'groq', 'model');
+  assert.equal(invalidJson.ok, false);
+  assert.equal(invalidJson.status, 502);
+  assert.match(invalidJson.body.error, /invalid response/);
+
+  const empty = await normalizeProviderResponse(new Response(JSON.stringify({ output: [] }), { status: 200 }), 'groq', 'model');
+  assert.equal(empty.ok, false);
+  assert.equal(empty.status, 502);
+  assert.match(empty.body.error, /empty response/);
+});
